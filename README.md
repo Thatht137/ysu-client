@@ -1,133 +1,164 @@
 # ysu-client
 
-> **燕大终端** — 燕山大学网上系统的第三方 Web 客户端。
+> [English](README.md) | [中文](README.zh-CN.md)
 
-基于 Next.js 16 + React 19 + shadcn/ui 构建，以 [`ysu-api`](../ysu-api) 为后端，
-提供 CAS 登录、教务查询与一键评教等功能。目前覆盖的范围是教务系统；命名留出余量，
-后续接入其他校园系统（图书馆、一卡通等）时无需更名。
+> **YSU Terminal** — a third-party web client for Yanshan University's
+> online systems.
 
-> ⚠️ **第三方客户端，与燕山大学官方无任何关联。** 仅供个人学习交流，使用即默认了解并
-> 接受相关风险，请勿用于侵犯他人权益或违反学校规定的场景。
+Built on Next.js 16 + React 19 + shadcn/ui, backed by
+[`ysu-api`](../ysu-api). Covers CAS login, academic-system queries, and
+one-click course evaluation. The current scope is the academic system;
+the name was chosen with headroom so that future integrations (library,
+campus card, etc.) won't require a rename.
 
-## 功能
+> ⚠️ **Third-party client, not affiliated with Yanshan University.**
+> For personal study and reference only. Using it implies acceptance of
+> the associated risks. Do not use it to infringe on others' rights or
+> in ways that violate university rules.
 
-- **认证**：CAS 登录，自动处理图形验证码与 SMS / cpdaily MFA；可选「记住密码」。
-- **总览**：当前教学周、今日课程（按节次时间高亮当前 / 已过课程）、待考考试、绩点速览。
-- **成绩**：按学期 / 课程名筛选，单门成绩可下钻至**教学班 / 全课程**两个维度的
-  统计、等级分布与个人排名。
-- **学分绩点**：必修 / 选修 / 学位课各项学分与初始 / 最高绩点。
-- **课表**：理论课表 + 实验选课合并显示，按周次切换，处理重叠课程。
-- **考试**：按学期查询，区分未完成 / 已完成。
-- **培养方案**：课程列表 + 学业完成情况 + 学业预警。
-- **评教**：单选 / 多选 / 填空题；一键最高分自动填写；**批量评教**支持选择多条任务，
-  自动填写 → 预检得分 → 二次确认 → 批量提交，可中途中断。
-- **体验**：i18n（中 / 英）、深 / 浅 / 跟随系统主题（按 `d` 切换）、桌面 + 移动端
-  响应式布局、24h 本地缓存（基于 `localStorage`）以加速二次加载。
+## Features
 
-## 技术栈
+- **Authentication.** CAS login with automatic handling of CAPTCHA and
+  SMS / cpdaily MFA. Optional "remember password".
+- **Overview.** Current teaching week, today's classes (with the active
+  and past periods highlighted), upcoming exams, and a GPA snapshot.
+- **Grades.** Filter by term / course name. Drill into a single course
+  for stats, grade distribution, and personal ranking — both at the
+  teaching-class and whole-course level.
+- **Credits & GPA.** Required / elective / degree-course credits with
+  initial and best-attempt GPAs.
+- **Schedule.** Lecture timetable merged with experiment/lab choices,
+  switchable by teaching week, with overlapping-class handling.
+- **Exams.** Per-term view, separating upcoming and finished exams.
+- **Training plan.** Course list, academic completion progress, and
+  academic-warning flags.
+- **Course evaluation.** Single-choice, multi-choice, and free-text
+  questions; one-click "fill with the highest score". **Batch
+  evaluation** lets you select multiple tasks, auto-fill them, pre-check
+  the resulting scores, double-confirm, then submit in a batch — with
+  the option to abort midway.
+- **UX.** i18n (中 / EN), dark / light / system themes (toggle with `d`),
+  responsive desktop and mobile layouts, and a 24 h `localStorage` cache
+  for faster repeat loads.
 
-| 类型 | 选用 |
+## Tech stack
+
+| Layer | Choice |
 | --- | --- |
-| 框架 | Next.js 16（App Router，Turbopack） |
-| 视图 | React 19 + TypeScript 5.9 |
-| UI | shadcn/ui（nova preset） + Tailwind CSS v4 |
-| 状态 | Zustand（含 `persist` 中间件） |
-| 主题 | next-themes |
-| 提示 | sonner |
-| 抽屉 / 弹层 | radix-ui、vaul |
-| 图标 | lucide-react |
+| Framework | Next.js 16 (App Router, Turbopack) |
+| View | React 19 + TypeScript 5.9 |
+| UI | shadcn/ui (nova preset) + Tailwind CSS v4 |
+| State | Zustand (with the `persist` middleware) |
+| Theme | next-themes |
+| Toasts | sonner |
+| Drawers / overlays | radix-ui, vaul |
+| Icons | lucide-react |
 
-## 安装
+## Install
 
-需要 Node.js ≥ 20。任选一种包管理器即可：
+Requires Node.js ≥ 20. Either package manager works:
 
 ```bash
 npm install
-# 或
+# or
 pnpm install
 ```
 
-## 启动
+## Run
 
 ```bash
 npm run dev          # http://localhost:3000 (Turbopack)
-npm run build        # 生产构建
-npm run start        # 启动生产构建
-npm run typecheck    # TypeScript 类型检查
+npm run build        # production build
+npm run start        # serve the production build
+npm run typecheck    # TypeScript type check
 npm run lint         # ESLint
-npm run format       # Prettier 格式化
+npm run format       # Prettier
 ```
 
-### 环境变量
+### Environment variables
 
-复制 `.env.example` 为 `.env.local`（本地开发）或 `.env`（生产部署）后按需修改：
+Copy `.env.example` to `.env.local` (development) or `.env` (production)
+and adjust as needed:
 
-| 变量 | 默认 | 说明 |
+| Variable | Default | Notes |
 | --- | --- | --- |
-| `NEXT_PUBLIC_API_BASE` | `http://localhost:11920` | [`ysu-api`](../ysu-api) 后端基地址；带 `NEXT_PUBLIC_` 前缀的变量会被打包进客户端 bundle |
+| `NEXT_PUBLIC_API_BASE` | `http://localhost:11920` | Base URL of the [`ysu-api`](../ysu-api) backend. Variables prefixed with `NEXT_PUBLIC_` are inlined into the client bundle. |
 
-部署到其他主机时，请将该地址改为可被浏览器直接访问的 URL。
+When deploying to a different host, set this to a URL the browser can
+reach directly.
 
-## 与后端的契约
+## Contract with the backend
 
-ysu-client 假设后端是 [`ysu-api`](../ysu-api)，所有交互细节都收敛在 `lib/api.ts`：
+ysu-client assumes the backend is [`ysu-api`](../ysu-api). All wire
+details live in `lib/api.ts`:
 
-- 凭据通过 `X-CAS-Credential` Header 透传，浏览器侧持久化到 `localStorage`
-  键 `ysu-auth`（zustand persist）。
-- 24 小时数据缓存写在 `localStorage` 键 `ysu-cache:*`，详见 `lib/cache.ts`。
-- 错误模型沿用 ysu-api：通过响应中的 `code`（如 `NEED_CAPTCHA`、`MFA_REQUIRED`）
-  分支处理，`detail` 直接展示给用户。
+- Credentials are sent via the `X-CAS-Credential` header and persisted
+  in the browser under the `localStorage` key `ysu-auth` (zustand
+  `persist`).
+- The 24-hour data cache lives under `localStorage` keys `ysu-cache:*` —
+  see `lib/cache.ts`.
+- The error model follows ysu-api: branch on the response `code` (e.g.
+  `NEED_CAPTCHA`, `MFA_REQUIRED`) and surface `detail` to the user
+  directly.
 
-## 目录速览
+## Directory layout
 
 ```
 app/
-├── layout.tsx              # 根布局：i18n + 主题 + Tooltip + Toaster
-├── page.tsx                # 入口重定向（已登录 → /dashboard，否则 → /login）
-├── login/                  # CAS 登录 + MFA
+├── layout.tsx              # root layout: i18n + theme + Tooltip + Toaster
+├── page.tsx                # entry redirect (logged in → /dashboard, otherwise → /login)
+├── login/                  # CAS login + MFA
 └── dashboard/
-    ├── layout.tsx          # 鉴权守卫、侧边栏 / 顶栏 / 底栏
-    ├── page.tsx            # 总览
-    ├── grades/             # 成绩 + 统计弹窗
-    ├── gpa/                # 学分绩点
-    ├── schedule/           # 课表（desktop / mobile 双视图 + 周次切换）
-    ├── exams/              # 考试安排
-    ├── training-plan/      # 培养方案
-    ├── evaluation/         # 评教（单选 / 多选 / 填空 + 批量自动评教）
-    ├── student/            # 学生信息（弹窗）
-    └── me/                 # 「我的」（移动端入口）
+    ├── layout.tsx          # auth guard, sidebar / topbar / bottom bar
+    ├── page.tsx            # overview
+    ├── grades/             # grades + stats modal
+    ├── gpa/                # credits & GPA
+    ├── schedule/           # timetable (desktop / mobile views + week switcher)
+    ├── exams/              # exams
+    ├── training-plan/      # training plan
+    ├── evaluation/         # course evaluation (single / multi / text + batch auto-fill)
+    ├── student/            # student profile (modal)
+    └── me/                 # "Me" entry (mobile)
 components/
-├── ui/                     # shadcn/ui 原语
-├── mobile-bottom-nav.tsx   # 移动端底部导航
-├── mobile-top-bar.tsx      # 移动端顶部栏（动态右侧 slot）
-├── refresh-indicator.tsx   # 二次加载时的刷新动画
-├── responsive-modal.tsx    # 桌面 Dialog / 移动 Drawer 自适应
-└── theme-provider.tsx      # next-themes 包装，支持按 `d` 切换
+├── ui/                     # shadcn/ui primitives
+├── mobile-bottom-nav.tsx   # mobile bottom navigation
+├── mobile-top-bar.tsx      # mobile top bar (dynamic right-slot)
+├── refresh-indicator.tsx   # refresh animation for second loads
+├── responsive-modal.tsx    # desktop Dialog / mobile Drawer adapter
+└── theme-provider.tsx      # next-themes wrapper with `d` to toggle
 hooks/
-└── use-mobile.ts           # 媒体查询断点
+└── use-mobile.ts           # responsive breakpoint
 lib/
-├── api.ts                  # ysu-api fetch 客户端
-├── auth-store.ts           # 鉴权 zustand store（持久化到 localStorage）
-├── cache.ts                # 24h TTL 本地缓存
-├── mobile-header-store.ts  # 各页面向移动端顶栏注入右侧操作
-├── refresh-store.ts        # 全局刷新状态
-├── types.ts                # 与后端契约的 TypeScript 类型
-└── i18n/                   # zh / en 字典 + Context + useTranslation
+├── api.ts                  # ysu-api fetch client
+├── auth-store.ts           # auth zustand store (persisted to localStorage)
+├── cache.ts                # 24 h TTL local cache
+├── mobile-header-store.ts  # per-page right-slot for the mobile top bar
+├── refresh-store.ts        # global refresh state
+├── types.ts                # TypeScript contracts with the backend
+└── i18n/                   # zh / en dictionaries + Context + useTranslation
 ```
 
-## 安全注意事项
+## Security notes
 
-- **凭据保护**：`credential` 等价于活动 CAS 会话 cookie，泄漏后第三方即可冒用账户。
-  本客户端将其落盘到 `localStorage`，请勿在共享设备上启用「记住密码」。
-- **记住密码**：勾选后，明文用户名与密码会写入 `localStorage` 的
-  `ysu-login-remember` 键以便自动回填。考虑到 CAS 流程必须先重新认证，这是当前
-  能给的便利上限；如有更高安全要求请勿勾选。
-- **后端可信度**：`NEXT_PUBLIC_API_BASE` 指向的服务能拿到全部凭据。务必只接入
-  自己掌控的 `ysu-api` 实例，且尽可能走 HTTPS。
-- **CORS**：浏览器直连后端时，请在 `ysu-api` 通过 `YSU_API_CORS_ORIGINS`
-  白名单当前域名。
+- **Credential protection.** `credential` is equivalent to an active CAS
+  session cookie; whoever holds it can impersonate the student. This
+  client persists it to `localStorage`, so do **not** enable "remember
+  password" on shared devices.
+- **Remember password.** When enabled, the plaintext username and
+  password are written to the `localStorage` key `ysu-login-remember` for
+  auto-fill. Since the CAS flow always requires a fresh authentication,
+  this is the highest convenience we can offer; if you need stronger
+  guarantees, leave it unchecked.
+- **Backend trust.** Whatever service `NEXT_PUBLIC_API_BASE` points at
+  receives every credential. Only point it at a `ysu-api` instance you
+  control, ideally over HTTPS.
+- **CORS.** When the browser talks to the backend directly, allow-list
+  the current origin via `YSU_API_CORS_ORIGINS` on the `ysu-api` side.
 
-## 协议与免责
+## License & disclaimer
 
-本项目源代码默认按 MIT 协议开放（如仓库未单独附 `LICENSE` 文件，以本节为准）。
-仓库与作者**不对**因使用该客户端造成的任何账户、数据、纪律或法律后果负责。
+The source code in this repository is released under the MIT License by
+default (if the repo does not ship a separate `LICENSE` file, this
+section is authoritative). The repository and its authors take **no
+responsibility** for any account, data, disciplinary, or legal
+consequences arising from using this client.
