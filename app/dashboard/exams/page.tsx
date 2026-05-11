@@ -11,7 +11,15 @@ import { useAuthStore } from "@/lib/auth-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { getExams } from "@/lib/api";
 import type { Exam } from "@/lib/types";
-import { MapPin, Clock, CalendarDays } from "lucide-react";
+import { MapPin, Clock, CalendarDays, CheckCircle2 } from "lucide-react";
+
+function isExamCompleted(exam: Exam): boolean {
+  if (!exam.exam_date) return false;
+  const examDate = new Date(exam.exam_date.replace(/-/g, "/"));
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return examDate < today;
+}
 
 export default function ExamsPage() {
   const credential = useAuthStore((s) => s.credential);
@@ -48,6 +56,15 @@ export default function ExamsPage() {
     }
   }
 
+  function compareExamDate(a: Exam, b: Exam) {
+    const da = a.exam_date ? new Date(a.exam_date.replace(/-/g, "/")).getTime() : 0;
+    const db = b.exam_date ? new Date(b.exam_date.replace(/-/g, "/")).getTime() : 0;
+    return da - db;
+  }
+
+  const upcomingExams = exams.filter((e) => !isExamCompleted(e)).sort(compareExamDate);
+  const completedExams = exams.filter((e) => isExamCompleted(e)).sort(compareExamDate);
+
   if (loading && exams.length === 0) {
     return (
       <div className="flex flex-col gap-4">
@@ -79,37 +96,83 @@ export default function ExamsPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {exams.length === 0 ? (
-          <p className="text-muted-foreground col-span-full text-center py-12">{t("exams.noData")}</p>
-        ) : (
-          exams.map((exam, idx) => (
-            <Card key={idx}>
-              <CardHeader>
-                <CardTitle className="text-base">{exam.name}</CardTitle>
-                <CardDescription>{exam.exam_name}</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <CalendarDays className="size-4 text-muted-foreground" />
-                  <span>{exam.exam_date}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Clock className="size-4 text-muted-foreground" />
-                  <span>{exam.exam_time}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <MapPin className="size-4 text-muted-foreground" />
-                  <span>{exam.exam_location}</span>
-                </div>
-                {exam.seat_number && (
-                  <Badge variant="outline">{t("exams.seatNumber")}: {exam.seat_number}</Badge>
-                )}
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+      {exams.length === 0 ? (
+        <p className="text-muted-foreground text-center py-12">{t("exams.noData")}</p>
+      ) : (
+        <div className="flex flex-col gap-6">
+          {upcomingExams.length > 0 && (
+            <div className="grid gap-4 md:grid-cols-2">
+              {upcomingExams.map((exam, idx) => (
+                <Card key={idx}>
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <CardTitle className="text-base">{exam.name}</CardTitle>
+                      <Badge variant="default">{t("exams.upcomingExams")}</Badge>
+                    </div>
+                    <CardDescription>{exam.exam_name}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <CalendarDays className="size-4 text-muted-foreground" />
+                      <span>{exam.exam_date}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="size-4 text-muted-foreground" />
+                      <span>{exam.exam_time}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <MapPin className="size-4 text-muted-foreground" />
+                      <span>{exam.exam_location}</span>
+                    </div>
+                    {exam.seat_number && (
+                      <Badge variant="outline">{t("exams.seatNumber")}: {exam.seat_number}</Badge>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {completedExams.length > 0 && (
+            <>
+              <h3 className="text-sm font-medium text-muted-foreground">{t("exams.completedExams")}</h3>
+              <div className="grid gap-4 md:grid-cols-2">
+                {completedExams.map((exam, idx) => (
+                  <Card key={idx} className="opacity-60">
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <CardTitle className="text-base">{exam.name}</CardTitle>
+                        <Badge variant="secondary" className="gap-1">
+                          <CheckCircle2 className="size-3" />
+                          {t("exams.completed")}
+                        </Badge>
+                      </div>
+                      <CardDescription>{exam.exam_name}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <CalendarDays className="size-4 text-muted-foreground" />
+                        <span>{exam.exam_date}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Clock className="size-4 text-muted-foreground" />
+                        <span>{exam.exam_time}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <MapPin className="size-4 text-muted-foreground" />
+                        <span>{exam.exam_location}</span>
+                      </div>
+                      {exam.seat_number && (
+                        <Badge variant="outline">{t("exams.seatNumber")}: {exam.seat_number}</Badge>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

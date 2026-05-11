@@ -24,10 +24,10 @@ import {
 } from "@/components/ui/table";
 import { useAuthStore } from "@/lib/auth-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
-import { getGrades, getGPAStats } from "@/lib/api";
+import { getGrades, getGPAStats, getCurrentWeek } from "@/lib/api";
 import { cacheGet, cacheSet, cacheKey } from "@/lib/cache";
 import type { Grade, GPAStats } from "@/lib/types";
-import { Search } from "lucide-react";
+import { Search, ChevronDown, ChevronUp } from "lucide-react";
 
 export default function GradesPage() {
   const credential = useAuthStore((s) => s.credential);
@@ -38,6 +38,7 @@ export default function GradesPage() {
   const ALL_TERM = "__all__";
   const [term, setTerm] = useState(ALL_TERM);
   const [courseName, setCourseName] = useState("");
+  const [showAllGpa, setShowAllGpa] = useState(false);
 
   const terms = Array.from(new Set(grades.map((g) => g.term).filter(Boolean))).sort();
 
@@ -55,14 +56,18 @@ export default function GradesPage() {
 
     async function load() {
       try {
-        const [g, gp] = await Promise.all([
+        const [g, gp, weekInfo] = await Promise.all([
           getGrades(credential!),
           getGPAStats(credential!).catch(() => null),
+          getCurrentWeek(credential!).catch(() => null),
         ]);
         setGrades(g);
         setGpa(gp);
         cacheSet(cacheKey(["grades", credential!]), g);
         cacheSet(cacheKey(["gpa", credential!]), gp);
+        if (weekInfo?.term && terms.length === 0) {
+          setTerm(weekInfo.term);
+        }
       } catch (err) {
         if (!cachedGrades) toast.error((err as Error).message || t("app.updating"));
       } finally {
@@ -71,6 +76,13 @@ export default function GradesPage() {
     }
     load();
   }, [credential, t]);
+
+  useEffect(() => {
+    if (terms.length > 0 && term === ALL_TERM) {
+      const latest = terms[terms.length - 1];
+      if (latest) setTerm(latest);
+    }
+  }, [terms, term, ALL_TERM]);
 
   async function handleSearch() {
     if (!credential) return;
@@ -93,6 +105,19 @@ export default function GradesPage() {
     return true;
   });
 
+  const basicGpaItems = [
+    { label: t("grades.gpaInitial"), value: gpa?.gpa_initial },
+    { label: t("dashboard.weightedAvg"), value: gpa?.weighted_avg },
+    { label: t("dashboard.arithmeticAvg"), value: gpa?.arithmetic_avg },
+  ];
+
+  const extraGpaItems = [
+    { label: t("grades.gpaHighest"), value: gpa?.gpa_highest },
+    { label: t("grades.requiredGpaHighest"), value: gpa?.required_gpa_highest },
+    { label: t("grades.degreeGpaInitial"), value: gpa?.degree_gpa_initial },
+    { label: t("grades.degreeWeightedAvg"), value: gpa?.degree_weighted_avg },
+  ];
+
   if (loading && grades.length === 0) {
     return (
       <div className="flex flex-col gap-8">
@@ -107,25 +132,31 @@ export default function GradesPage() {
     <div className="flex flex-col gap-8">
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">{t("grades.gpaTitle")}</CardTitle>
-          <CardDescription>{t("grades.gpaDescription")}</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base">{t("grades.gpaTitle")}</CardTitle>
+              <CardDescription>{t("grades.gpaDescription")}</CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setShowAllGpa((v) => !v)}>
+              {showAllGpa ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
-            {[
-              { label: t("grades.gpaInitial"), value: gpa?.gpa_initial },
-              { label: t("grades.gpaHighest"), value: gpa?.gpa_highest },
-              { label: t("grades.requiredGpaHighest"), value: gpa?.required_gpa_highest },
-              { label: t("grades.degreeGpaInitial"), value: gpa?.degree_gpa_initial },
-              { label: t("dashboard.weightedAvg"), value: gpa?.weighted_avg },
-              { label: t("dashboard.arithmeticAvg"), value: gpa?.arithmetic_avg },
-              { label: t("grades.degreeWeightedAvg"), value: gpa?.degree_weighted_avg },
-            ].map((item) => (
+          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+            {basicGpaItems.map((item) => (
               <div key={item.label} className="flex flex-col gap-1 rounded-md border p-3">
                 <span className="text-xs text-muted-foreground">{item.label}</span>
                 <span className="text-lg font-semibold">{item.value || "-"}</span>
               </div>
             ))}
+            {showAllGpa &&
+              extraGpaItems.map((item) => (
+                <div key={item.label} className="flex flex-col gap-1 rounded-md border p-3">
+                  <span className="text-xs text-muted-foreground">{item.label}</span>
+                  <span className="text-lg font-semibold">{item.value || "-"}</span>
+                </div>
+              ))}
           </div>
         </CardContent>
       </Card>

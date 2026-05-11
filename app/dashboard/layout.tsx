@@ -1,16 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useTheme } from "next-themes";
 import { useAuthStore } from "@/lib/auth-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
-import type { Locale } from "@/lib/i18n/dict";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -30,7 +28,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { getStudentInfo } from "@/lib/api";
+import type { StudentInfo } from "@/lib/types";
 import {
   BookOpen,
   Calendar,
@@ -43,7 +49,6 @@ import {
   ScrollText,
   Sun,
   User,
-  BarChart3,
   Globe,
 } from "lucide-react";
 
@@ -58,11 +63,24 @@ export default function DashboardLayout({
   const { isAuthenticated, hasHydrated, username, clearCredential } = useAuthStore();
   const { t, locale, setLocale } = useTranslation();
 
+  const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null);
+  const [studentDialogOpen, setStudentDialogOpen] = useState(false);
+  const [loadingStudent, setLoadingStudent] = useState(false);
+
+  const credential = useAuthStore((s) => s.credential);
+
+  useEffect(() => {
+    if (!credential) return;
+    setLoadingStudent(true);
+    getStudentInfo(credential)
+      .then((s) => setStudentInfo(s))
+      .catch(() => {})
+      .finally(() => setLoadingStudent(false));
+  }, [credential]);
+
   const navItems = [
     { title: t("app.overview"), url: "/dashboard", icon: LayoutDashboard },
-    { title: t("app.studentInfo"), url: "/dashboard/student", icon: User },
     { title: t("app.grades"), url: "/dashboard/grades", icon: GraduationCap },
-    { title: t("app.gpa"), url: "/dashboard/gpa", icon: BarChart3 },
     { title: t("app.schedule"), url: "/dashboard/schedule", icon: Calendar },
     { title: t("app.exams"), url: "/dashboard/exams", icon: FileText },
     { title: t("app.trainingPlan"), url: "/dashboard/training-plan", icon: BookOpen },
@@ -99,8 +117,11 @@ export default function DashboardLayout({
   }
 
   return (
-    <SidebarProvider>
-      <Sidebar collapsible="icon">
+    <SidebarProvider style={{ "--sidebar-width": "18rem" } as React.CSSProperties}>
+      <Sidebar
+        collapsible="icon"
+        className="[&_[data-sidebar=menu-button]]:py-3"
+      >
         <SidebarHeader>
           <div className="flex items-center gap-2 px-2 py-3">
             <GraduationCap className="size-6 shrink-0" />
@@ -111,13 +132,14 @@ export default function DashboardLayout({
           <SidebarGroup>
             <SidebarGroupLabel>{t("app.nav")}</SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu>
+              <SidebarMenu className="gap-1.5">
                 {navItems.map((item) => (
                   <SidebarMenuItem key={item.url}>
                     <SidebarMenuButton
                       asChild
                       isActive={pathname === item.url}
                       tooltip={item.title}
+                      className="py-3"
                     >
                       <Link href={item.url}>
                         <item.icon />
@@ -130,29 +152,6 @@ export default function DashboardLayout({
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
-        <SidebarFooter>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                onClick={toggleLocale}
-                tooltip={t("app.language")}
-              >
-                <Globe className="size-4" />
-                <span>{locale === "zh" ? "中文" : "English"}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                tooltip={t("app.theme")}
-              >
-                <Sun className="size-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                <Moon className="absolute size-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                <span>{t("app.theme")}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarFooter>
         <SidebarRail />
       </Sidebar>
       <main className="flex-1 overflow-auto">
@@ -164,6 +163,14 @@ export default function DashboardLayout({
             </h1>
           </div>
           <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            >
+              <Sun className="size-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+              <Moon className="absolute size-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            </Button>
             <Button variant="ghost" size="sm" onClick={toggleLocale}>
               <Globe className="size-4 mr-1" />
               {locale === "zh" ? "中文" : "EN"}
@@ -173,14 +180,21 @@ export default function DashboardLayout({
                 <Button variant="ghost" className="relative size-8 rounded-full">
                   <Avatar className="size-8">
                     <AvatarFallback className="text-xs">
-                      {username?.slice(-2) || "U"}
+                      {studentInfo?.name?.slice(-2) || username?.slice(-2) || "U"}
                     </AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem disabled className="text-muted-foreground">
-                  {username || t("app.login")}
+              <DropdownMenuContent align="end" className="min-w-[10rem]">
+                <DropdownMenuItem disabled className="flex flex-col items-start gap-0.5">
+                  <span className="font-medium text-foreground">{studentInfo?.name || username || t("app.login")}</span>
+                  {studentInfo?.student_id && (
+                    <span className="text-xs text-muted-foreground">{studentInfo.student_id}</span>
+                  )}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStudentDialogOpen(true)}>
+                  <User className="mr-2 size-4" />
+                  {t("app.studentInfo")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 size-4" />
@@ -192,6 +206,48 @@ export default function DashboardLayout({
         </header>
         <div className="p-8">{children}</div>
       </main>
+
+      <Dialog open={studentDialogOpen} onOpenChange={setStudentDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("student.title")}</DialogTitle>
+          </DialogHeader>
+          {loadingStudent || !studentInfo ? (
+            <div className="flex flex-col gap-3">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="h-4 bg-muted rounded animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {[
+                { label: t("student.fields.name"), value: studentInfo.name },
+                { label: t("student.fields.studentId"), value: studentInfo.student_id },
+                { label: t("student.fields.pinyin"), value: studentInfo.name_pinyin },
+                { label: t("student.fields.gender"), value: studentInfo.gender },
+                { label: t("student.fields.nation"), value: studentInfo.nation },
+                { label: t("student.fields.nationality"), value: studentInfo.nationality },
+                { label: t("student.fields.department"), value: studentInfo.department },
+                { label: t("student.fields.major"), value: studentInfo.major },
+                { label: t("student.fields.className"), value: studentInfo.class_name },
+                { label: t("student.fields.gradeLevel"), value: studentInfo.grade_level },
+                { label: t("student.fields.enrollmentDate"), value: studentInfo.enrollment_date },
+                { label: t("student.fields.expectedGraduation"), value: studentInfo.expected_graduation },
+                { label: t("student.fields.educationLevel"), value: studentInfo.education_level },
+                { label: t("student.fields.campus"), value: studentInfo.campus },
+                { label: t("student.fields.studentStatus"), value: studentInfo.student_status },
+                { label: t("student.fields.studyDuration"), value: studentInfo.study_duration },
+                { label: t("student.fields.foreignLanguage"), value: studentInfo.foreign_language },
+              ].map((f) => (
+                <div key={f.label} className="flex flex-col gap-1">
+                  <span className="text-sm text-muted-foreground">{f.label}</span>
+                  <span className="font-medium">{f.value || "-"}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </SidebarProvider>
   );
 }

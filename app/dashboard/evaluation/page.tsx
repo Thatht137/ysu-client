@@ -67,6 +67,11 @@ export default function EvaluationPage() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [batchAutoLoading, setBatchAutoLoading] = useState(false);
 
+  // Batch selection dialog states
+  const [batchSelectOpen, setBatchSelectOpen] = useState(false);
+  const [batchConfirmOpen, setBatchConfirmOpen] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     if (!credential) return;
     async function load() {
@@ -263,17 +268,61 @@ export default function EvaluationPage() {
     }
   }
 
-  async function handleBatchAutoFill() {
-    if (!credential || !selectedType) return;
+  // Batch auto-fill with selection dialog
+  function openBatchSelect() {
     const activeTasks = tasks.filter((task) => getTaskStatus(task, t).active);
     if (activeTasks.length === 0) {
       toast.error(t("evaluation.noActiveTasks"));
       return;
     }
+    setSelectedTaskIds(new Set());
+    setBatchSelectOpen(true);
+  }
+
+  function toggleTaskSelection(taskId: string) {
+    setSelectedTaskIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
+  }
+
+  function selectAllTasks() {
+    const activeTasks = tasks.filter((task) => getTaskStatus(task, t).active);
+    setSelectedTaskIds(new Set(activeTasks.map((t) => t.wid || "").filter(Boolean)));
+  }
+
+  function deselectAllTasks() {
+    setSelectedTaskIds(new Set());
+  }
+
+  function goToBatchConfirm() {
+    if (selectedTaskIds.size === 0) {
+      toast.error("请至少选择一个任务");
+      return;
+    }
+    setBatchSelectOpen(false);
+    setBatchConfirmOpen(true);
+  }
+
+  async function executeBatchAutoFill() {
+    if (!credential || !selectedType) return;
+    const tasksToProcess = tasks.filter(
+      (task) => selectedTaskIds.has(task.wid || "") && getTaskStatus(task, t).active
+    );
+    if (tasksToProcess.length === 0) {
+      toast.error(t("evaluation.noActiveTasks"));
+      return;
+    }
+    setBatchConfirmOpen(false);
     setBatchAutoLoading(true);
     let success = 0;
     let failed = 0;
-    for (const task of activeTasks) {
+    for (const task of tasksToProcess) {
       try {
         const d = await getEvaluationDetail(credential!, task.group_no || "", task.eval_type || "", task.sequence);
         const initial: Record<string, EvaluationAnswer> = {};
@@ -342,7 +391,7 @@ export default function EvaluationPage() {
               <CardDescription>{t("evaluation.description")}</CardDescription>
             </div>
             {selectedType && tasks.filter((task) => getTaskStatus(task, t).active).length > 0 && (
-              <Button variant="outline" size="sm" onClick={handleBatchAutoFill} disabled={batchAutoLoading}>
+              <Button variant="outline" size="sm" onClick={openBatchSelect} disabled={batchAutoLoading}>
                 <Sparkles className="size-4 mr-1" />
                 {batchAutoLoading ? t("evaluation.batchAutoLoading") : t("evaluation.batchAuto")}
               </Button>
@@ -416,8 +465,9 @@ export default function EvaluationPage() {
         </Card>
       )}
 
+      {/* Main evaluation dialog - enlarged */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-auto">
+        <DialogContent className="sm:max-w-5xl w-[90vw] max-h-[90vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>{detail?.name || t("evaluation.title")}</DialogTitle>
             <DialogDescription>
@@ -547,8 +597,9 @@ export default function EvaluationPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Preview dialog */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{t("evaluation.previewResult")}</DialogTitle>
           </DialogHeader>
@@ -562,6 +613,90 @@ export default function EvaluationPage() {
           </div>
           <DialogFooter>
             <Button onClick={() => setPreviewOpen(false)}>{t("evaluation.close")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Batch selection dialog */}
+      <Dialog open={batchSelectOpen} onOpenChange={setBatchSelectOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{t("evaluation.batchSelectTitle")}</DialogTitle>
+            <DialogDescription>{t("evaluation.batchSelectDesc")}</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="sm" onClick={selectAllTasks}>
+                {t("evaluation.selectAll")}
+              </Button>
+              <Button variant="outline" size="sm" onClick={deselectAllTasks}>
+                {t("evaluation.deselectAll")}
+              </Button>
+              <span className="text-sm text-muted-foreground ml-auto">
+                {t("evaluation.selectedCount", { count: selectedTaskIds.size })}
+              </span>
+            </div>
+            <div className="flex flex-col gap-2 max-h-[50vh] overflow-auto">
+              {tasks
+                .filter((task) => getTaskStatus(task, t).active)
+                .map((task) => (
+                  <div
+                    key={task.wid}
+                    className="flex items-start gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/50"
+                    onClick={() => toggleTaskSelection(task.wid || "")}
+                  >
+                    <Checkbox
+                      checked={selectedTaskIds.has(task.wid || "")}
+                      onCheckedChange={() => toggleTaskSelection(task.wid || "")}
+                      className="mt-0.5"
+                    />
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-medium text-sm">{task.course_name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {task.teacher_name} · {task.term_name}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchSelectOpen(false)}>
+              {t("evaluation.cancel")}
+            </Button>
+            <Button onClick={goToBatchConfirm} disabled={selectedTaskIds.size === 0}>
+              {t("evaluation.nextStep")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Batch confirmation dialog */}
+      <Dialog open={batchConfirmOpen} onOpenChange={setBatchConfirmOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{t("evaluation.batchConfirmTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("evaluation.batchConfirmDesc", { count: selectedTaskIds.size })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 max-h-[40vh] overflow-auto">
+            {tasks
+              .filter((task) => selectedTaskIds.has(task.wid || ""))
+              .map((task) => (
+                <div key={task.wid} className="flex items-center gap-2 rounded-lg border p-2 text-sm">
+                  <span className="font-medium">{task.course_name}</span>
+                  <span className="text-muted-foreground text-xs">· {task.teacher_name}</span>
+                </div>
+              ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchConfirmOpen(false)}>
+              {t("evaluation.cancel")}
+            </Button>
+            <Button onClick={executeBatchAutoFill}>
+              {t("evaluation.confirmSubmit")}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

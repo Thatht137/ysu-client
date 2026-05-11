@@ -16,6 +16,7 @@ import {
 import { useAuthStore } from "@/lib/auth-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { getExperimentalSchedule, getClassPeriods, getCurrentWeek } from "@/lib/api";
+import { cacheGet, cacheSet, cacheKey } from "@/lib/cache";
 import type { Course, ClassPeriod, CurrentWeek } from "@/lib/types";
 
 function parseWeeks(weeksStr: string): number[] {
@@ -62,6 +63,23 @@ export default function SchedulePage() {
 
   useEffect(() => {
     if (!credential) return;
+
+    const cachedCourses = cacheGet<Course[]>(cacheKey(["schedule", credential]));
+    const cachedPeriods = cacheGet<ClassPeriod[]>(cacheKey(["periods", credential]));
+    const cachedWeek = cacheGet<CurrentWeek>(cacheKey(["week", credential]));
+
+    if (cachedCourses) setCourses(cachedCourses);
+    if (cachedPeriods) setPeriods(cachedPeriods);
+    if (cachedWeek) {
+      setCurrentWeek(cachedWeek);
+      if (cachedWeek.week) setSelectedWeek(cachedWeek.week);
+    }
+
+    if (cachedCourses || cachedPeriods || cachedWeek) {
+      setLoading(false);
+      toast.info(t("app.updating"));
+    }
+
     async function load() {
       try {
         const [c, p, w] = await Promise.all([
@@ -73,6 +91,9 @@ export default function SchedulePage() {
         setPeriods(p.filter((x) => x.is_in_use).sort((a, b) => a.section - b.section));
         setCurrentWeek(w);
         if (w?.week) setSelectedWeek(w.week);
+        cacheSet(cacheKey(["schedule", credential!]), c);
+        cacheSet(cacheKey(["periods", credential!]), p.filter((x) => x.is_in_use).sort((a, b) => a.section - b.section));
+        cacheSet(cacheKey(["week", credential!]), w);
       } catch (err) {
         toast.error((err as Error).message || t("app.updating"));
       } finally {
@@ -93,6 +114,8 @@ export default function SchedulePage() {
       setCourses(c);
       setCurrentWeek(w);
       if (w?.week) setSelectedWeek(w.week);
+      cacheSet(cacheKey(["schedule", credential!]), c);
+      cacheSet(cacheKey(["week", credential!]), w);
     } catch (err) {
       toast.error((err as Error).message || t("app.updating"));
     } finally {
@@ -165,6 +188,8 @@ export default function SchedulePage() {
     };
   }
 
+  const currentWeekday = currentWeek?.weekday ?? 0;
+
   if (loading && courses.length === 0) {
     return (
       <div className="flex flex-col gap-4">
@@ -221,8 +246,15 @@ export default function SchedulePage() {
                 }}
               >
                 <div className="border p-2 text-sm font-medium bg-muted/50">{t("schedule.sections")}</div>
-                {WEEKDAYS.slice(1).map((d) => (
-                  <div key={d} className="border p-2 text-center text-sm font-medium bg-muted/50">
+                {WEEKDAYS.slice(1).map((d, idx) => (
+                  <div
+                    key={d}
+                    className={`border p-2 text-center text-sm font-medium ${
+                      idx + 1 === currentWeekday
+                        ? "bg-primary/10 text-primary"
+                        : "bg-muted/50"
+                    }`}
+                  >
                     {d}
                   </div>
                 ))}
@@ -241,7 +273,9 @@ export default function SchedulePage() {
                 {mergedBlocks.map((block, idx) => (
                   <div
                     key={idx}
-                    className="border p-1"
+                    className={`border p-1 ${
+                      block.day === currentWeekday ? "bg-primary/5" : ""
+                    }`}
                     style={blockStyle(block)}
                   >
                     {block.courses.length === 1 ? (
