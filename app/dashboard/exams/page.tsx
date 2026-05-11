@@ -8,12 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/lib/auth-store";
+import { useTranslation } from "@/lib/i18n/use-translation";
 import { getExams } from "@/lib/api";
 import type { Exam } from "@/lib/types";
 import { MapPin, Clock, CalendarDays } from "lucide-react";
 
 export default function ExamsPage() {
   const credential = useAuthStore((s) => s.credential);
+  const { t } = useTranslation();
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   const [term, setTerm] = useState("");
@@ -25,13 +27,13 @@ export default function ExamsPage() {
         const e = await getExams(credential!);
         setExams(e);
       } catch (err) {
-        toast.error((err as Error).message || "加载失败");
+        toast.error((err as Error).message || t("app.updating"));
       } finally {
         setLoading(false);
       }
     }
     load();
-  }, [credential]);
+  }, [credential, t]);
 
   async function handleQuery() {
     if (!credential) return;
@@ -40,7 +42,7 @@ export default function ExamsPage() {
       const e = await getExams(credential, term || undefined);
       setExams(e);
     } catch (err) {
-      toast.error((err as Error).message || "查询失败");
+      toast.error((err as Error).message || t("app.updating"));
     } finally {
       setLoading(false);
     }
@@ -63,23 +65,23 @@ export default function ExamsPage() {
     <div className="flex flex-col gap-6">
       <Card>
         <CardHeader>
-          <CardTitle>考试安排</CardTitle>
-          <CardDescription>查看各学期考试时间与地点</CardDescription>
+          <CardTitle>{t("exams.title")}</CardTitle>
+          <CardDescription>{t("exams.description")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">学期</label>
-              <Input value={term} onChange={(e) => setTerm(e.target.value)} placeholder="如 2024-2025-1" className="w-48" />
+              <label className="text-sm font-medium">{t("exams.termLabel")}</label>
+              <Input value={term} onChange={(e) => setTerm(e.target.value)} placeholder={t("exams.termPlaceholder")} className="w-48" />
             </div>
-            <Button onClick={handleQuery}>查询</Button>
+            <Button onClick={handleQuery}>{t("exams.query")}</Button>
           </div>
         </CardContent>
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
         {exams.length === 0 ? (
-          <p className="text-muted-foreground col-span-full text-center py-12">暂无考试安排</p>
+          <p className="text-muted-foreground col-span-full text-center py-12">{t("exams.noData")}</p>
         ) : (
           exams.map((exam, idx) => (
             <Card key={idx}>
@@ -101,7 +103,7 @@ export default function ExamsPage() {
                   <span>{exam.exam_location}</span>
                 </div>
                 {exam.seat_number && (
-                  <Badge variant="outline">座位号: {exam.seat_number}</Badge>
+                  <Badge variant="outline">{t("exams.seatNumber")}: {exam.seat_number}</Badge>
                 )}
               </CardContent>
             </Card>

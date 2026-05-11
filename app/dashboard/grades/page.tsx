@@ -23,14 +23,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuthStore } from "@/lib/auth-store";
-import { getGrades } from "@/lib/api";
-import type { Grade } from "@/lib/types";
-import { Search } from "lucide-react";
+import { useTranslation } from "@/lib/i18n/use-translation";
+import { getGrades, getGPAStats } from "@/lib/api";
+import { cacheGet, cacheSet, cacheKey } from "@/lib/cache";
+import type { Grade, GPAStats } from "@/lib/types";
+import { Search, AlertCircle } from "lucide-react";
 
 export default function GradesPage() {
   const credential = useAuthStore((s) => s.credential);
+  const { t } = useTranslation();
   const [grades, setGrades] = useState<Grade[]>([]);
+  const [gpa, setGpa] = useState<GPAStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
   const ALL_TERM = "__all__";
   const [term, setTerm] = useState(ALL_TERM);
   const [courseName, setCourseName] = useState("");
@@ -39,18 +44,35 @@ export default function GradesPage() {
 
   useEffect(() => {
     if (!credential) return;
+
+    const cachedGrades = cacheGet<Grade[]>(cacheKey(["grades", credential]));
+    const cachedGpa = cacheGet<GPAStats>(cacheKey(["gpa", credential]));
+    if (cachedGrades) setGrades(cachedGrades);
+    if (cachedGpa) setGpa(cachedGpa);
+    if (cachedGrades || cachedGpa) {
+      setLoading(false);
+      setUpdating(true);
+    }
+
     async function load() {
       try {
-        const g = await getGrades(credential!);
+        const [g, gp] = await Promise.all([
+          getGrades(credential!),
+          getGPAStats(credential!).catch(() => null),
+        ]);
         setGrades(g);
+        setGpa(gp);
+        cacheSet(cacheKey(["grades", credential!]), g);
+        cacheSet(cacheKey(["gpa", credential!]), gp);
       } catch (err) {
-        toast.error((err as Error).message || "加载失败");
+        if (!cachedGrades) toast.error((err as Error).message || t("app.updating"));
       } finally {
         setLoading(false);
+        setUpdating(false);
       }
     }
     load();
-  }, [credential]);
+  }, [credential, t]);
 
   async function handleSearch() {
     if (!credential) return;
@@ -62,7 +84,7 @@ export default function GradesPage() {
       });
       setGrades(g);
     } catch (err) {
-      toast.error((err as Error).message || "查询失败");
+      toast.error((err as Error).message || t("app.updating"));
     } finally {
       setLoading(false);
     }
@@ -75,7 +97,8 @@ export default function GradesPage() {
 
   if (loading && grades.length === 0) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-8">
+        <Skeleton className="h-24" />
         <Skeleton className="h-12" />
         <Skeleton className="h-96" />
       </div>
@@ -83,42 +106,74 @@ export default function GradesPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
+      {updating && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <AlertCircle className="size-4" />
+          {t("app.updating")}
+        </div>
+      )}
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">{t("grades.gpaTitle")}</CardTitle>
+          <CardDescription>{t("grades.gpaDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
+            {[
+              { label: t("grades.gpaInitial"), value: gpa?.gpa_initial },
+              { label: t("grades.gpaHighest"), value: gpa?.gpa_highest },
+              { label: t("grades.requiredGpaHighest"), value: gpa?.required_gpa_highest },
+              { label: t("grades.degreeGpaInitial"), value: gpa?.degree_gpa_initial },
+              { label: t("dashboard.weightedAvg"), value: gpa?.weighted_avg },
+              { label: t("dashboard.arithmeticAvg"), value: gpa?.arithmetic_avg },
+              { label: t("grades.degreeWeightedAvg"), value: gpa?.degree_weighted_avg },
+            ].map((item) => (
+              <div key={item.label} className="flex flex-col gap-1 rounded-md border p-3">
+                <span className="text-xs text-muted-foreground">{item.label}</span>
+                <span className="text-lg font-semibold">{item.value || "-"}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
-          <CardTitle>成绩查询</CardTitle>
-          <CardDescription>查看各学期课程成绩与绩点</CardDescription>
+          <CardTitle>{t("grades.title")}</CardTitle>
+          <CardDescription>{t("grades.description")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">学期</label>
+              <label className="text-sm font-medium">{t("grades.termLabel")}</label>
               <Select value={term} onValueChange={setTerm}>
                 <SelectTrigger className="w-48">
-                  <SelectValue placeholder="全部学期" />
+                  <SelectValue placeholder={t("grades.allTerms")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL_TERM}>全部学期</SelectItem>
-                  {terms.map((t) => (
-                    <SelectItem key={t} value={t!}>
-                      {t}
+                  <SelectItem value={ALL_TERM}>{t("grades.allTerms")}</SelectItem>
+                  {terms.map((tItem) => (
+                    <SelectItem key={tItem} value={tItem!}>
+                      {tItem}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">课程名</label>
+              <label className="text-sm font-medium">{t("grades.courseNameLabel")}</label>
               <Input
                 value={courseName}
                 onChange={(e) => setCourseName(e.target.value)}
-                placeholder="搜索课程..."
+                placeholder={t("grades.courseNamePlaceholder")}
                 className="w-48"
               />
             </div>
             <Button onClick={handleSearch}>
               <Search className="size-4" />
-              查询
+              {t("grades.search")}
             </Button>
           </div>
         </CardContent>
@@ -126,25 +181,25 @@ export default function GradesPage() {
 
       <Card>
         <CardContent className="pt-6">
-          <div className="rounded-md border">
+          <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>学期</TableHead>
-                  <TableHead>课程名</TableHead>
-                  <TableHead>课程号</TableHead>
-                  <TableHead>成绩</TableHead>
-                  <TableHead>绩点</TableHead>
-                  <TableHead>学分</TableHead>
-                  <TableHead>类型</TableHead>
-                  <TableHead>状态</TableHead>
+                  <TableHead>{t("grades.table.term")}</TableHead>
+                  <TableHead>{t("grades.table.courseName")}</TableHead>
+                  <TableHead>{t("grades.table.courseCode")}</TableHead>
+                  <TableHead>{t("grades.table.score")}</TableHead>
+                  <TableHead>{t("grades.table.gradePoint")}</TableHead>
+                  <TableHead>{t("grades.table.credit")}</TableHead>
+                  <TableHead>{t("grades.table.type")}</TableHead>
+                  <TableHead>{t("grades.table.status")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center text-muted-foreground">
-                      暂无成绩数据
+                      {t("grades.table.noData")}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -161,9 +216,9 @@ export default function GradesPage() {
                       </TableCell>
                       <TableCell>
                         {g.is_pass ? (
-                          <Badge variant="default">通过</Badge>
+                          <Badge variant="default">{t("grades.table.pass")}</Badge>
                         ) : (
-                          <Badge variant="destructive">未通过</Badge>
+                          <Badge variant="destructive">{t("grades.table.fail")}</Badge>
                         )}
                       </TableCell>
                     </TableRow>

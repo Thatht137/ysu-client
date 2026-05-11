@@ -3,7 +3,10 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import { useTheme } from "next-themes";
 import { useAuthStore } from "@/lib/auth-store";
+import { useTranslation } from "@/lib/i18n/use-translation";
+import type { Locale } from "@/lib/i18n/dict";
 import {
   Sidebar,
   SidebarContent,
@@ -16,10 +19,17 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
+  SidebarRail,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import {
   BookOpen,
@@ -29,24 +39,13 @@ import {
   GraduationCap,
   LayoutDashboard,
   LogOut,
+  Moon,
   ScrollText,
-  Settings,
+  Sun,
   User,
-  AlertTriangle,
   BarChart3,
+  Globe,
 } from "lucide-react";
-
-const navItems = [
-  { title: "总览", url: "/dashboard", icon: LayoutDashboard },
-  { title: "学生信息", url: "/dashboard/student", icon: User },
-  { title: "成绩查询", url: "/dashboard/grades", icon: GraduationCap },
-  { title: "绩点统计", url: "/dashboard/gpa", icon: BarChart3 },
-  { title: "课表查询", url: "/dashboard/schedule", icon: Calendar },
-  { title: "考试安排", url: "/dashboard/exams", icon: FileText },
-  { title: "培养方案", url: "/dashboard/training-plan", icon: BookOpen },
-  { title: "学业完成", url: "/dashboard/academic", icon: ScrollText },
-  { title: "学生评教", url: "/dashboard/evaluation", icon: ClipboardCheck },
-];
 
 export default function DashboardLayout({
   children,
@@ -55,7 +54,21 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { isAuthenticated, hasHydrated, clearCredential } = useAuthStore();
+  const { theme, setTheme } = useTheme();
+  const { isAuthenticated, hasHydrated, username, clearCredential } = useAuthStore();
+  const { t, locale, setLocale } = useTranslation();
+
+  const navItems = [
+    { title: t("app.overview"), url: "/dashboard", icon: LayoutDashboard },
+    { title: t("app.studentInfo"), url: "/dashboard/student", icon: User },
+    { title: t("app.grades"), url: "/dashboard/grades", icon: GraduationCap },
+    { title: t("app.gpa"), url: "/dashboard/gpa", icon: BarChart3 },
+    { title: t("app.schedule"), url: "/dashboard/schedule", icon: Calendar },
+    { title: t("app.exams"), url: "/dashboard/exams", icon: FileText },
+    { title: t("app.trainingPlan"), url: "/dashboard/training-plan", icon: BookOpen },
+    { title: t("app.academic"), url: "/dashboard/academic", icon: ScrollText },
+    { title: t("app.evaluation"), url: "/dashboard/evaluation", icon: ClipboardCheck },
+  ];
 
   useEffect(() => {
     if (hasHydrated && !isAuthenticated) {
@@ -65,14 +78,18 @@ export default function DashboardLayout({
 
   function handleLogout() {
     clearCredential();
-    toast.success("已退出登录");
+    toast.success(t("app.logout"));
     router.replace("/login");
+  }
+
+  function toggleLocale() {
+    setLocale(locale === "zh" ? "en" : "zh");
   }
 
   if (!hasHydrated) {
     return (
       <div className="flex min-h-svh items-center justify-center">
-        <div className="text-muted-foreground">加载中...</div>
+        <div className="text-muted-foreground">{t("app.updating")}</div>
       </div>
     );
   }
@@ -83,16 +100,16 @@ export default function DashboardLayout({
 
   return (
     <SidebarProvider>
-      <Sidebar>
+      <Sidebar collapsible="icon">
         <SidebarHeader>
           <div className="flex items-center gap-2 px-2 py-3">
-            <GraduationCap className="size-6" />
-            <span className="font-semibold">YSU 教务</span>
+            <GraduationCap className="size-6 shrink-0" />
+            <span className="font-semibold group-data-[collapsible=icon]:hidden">{t("app.name")}</span>
           </div>
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>
-            <SidebarGroupLabel>导航</SidebarGroupLabel>
+            <SidebarGroupLabel>{t("app.nav")}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {navItems.map((item) => (
@@ -100,6 +117,7 @@ export default function DashboardLayout({
                     <SidebarMenuButton
                       asChild
                       isActive={pathname === item.url}
+                      tooltip={item.title}
                     >
                       <Link href={item.url}>
                         <item.icon />
@@ -113,27 +131,66 @@ export default function DashboardLayout({
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter>
-          <div className="flex flex-col gap-2 p-2">
-            <Separator />
-            <Button
-              variant="ghost"
-              className="justify-start gap-2"
-              onClick={handleLogout}
-            >
-              <LogOut className="size-4" />
-              退出登录
-            </Button>
-          </div>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                onClick={toggleLocale}
+                tooltip={t("app.language")}
+              >
+                <Globe className="size-4" />
+                <span>{locale === "zh" ? "中文" : "English"}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                tooltip={t("app.theme")}
+              >
+                <Sun className="size-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                <Moon className="absolute size-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                <span>{t("app.theme")}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
         </SidebarFooter>
+        <SidebarRail />
       </Sidebar>
       <main className="flex-1 overflow-auto">
-        <div className="flex items-center gap-2 border-b p-4">
-          <SidebarTrigger />
-          <h1 className="text-lg font-semibold">
-            {navItems.find((i) => i.url === pathname)?.title || "YSU 教务"}
-          </h1>
-        </div>
-        <div className="p-6">{children}</div>
+        <header className="flex items-center justify-between gap-4 border-b px-6 py-4">
+          <div className="flex items-center gap-3">
+            <SidebarTrigger />
+            <h1 className="text-lg font-semibold">
+              {navItems.find((i) => i.url === pathname)?.title || t("app.name")}
+            </h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={toggleLocale}>
+              <Globe className="size-4 mr-1" />
+              {locale === "zh" ? "中文" : "EN"}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative size-8 rounded-full">
+                  <Avatar className="size-8">
+                    <AvatarFallback className="text-xs">
+                      {username?.slice(-2) || "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem disabled className="text-muted-foreground">
+                  {username || t("app.login")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleLogout}>
+                  <LogOut className="mr-2 size-4" />
+                  {t("app.logout")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
+        <div className="p-8">{children}</div>
       </main>
     </SidebarProvider>
   );

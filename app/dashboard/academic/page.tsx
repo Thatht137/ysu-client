@@ -15,12 +15,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuthStore } from "@/lib/auth-store";
+import { useTranslation } from "@/lib/i18n/use-translation";
 import { getAcademicCompletion, getAcademicWarnings } from "@/lib/api";
 import type { AcademicCompletion, AcademicWarning } from "@/lib/types";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 
 export default function AcademicPage() {
   const credential = useAuthStore((s) => s.credential);
+  const { t } = useTranslation();
   const [completion, setCompletion] = useState<AcademicCompletion | null>(null);
   const [warnings, setWarnings] = useState<AcademicWarning[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,13 +38,13 @@ export default function AcademicPage() {
         setCompletion(c);
         setWarnings(w);
       } catch (err) {
-        toast.error((err as Error).message || "加载失败");
+        toast.error((err as Error).message || t("app.updating"));
       } finally {
         setLoading(false);
       }
     }
     load();
-  }, [credential]);
+  }, [credential, t]);
 
   if (loading) {
     return (
@@ -58,23 +60,23 @@ export default function AcademicPage() {
     <div className="flex flex-col gap-6">
       <Card>
         <CardHeader>
-          <CardTitle>学业完成</CardTitle>
-          <CardDescription>培养方案完成情况</CardDescription>
+          <CardTitle>{t("academic.completionTitle")}</CardTitle>
+          <CardDescription>{t("academic.completionDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           {completion ? (
             <div className="flex flex-col gap-4">
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="flex flex-col gap-1 rounded-lg border p-4">
-                  <span className="text-sm text-muted-foreground">培养方案</span>
+                  <span className="text-sm text-muted-foreground">{t("academic.planName")}</span>
                   <span className="text-xl font-semibold">{completion.plan_name || "-"}</span>
                 </div>
                 <div className="flex flex-col gap-1 rounded-lg border p-4">
-                  <span className="text-sm text-muted-foreground">要求学分</span>
+                  <span className="text-sm text-muted-foreground">{t("academic.totalRequired")}</span>
                   <span className="text-xl font-semibold">{completion.total_required || "-"}</span>
                 </div>
                 <div className="flex flex-col gap-1 rounded-lg border p-4">
-                  <span className="text-sm text-muted-foreground">已完成</span>
+                  <span className="text-sm text-muted-foreground">{t("academic.completed")}</span>
                   <span className="text-xl font-semibold">{completion.completed || "-"}</span>
                 </div>
               </div>
@@ -82,43 +84,43 @@ export default function AcademicPage() {
                 {completion.passed ? (
                   <Badge variant="default" className="gap-1">
                     <CheckCircle2 className="size-3" />
-                    已通过
+                    {t("academic.passed")}
                   </Badge>
                 ) : (
                   <Badge variant="destructive" className="gap-1">
                     <AlertTriangle className="size-3" />
-                    未完成
+                    {t("academic.notPassed")}
                   </Badge>
                 )}
               </div>
             </div>
           ) : (
-            <p className="text-muted-foreground">暂无学业完成数据</p>
+            <p className="text-muted-foreground">{t("academic.noCompletionData")}</p>
           )}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>学业预警</CardTitle>
-          <CardDescription>学业状态预警信息</CardDescription>
+          <CardTitle>{t("academic.warningsTitle")}</CardTitle>
+          <CardDescription>{t("academic.warningsDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           {warnings.length === 0 ? (
             <Alert>
               <CheckCircle2 className="size-4" />
-              <AlertTitle>无预警</AlertTitle>
-              <AlertDescription>当前没有学业预警信息</AlertDescription>
+              <AlertTitle>{t("academic.noWarnings")}</AlertTitle>
+              <AlertDescription>{t("academic.noWarningsDesc")}</AlertDescription>
             </Alert>
           ) : (
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>预警类型</TableHead>
-                    <TableHead>级别</TableHead>
-                    <TableHead>描述</TableHead>
-                    <TableHead>学期</TableHead>
+                    <TableHead>{t("academic.table.type")}</TableHead>
+                    <TableHead>{t("academic.table.level")}</TableHead>
+                    <TableHead>{t("academic.table.description")}</TableHead>
+                    <TableHead>{t("academic.table.term")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

@@ -14,10 +14,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAuthStore } from "@/lib/auth-store";
+import { useTranslation } from "@/lib/i18n/use-translation";
 import { getExperimentalSchedule, getClassPeriods, getCurrentWeek } from "@/lib/api";
 import type { Course, ClassPeriod, CurrentWeek } from "@/lib/types";
-
-const WEEKDAYS = ["", "周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
 function parseWeeks(weeksStr: string): number[] {
   const result = new Set<number>();
@@ -50,6 +49,7 @@ interface GridCell {
 
 export default function SchedulePage() {
   const credential = useAuthStore((s) => s.credential);
+  const { t } = useTranslation();
   const [courses, setCourses] = useState<Course[]>([]);
   const [periods, setPeriods] = useState<ClassPeriod[]>([]);
   const [currentWeek, setCurrentWeek] = useState<CurrentWeek | null>(null);
@@ -57,6 +57,8 @@ export default function SchedulePage() {
   const [term, setTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [overlapDialog, setOverlapDialog] = useState<{ day: number; section: number; courses: Course[] } | null>(null);
+
+  const WEEKDAYS = ["", t("dashboard.weekday", { day: 1 }), t("dashboard.weekday", { day: 2 }), t("dashboard.weekday", { day: 3 }), t("dashboard.weekday", { day: 4 }), t("dashboard.weekday", { day: 5 }), t("dashboard.weekday", { day: 6 }), t("dashboard.weekday", { day: 7 })];
 
   useEffect(() => {
     if (!credential) return;
@@ -72,13 +74,13 @@ export default function SchedulePage() {
         setCurrentWeek(w);
         if (w?.week) setSelectedWeek(w.week);
       } catch (err) {
-        toast.error((err as Error).message || "加载失败");
+        toast.error((err as Error).message || t("app.updating"));
       } finally {
         setLoading(false);
       }
     }
     load();
-  }, [credential]);
+  }, [credential, t]);
 
   async function handleQuery() {
     if (!credential) return;
@@ -92,7 +94,7 @@ export default function SchedulePage() {
       setCurrentWeek(w);
       if (w?.week) setSelectedWeek(w.week);
     } catch (err) {
-      toast.error((err as Error).message || "查询失败");
+      toast.error((err as Error).message || t("app.updating"));
     } finally {
       setLoading(false);
     }
@@ -120,7 +122,6 @@ export default function SchedulePage() {
     return g;
   }, [filteredCourses, periods]);
 
-  // For each day, compute merged blocks: consecutive sections with the same single course
   const mergedBlocks = useMemo(() => {
     const blocks: { day: number; start: number; end: number; courses: Course[] }[] = [];
     const maxSection = periods.length > 0 ? periods[periods.length - 1].section : 12;
@@ -132,7 +133,6 @@ export default function SchedulePage() {
           section++;
           continue;
         }
-        // When single course, try to merge consecutive sections
         if (cell.courses.length === 1) {
           const course = cell.courses[0];
           let end = section;
@@ -147,7 +147,6 @@ export default function SchedulePage() {
           blocks.push({ day, start: section, end, courses: [course] });
           section = end + 1;
         } else {
-          // Multiple courses at this section - don't merge
           blocks.push({ day, start: section, end: section, courses: cell.courses });
           section++;
         }
@@ -157,8 +156,8 @@ export default function SchedulePage() {
   }, [grid, periods]);
 
   function blockStyle(block: { day: number; start: number; end: number }) {
-    const rowStart = periods.findIndex((p) => p.section === block.start) + 2; // +2 because header is row 1
-    const rowEnd = periods.findIndex((p) => p.section === block.end) + 3; // span to after the last section
+    const rowStart = periods.findIndex((p) => p.section === block.start) + 2;
+    const rowEnd = periods.findIndex((p) => p.section === block.end) + 3;
     const colStart = block.day + 1;
     return {
       gridRow: `${rowStart} / ${rowEnd}`,
@@ -179,31 +178,31 @@ export default function SchedulePage() {
     <div className="flex flex-col gap-6">
       <Card>
         <CardHeader>
-          <CardTitle>课表查询</CardTitle>
-          <CardDescription>查看课程安排（含实验选课），选择周次筛选</CardDescription>
+          <CardTitle>{t("schedule.title")}</CardTitle>
+          <CardDescription>{t("schedule.description")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">学期</label>
-              <Input value={term} onChange={(e) => setTerm(e.target.value)} placeholder="如 2024-2025-1" className="w-48" />
+              <label className="text-sm font-medium">{t("schedule.termLabel")}</label>
+              <Input value={term} onChange={(e) => setTerm(e.target.value)} placeholder={t("schedule.termPlaceholder")} className="w-48" />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">周次</label>
+              <label className="text-sm font-medium">{t("schedule.weekLabel")}</label>
               <div className="flex items-center gap-2">
                 <Input
                   type="number"
                   value={selectedWeek || ""}
                   onChange={(e) => setSelectedWeek(parseInt(e.target.value, 10) || 0)}
-                  placeholder="全部"
+                  placeholder={t("schedule.weeks")}
                   className="w-24"
                 />
                 {currentWeek?.week && (
-                  <Badge variant="secondary">当前第 {currentWeek.week} 周</Badge>
+                  <Badge variant="secondary">{t("schedule.currentWeekBadge", { week: currentWeek.week })}</Badge>
                 )}
               </div>
             </div>
-            <Button onClick={handleQuery}>查询</Button>
+            <Button onClick={handleQuery}>{t("schedule.query")}</Button>
           </div>
         </CardContent>
       </Card>
@@ -211,7 +210,7 @@ export default function SchedulePage() {
       <Card>
         <CardContent className="pt-6">
           {courses.length === 0 ? (
-            <p className="text-center text-muted-foreground py-12">暂无课表数据</p>
+            <p className="text-center text-muted-foreground py-12">{t("schedule.noData")}</p>
           ) : (
             <div className="overflow-auto">
               <div
@@ -221,27 +220,24 @@ export default function SchedulePage() {
                   gridTemplateRows: `auto repeat(${periods.length}, minmax(60px, auto))`,
                 }}
               >
-                {/* Header */}
-                <div className="border p-2 text-sm font-medium bg-muted/50">节次</div>
+                <div className="border p-2 text-sm font-medium bg-muted/50">{t("schedule.sections")}</div>
                 {WEEKDAYS.slice(1).map((d) => (
                   <div key={d} className="border p-2 text-center text-sm font-medium bg-muted/50">
                     {d}
                   </div>
                 ))}
 
-                {/* Period labels */}
                 {periods.map((p) => (
                   <div
                     key={p.section}
                     className="border p-2 text-xs text-muted-foreground flex flex-col justify-center"
                     style={{ gridColumn: 1 }}
                   >
-                    <span className="font-medium text-foreground">{p.name || `第${p.section}节`}</span>
+                    <span className="font-medium text-foreground">{p.name || t("dashboard.sectionRange", { start: p.section, end: p.section })}</span>
                     <span>{p.start_time}-{p.end_time}</span>
                   </div>
                 ))}
 
-                {/* Merged course blocks */}
                 {mergedBlocks.map((block, idx) => (
                   <div
                     key={idx}
@@ -266,8 +262,8 @@ export default function SchedulePage() {
                           })
                         }
                       >
-                        <Badge variant="secondary">{block.courses.length} 个课程</Badge>
-                        <span className="text-xs text-muted-foreground">点击展开</span>
+                        <Badge variant="secondary">{t("schedule.overlapCourses", { count: block.courses.length })}</Badge>
+                        <span className="text-xs text-muted-foreground">{t("schedule.expand")}</span>
                       </button>
                     )}
                   </div>
@@ -282,7 +278,7 @@ export default function SchedulePage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {overlapDialog && `${WEEKDAYS[overlapDialog.day]} 第${overlapDialog.section}节`}
+              {overlapDialog && t("schedule.overlapDialogTitle", { weekday: WEEKDAYS[overlapDialog.day], section: overlapDialog.section })}
             </DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-3">
@@ -293,7 +289,7 @@ export default function SchedulePage() {
                   <CardDescription>{c.teacher} · {c.classroom}</CardDescription>
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground">
-                  周次: {c.weeks} · 节次: {c.start_section}-{c.end_section}
+                  {t("schedule.weeks")}: {c.weeks} · {t("schedule.sections")}: {c.start_section}-{c.end_section}
                 </CardContent>
               </Card>
             ))}

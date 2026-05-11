@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -13,11 +13,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   ToggleGroup,
   ToggleGroupItem,
 } from "@/components/ui/toggle-group";
 import { useAuthStore } from "@/lib/auth-store";
+import { useTranslation } from "@/lib/i18n/use-translation";
 import {
   fetchCaptcha,
   loginStep1,
@@ -27,13 +29,35 @@ import {
 
 type Step = "credentials" | "mfa";
 
+const REMEMBER_KEY = "ysu-login-remember";
+
+function loadRemembered(): { username: string; password: string } | null {
+  try {
+    const raw = localStorage.getItem(REMEMBER_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function saveRemembered(username: string, password: string) {
+  localStorage.setItem(REMEMBER_KEY, JSON.stringify({ username, password }));
+}
+
+function clearRemembered() {
+  localStorage.removeItem(REMEMBER_KEY);
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const setCredential = useAuthStore((s) => s.setCredential);
+  const { t } = useTranslation();
 
   const [step, setStep] = useState<Step>("credentials");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(false);
   const [captcha, setCaptcha] = useState("");
   const [captchaImage, setCaptchaImage] = useState<string | null>(null);
   const [needsCaptcha, setNeedsCaptcha] = useState(false);
@@ -44,6 +68,15 @@ export default function LoginPage() {
   const [methodCode, setMethodCode] = useState("");
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    const r = loadRemembered();
+    if (r) {
+      setUsername(r.username);
+      setPassword(r.password);
+      setRemember(true);
+    }
+  }, []);
+
   async function handleCheckCaptcha() {
     if (!username) return;
     try {
@@ -53,7 +86,6 @@ export default function LoginPage() {
         setCaptchaImage(`data:image/png;base64,${res.image_base64}`);
       }
     } catch {
-      // captcha not needed or error, proceed
       setNeedsCaptcha(false);
     }
   }
@@ -61,7 +93,7 @@ export default function LoginPage() {
   async function handleSubmitCredentials(e: React.FormEvent) {
     e.preventDefault();
     if (!username || !password) {
-      toast.error("请输入学号和密码");
+      toast.error(t("login.usernamePlaceholder"));
       return;
     }
     setLoading(true);
@@ -74,7 +106,12 @@ export default function LoginPage() {
 
       if (res.authenticated && res.credential) {
         setCredential(res.credential, username);
-        toast.success("登录成功");
+        if (remember) {
+          saveRemembered(username, password);
+        } else {
+          clearRemembered();
+        }
+        toast.success(t("login.submit"));
         router.replace("/dashboard");
         return;
       }
@@ -82,21 +119,21 @@ export default function LoginPage() {
       if (res.needs_mfa && res.credential) {
         setTempCredential(res.credential);
         setStep("mfa");
-        toast.info("需要 MFA 验证");
+        toast.info("MFA");
         return;
       }
 
-      toast.error("登录失败，请检查用户名和密码");
+      toast.error(t("login.passwordLabel"));
     } catch (err) {
       const e = err as Error & { code?: string; status?: number };
       if (e.code === "NEED_CAPTCHA" || e.status === 403) {
-        toast.error("需要验证码，请重新输入");
+        toast.error(t("login.captchaLabel"));
         await handleCheckCaptcha();
       } else if (e.code === "MFA_REQUIRED") {
-        toast.info("需要 MFA 验证");
+        toast.info("MFA");
         setStep("mfa");
       } else {
-        toast.error(e.message || "登录失败");
+        toast.error(e.message || t("login.submit"));
       }
     } finally {
       setLoading(false);
@@ -113,9 +150,9 @@ export default function LoginPage() {
       );
       setMobileHint(res.mobile_hint);
       setMethodCode(res.method_code);
-      toast.success(`验证码已发送至 ${res.mobile_hint}`);
+      toast.success(`${t("login.mfaSent")} ${res.mobile_hint}`);
     } catch (err) {
-      toast.error((err as Error).message || "请求验证码失败");
+      toast.error((err as Error).message || t("login.mfaRequest"));
     } finally {
       setLoading(false);
     }
@@ -124,7 +161,7 @@ export default function LoginPage() {
   async function handleSubmitMFA(e: React.FormEvent) {
     e.preventDefault();
     if (!tempCredential || !mfaCode) {
-      toast.error("请输入验证码");
+      toast.error(t("login.mfaCodePlaceholder"));
       return;
     }
     setLoading(true);
@@ -139,10 +176,15 @@ export default function LoginPage() {
         tempCredential,
       );
       setCredential(res.credential, username);
-      toast.success("登录成功");
+      if (remember) {
+        saveRemembered(username, password);
+      } else {
+        clearRemembered();
+      }
+      toast.success(t("login.submit"));
       router.replace("/dashboard");
     } catch (err) {
-      toast.error((err as Error).message || "验证码错误");
+      toast.error((err as Error).message || t("login.mfaCodeLabel"));
     } finally {
       setLoading(false);
     }
@@ -152,63 +194,73 @@ export default function LoginPage() {
     <div className="flex min-h-svh items-center justify-center p-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>燕山大学教务系统</CardTitle>
+          <CardTitle>{t("login.title")}</CardTitle>
           <CardDescription>
             {step === "credentials"
-              ? "请输入学号和密码登录"
-              : "请输入 MFA 验证码"}
+              ? t("login.usernamePlaceholder")
+              : t("login.mfaTitle")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {step === "credentials" ? (
-            <form onSubmit={handleSubmitCredentials} className="flex flex-col gap-4">
+            <form onSubmit={handleSubmitCredentials} className="flex flex-col gap-5">
               <div className="flex flex-col gap-2">
-                <Label htmlFor="username">学号</Label>
+                <Label htmlFor="username">{t("login.usernameLabel")}</Label>
                 <Input
                   id="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="请输入学号"
+                  placeholder={t("login.usernamePlaceholder")}
                   autoComplete="username"
                   onBlur={handleCheckCaptcha}
                 />
               </div>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="password">密码</Label>
+                <Label htmlFor="password">{t("login.passwordLabel")}</Label>
                 <Input
                   id="password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="请输入密码"
+                  placeholder={t("login.passwordPlaceholder")}
                   autoComplete="current-password"
                 />
               </div>
               {needsCaptcha && captchaImage && (
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="captcha">验证码</Label>
+                  <Label htmlFor="captcha">{t("login.captchaLabel")}</Label>
                   <img
                     src={captchaImage}
                     alt="captcha"
-                    className="rounded-md border"
+                    className="rounded-md border cursor-pointer"
                     onClick={handleCheckCaptcha}
                   />
                   <Input
                     id="captcha"
                     value={captcha}
                     onChange={(e) => setCaptcha(e.target.value)}
-                    placeholder="请输入验证码"
+                    placeholder={t("login.captchaPlaceholder")}
                   />
                 </div>
               )}
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="remember"
+                  checked={remember}
+                  onCheckedChange={(c) => setRemember(c === true)}
+                />
+                <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">
+                  {t("login.remember")}
+                </Label>
+              </div>
               <Button type="submit" disabled={loading}>
-                {loading ? "登录中..." : "登录"}
+                {loading ? t("login.loggingIn") : t("login.submit")}
               </Button>
             </form>
           ) : (
-            <form onSubmit={handleSubmitMFA} className="flex flex-col gap-4">
+            <form onSubmit={handleSubmitMFA} className="flex flex-col gap-5">
               <div className="flex flex-col gap-2">
-                <Label>MFA 方式</Label>
+                <Label>{t("login.mfaMethod")}</Label>
                 <ToggleGroup
                   type="single"
                   value={mfaMethod}
@@ -217,8 +269,8 @@ export default function LoginPage() {
                   }
                   className="justify-start"
                 >
-                  <ToggleGroupItem value="cpdaily">今日校园</ToggleGroupItem>
-                  <ToggleGroupItem value="sms">短信</ToggleGroupItem>
+                  <ToggleGroupItem value="cpdaily">{t("login.mfaMethodCpdaily")}</ToggleGroupItem>
+                  <ToggleGroupItem value="sms">{t("login.mfaMethodSms")}</ToggleGroupItem>
                 </ToggleGroup>
               </div>
               <Button
@@ -227,31 +279,31 @@ export default function LoginPage() {
                 onClick={handleRequestMFACode}
                 disabled={loading}
               >
-                {loading ? "发送中..." : "获取验证码"}
+                {loading ? t("login.mfaRequesting") : t("login.mfaRequest")}
               </Button>
               {mobileHint && (
                 <p className="text-sm text-muted-foreground">
-                  验证码将发送至 {mobileHint}
+                  {t("login.mfaSent")} {mobileHint}
                 </p>
               )}
               <div className="flex flex-col gap-2">
-                <Label htmlFor="mfaCode">验证码</Label>
+                <Label htmlFor="mfaCode">{t("login.mfaCodeLabel")}</Label>
                 <Input
                   id="mfaCode"
                   value={mfaCode}
                   onChange={(e) => setMfaCode(e.target.value)}
-                  placeholder="请输入验证码"
+                  placeholder={t("login.mfaCodePlaceholder")}
                 />
               </div>
               <Button type="submit" disabled={loading}>
-                {loading ? "验证中..." : "验证"}
+                {loading ? t("login.mfaVerifying") : t("login.mfaVerify")}
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => setStep("credentials")}
               >
-                返回
+                {t("login.back")}
               </Button>
             </form>
           )}
