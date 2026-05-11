@@ -131,6 +131,11 @@ export const zh = {
     batchNoResults: "没有可提交的结果",
     batchScore: "得分",
     batchAnswers: "填写结果",
+    previewKeys: {
+      calculateQuestionnaireAnswerScore: "评教得分",
+      score: "得分",
+      teacherName: "教师",
+    },
     validation: {
       notLoaded: "问卷未加载",
       unanswered: "第 {order} 题未作答",
@@ -372,6 +377,11 @@ export const en = {
     batchNoResults: "No results to submit",
     batchScore: "Score",
     batchAnswers: "Answers",
+    previewKeys: {
+      calculateQuestionnaireAnswerScore: "Evaluation Score",
+      score: "Score",
+      teacherName: "Teacher",
+    },
     validation: {
       notLoaded: "Questionnaire not loaded",
       unanswered: "Question {order} unanswered",

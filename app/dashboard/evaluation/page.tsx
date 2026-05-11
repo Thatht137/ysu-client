@@ -53,6 +53,38 @@ function renderPreviewValue(v: unknown): string {
   return String(v);
 }
 
+function renderScoreBlock(
+  k: string,
+  v: unknown,
+  t: ReturnType<typeof useTranslation>["t"],
+): React.ReactNode {
+  if (Array.isArray(v) && v.length > 0 && typeof v[0] === "object" && v[0] !== null) {
+    return (
+      <div className="flex flex-col gap-2 overflow-hidden">
+        {v.map((item, idx) => {
+          const obj = item as Record<string, unknown>;
+          return (
+            <div key={idx} className="rounded-md border p-2 flex flex-col gap-1 overflow-hidden">
+              {Object.entries(obj).map(([ik, iv]) => (
+                <div key={ik} className="grid grid-cols-[1fr_1fr] gap-2 text-sm items-center">
+                  <span className="text-muted-foreground truncate">{t(`evaluation.previewKeys.${ik}` as never) || ik}</span>
+                  <span className="font-medium truncate text-right">{renderPreviewValue(iv)}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  return <span className="font-medium truncate">{renderPreviewValue(v)}</span>;
+}
+
+function truncateText(text: string, maxLen = 40): string {
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen) + "...";
+}
+
 function formatAnswerPreview(
   detail: EvaluationDetail,
   answers: Record<string, EvaluationAnswer>,
@@ -71,7 +103,7 @@ function formatAnswerPreview(
     } else {
       answer = a.text || "-";
     }
-    return { order: q.order, text: q.text || "", answer };
+    return { order: q.order, text: q.text || "", answer: truncateText(answer) };
   });
 }
 
@@ -700,15 +732,15 @@ export default function EvaluationPage() {
 
       {/* Preview dialog */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="sm:max-w-xl overflow-hidden">
           <DialogHeader>
             <DialogTitle>{t("evaluation.previewResult")}</DialogTitle>
           </DialogHeader>
-          <div className="flex flex-col gap-2 text-sm">
+          <div className="flex flex-col gap-3 text-sm">
             {previewResult && Object.entries(previewResult).map(([k, v]) => (
-              <div key={k} className="flex justify-between">
-                <span className="text-muted-foreground">{k}</span>
-                <span className="font-medium">{renderPreviewValue(v)}</span>
+              <div key={k} className="flex flex-col gap-1.5">
+                <span className="text-muted-foreground text-xs">{t(`evaluation.previewKeys.${k}` as never) || k}</span>
+                {renderScoreBlock(k, v, t)}
               </div>
             ))}
           </div>
@@ -828,14 +860,14 @@ export default function EvaluationPage() {
 
       {/* Batch preview dialog */}
       <Dialog open={batchPreviewOpen} onOpenChange={setBatchPreviewOpen}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle>{t("evaluation.batchPreviewTitle")}</DialogTitle>
             <DialogDescription>{t("evaluation.batchPreviewDesc")}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
             {batchTasks.map((r, idx) => (
-              <Card key={idx} className={r.status === "failed" ? "opacity-60" : ""}>
+              <Card key={idx} className={r.status === "failed" ? "opacity-60 overflow-hidden" : "overflow-hidden"}>
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">
                     <div className="min-w-0">
@@ -853,11 +885,11 @@ export default function EvaluationPage() {
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3 text-sm">
                   {r.status === "filled" && r.scoreResult && (
-                    <div className="flex flex-col gap-1 rounded-md bg-muted/50 p-2">
+                    <div className="flex flex-col gap-2 rounded-md bg-muted/50 p-2">
                       {Object.entries(r.scoreResult).map(([k, v]) => (
-                        <div key={k} className="flex justify-between">
-                          <span className="text-muted-foreground">{k}</span>
-                          <span className="font-medium">{renderPreviewValue(v)}</span>
+                        <div key={k} className="flex flex-col gap-1">
+                          <span className="text-muted-foreground text-xs">{t(`evaluation.previewKeys.${k}` as never) || k}</span>
+                          {renderScoreBlock(k, v, t)}
                         </div>
                       ))}
                     </div>
@@ -866,11 +898,11 @@ export default function EvaluationPage() {
                     <div className="flex flex-col gap-1.5">
                       <span className="text-xs font-medium text-muted-foreground">{t("evaluation.batchAnswers")}</span>
                       {formatAnswerPreview(r.detail, r.answers).map((item) => (
-                        <div key={item.order} className="flex justify-between gap-2">
-                          <span className="text-muted-foreground truncate max-w-[60%]">
+                        <div key={item.order} className="grid grid-cols-[1fr_auto] gap-2 items-center">
+                          <span className="text-muted-foreground truncate" title={item.text}>
                             {item.order}. {item.text}
                           </span>
-                          <span className="font-medium shrink-0">{item.answer}</span>
+                          <span className="font-medium truncate text-right" title={item.answer}>{item.answer}</span>
                         </div>
                       ))}
                     </div>
