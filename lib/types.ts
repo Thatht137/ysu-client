@@ -251,7 +251,6 @@ export interface CalculateScoreRequest {
   course_name?: string;
   teacher_name?: string;
   sequence?: number;
-  PJGXID?: string;
 }
 
 export interface SubmitEvaluationRequest {
@@ -263,7 +262,6 @@ export interface SubmitEvaluationRequest {
   course_name?: string;
   teacher_name?: string;
   sequence?: number;
-  PJGXID?: string;
 }
 
 export interface ApiError {

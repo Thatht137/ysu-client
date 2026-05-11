@@ -75,6 +75,10 @@ function formatAnswerPreview(
   });
 }
 
+function getTeacherRelationId(task: EvaluationTask, detail: EvaluationDetail): string {
+  return (detail.teachers?.[0] as Record<string, unknown> | undefined)?.PJGXID as string | undefined || task.teacher_id || "";
+}
+
 function getTaskStatus(task: EvaluationTask, t: ReturnType<typeof useTranslation>["t"]): { active: boolean; label: string; variant: "default" | "secondary" | "destructive" | "outline" } {
   const now = new Date();
   if (task.start_time) {
@@ -260,11 +264,10 @@ export default function EvaluationPage() {
         wjid: selectedTask.wjid || detail.wjid || "",
         eval_type: selectedTask.eval_type || "",
         answers: buildAnswers(),
-        teacher_relation_id: selectedTask.teacher_id || "",
+        teacher_relation_id: getTeacherRelationId(selectedTask, detail),
         course_name: selectedTask.course_name || "",
         teacher_name: selectedTask.teacher_name || "",
         sequence: Number(selectedTask.sequence),
-        PJGXID: selectedTask.wid,
       });
       setPreviewResult(res);
       setPreviewOpen(true);
@@ -290,11 +293,10 @@ export default function EvaluationPage() {
         wjid: selectedTask.wjid || detail.wjid || "",
         eval_type: selectedTask.eval_type || "",
         answers: buildAnswers(),
-        teacher_relation_id: selectedTask.teacher_id || "",
+        teacher_relation_id: getTeacherRelationId(selectedTask, detail),
         course_name: selectedTask.course_name || "",
         teacher_name: selectedTask.teacher_name || "",
         sequence: Number(selectedTask.sequence),
-        PJGXID: selectedTask.wid,
       });
       toast.success(t("evaluation.submit"));
       setDialogOpen(false);
@@ -397,11 +399,10 @@ export default function EvaluationPage() {
           wjid: task.wjid || d.wjid || "",
           eval_type: task.eval_type || "",
           answers: Object.values(filled),
-          teacher_relation_id: task.teacher_id || "",
+          teacher_relation_id: getTeacherRelationId(task, d),
           course_name: task.course_name || "",
           teacher_name: task.teacher_name || "",
           sequence: Number(task.sequence),
-          PJGXID: task.wid,
         });
         results[i] = { ...results[i], detail: d, answers: filled, scoreResult: scoreRes, status: "filled" };
         setBatchTasks([...results]);
@@ -444,11 +445,10 @@ export default function EvaluationPage() {
           wjid: task.wjid || d.wjid || "",
           eval_type: task.eval_type || "",
           answers: Object.values(results[i].answers),
-          teacher_relation_id: task.teacher_id || "",
+          teacher_relation_id: getTeacherRelationId(task, d),
           course_name: task.course_name || "",
           teacher_name: task.teacher_name || "",
           sequence: Number(task.sequence),
-          PJGXID: task.wid,
         });
         results[i] = { ...results[i], status: "submitted" };
         setBatchTasks([...results]);
