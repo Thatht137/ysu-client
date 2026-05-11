@@ -50,6 +50,9 @@ import {
   User,
   Globe,
 } from "lucide-react";
+import { MobileBottomNav } from "@/components/mobile-bottom-nav";
+import { MobileTopBar } from "@/components/mobile-top-bar";
+import { RefreshIndicator } from "@/components/refresh-indicator";
 
 export default function DashboardLayout({
   children,
@@ -85,6 +88,19 @@ export default function DashboardLayout({
     { title: t("app.trainingPlan"), url: "/dashboard/training-plan", icon: BookOpen },
     { title: t("app.evaluation"), url: "/dashboard/evaluation", icon: ClipboardCheck },
   ];
+
+  const titleByPath: Record<string, string> = {
+    "/dashboard": t("app.overview"),
+    "/dashboard/grades": t("app.grades"),
+    "/dashboard/gpa": t("app.gpa"),
+    "/dashboard/schedule": t("app.schedule"),
+    "/dashboard/exams": t("app.exams"),
+    "/dashboard/training-plan": t("app.trainingPlan"),
+    "/dashboard/evaluation": t("app.evaluation"),
+    "/dashboard/student": t("app.studentInfo"),
+    "/dashboard/me": t("app.me"),
+  };
+  const pageTitle = titleByPath[pathname] ?? t("app.name");
 
   useEffect(() => {
     if (hasHydrated && !isAuthenticated) {
@@ -153,12 +169,14 @@ export default function DashboardLayout({
         </SidebarContent>
         <SidebarRail />
       </Sidebar>
-      <main className="flex-1 overflow-auto">
-        <header className="flex items-center justify-between gap-4 border-b px-6 py-4">
+      <main className="min-w-0 flex-1 overflow-x-hidden pb-16 md:overflow-auto md:pb-0">
+        <MobileTopBar title={pageTitle} />
+        <header className="hidden items-center justify-between gap-4 border-b px-6 py-4 md:flex">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold animate-in fade-in slide-in-from-left-2 duration-300">
               {navItems.find((i) => i.url === pathname)?.title || t("app.name")}
             </h1>
+            <RefreshIndicator />
           </div>
           <div className="flex items-center gap-3">
             <Button
@@ -203,10 +221,11 @@ export default function DashboardLayout({
             </DropdownMenu>
           </div>
         </header>
-        <div key={pathname} className="p-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
+        <div key={pathname} className="p-4 animate-in fade-in slide-in-from-bottom-2 duration-500 md:p-8">
           {children}
         </div>
       </main>
+      <MobileBottomNav />
 
       <Dialog open={studentDialogOpen} onOpenChange={setStudentDialogOpen}>
         <DialogContent className="max-w-lg">

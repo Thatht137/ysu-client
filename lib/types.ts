@@ -99,6 +99,7 @@ export interface Exam {
 export interface Grade {
   course_name: string;
   course_code?: string;
+  class_id?: string;
   score?: string;
   grade_level?: string;
   grade_point?: string;
@@ -118,6 +119,38 @@ export interface Grade {
   special_reason?: string;
   is_degree_course: boolean;
   project_name?: string;
+}
+
+export interface GradeStatistics {
+  scope?: string;
+  term?: string;
+  class_id?: string;
+  course_code?: string;
+  highest_score: number;
+  lowest_score: number;
+  average_score: number;
+}
+
+export interface GradeDistribution {
+  scope?: string;
+  term?: string;
+  class_id?: string;
+  course_code?: string;
+  level_code?: string;
+  level_name?: string;
+  count: number;
+}
+
+export interface GradeRanking {
+  scope?: string;
+  term?: string;
+  student_id?: string;
+  class_id?: string;
+  course_code?: string;
+  score: number;
+  rank: number;
+  total: number;
+  ranking_type?: string;
 }
 
 export interface GPAStats {

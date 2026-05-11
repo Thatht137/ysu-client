@@ -46,6 +46,7 @@ import {
   getAcademicWarnings,
 } from "@/lib/api";
 import { cacheGet, cacheSet, cacheKey } from "@/lib/cache";
+import { useRefreshStore } from "@/lib/refresh-store";
 import type {
   AcademicCompletion,
   AcademicWarning,
@@ -93,9 +94,11 @@ export default function TrainingPlanPage() {
     if (cachedCompletion) setCompletion(cachedCompletion);
     if (cachedWarnings) setWarnings(cachedWarnings);
 
+    let refreshing = false;
     if (cachedPlans || cachedCompletion || cachedWarnings) {
       setLoading(false);
-      toast.info(t("app.updating"));
+      useRefreshStore.getState().start();
+      refreshing = true;
     }
 
     async function load() {
@@ -117,6 +120,7 @@ export default function TrainingPlanPage() {
         }
       } finally {
         setLoading(false);
+        if (refreshing) useRefreshStore.getState().end();
       }
     }
     load();

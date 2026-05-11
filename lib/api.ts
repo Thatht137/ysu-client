@@ -10,6 +10,9 @@ import type {
   Exam,
   GPAStats,
   Grade,
+  GradeDistribution,
+  GradeRanking,
+  GradeStatistics,
   LoginRequest,
   LoginResponse,
   MFAChallengeResponse,
@@ -137,6 +140,40 @@ export function getGPAStats(credential: string, student_id?: string): Promise<GP
   const qs = new URLSearchParams();
   if (student_id) qs.set("student_id", student_id);
   return _fetch(`/jwxt/gpa?${qs.toString()}`, undefined, credential);
+}
+
+export function getGradeStatistics(
+  credential: string,
+  params: { class_id?: string; course_code?: string; term?: string },
+): Promise<GradeStatistics> {
+  const qs = new URLSearchParams();
+  if (params.class_id) qs.set("class_id", params.class_id);
+  if (params.course_code) qs.set("course_code", params.course_code);
+  if (params.term) qs.set("term", params.term);
+  return _fetch(`/jwxt/grades/statistics?${qs.toString()}`, undefined, credential);
+}
+
+export function getGradeDistribution(
+  credential: string,
+  params: { class_id?: string; course_code?: string; term?: string },
+): Promise<GradeDistribution[]> {
+  const qs = new URLSearchParams();
+  if (params.class_id) qs.set("class_id", params.class_id);
+  if (params.course_code) qs.set("course_code", params.course_code);
+  if (params.term) qs.set("term", params.term);
+  return _fetch(`/jwxt/grades/distribution?${qs.toString()}`, undefined, credential);
+}
+
+export function getGradeRanking(
+  credential: string,
+  params: { class_id?: string; course_code?: string; term?: string; student_id?: string },
+): Promise<GradeRanking> {
+  const qs = new URLSearchParams();
+  if (params.class_id) qs.set("class_id", params.class_id);
+  if (params.course_code) qs.set("course_code", params.course_code);
+  if (params.term) qs.set("term", params.term);
+  if (params.student_id) qs.set("student_id", params.student_id);
+  return _fetch(`/jwxt/grades/ranking?${qs.toString()}`, undefined, credential);
 }
 
 // ── Schedule ────────────────────────────────────────────

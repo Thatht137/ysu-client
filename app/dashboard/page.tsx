@@ -6,12 +6,15 @@ import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuthStore } from "@/lib/auth-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { getStudentInfo, getCurrentWeek, getGPAStats, getExperimentalSchedule, getExams } from "@/lib/api";
 import { cacheGet, cacheSet, cacheKey } from "@/lib/cache";
+import { useRefreshStore } from "@/lib/refresh-store";
+import { cn } from "@/lib/utils";
 import type { StudentInfo, CurrentWeek, GPAStats, Course, Exam } from "@/lib/types";
-import { Calendar, GraduationCap, BarChart3, Clock, BookOpen } from "lucide-react";
+import { Calendar, GraduationCap, BarChart3, Clock, BookOpen, Eye, EyeOff } from "lucide-react";
 
 function parseWeeks(weeksStr: string): number[] {
   const result = new Set<number>();
@@ -37,6 +40,19 @@ function isCourseActiveToday(course: Course, currentWeek: number, currentWeekday
   const weeks = parseWeeks(course.weeks || "");
   if (weeks.length === 0) return true;
   return weeks.includes(currentWeek);
+}
+
+const SECTION_TIME_MAP: Record<number, [number, number]> = {
+  1: [480, 575], 2: [480, 575],
+  3: [600, 695], 4: [600, 695],
+  5: [840, 935], 6: [840, 935],
+  7: [960, 1055], 8: [960, 1055],
+  9: [1140, 1235], 10: [1140, 1235],
+};
+
+function isCoursePast(course: Course, nowMinutes: number): boolean {
+  const endRange = SECTION_TIME_MAP[course.end_section];
+  return !!endRange && nowMinutes > endRange[1];
 }
 
 export default function DashboardPage() {
@@ -65,9 +81,11 @@ export default function DashboardPage() {
     if (cachedCourses) setCourses(cachedCourses);
     if (cachedExams) setExams(cachedExams);
 
+    let refreshing = false;
     if (cachedStudent || cachedWeek || cachedGpa || cachedCourses || cachedExams) {
       setLoading(false);
-      toast.info(t("app.updating"));
+      useRefreshStore.getState().start();
+      refreshing = true;
     }
 
     async function load() {
@@ -93,6 +111,7 @@ export default function DashboardPage() {
         if (!cachedStudent) toast.error((err as Error).message || t("app.updating"));
       } finally {
         setLoading(false);
+        if (refreshing) useRefreshStore.getState().end();
       }
     }
     load();
@@ -123,19 +142,10 @@ export default function DashboardPage() {
 
   function getCurrentCourse(): Course | null {
     const now = new Date();
-    const hour = now.getHours();
-    const minute = now.getMinutes();
-    const timeVal = hour * 60 + minute;
-    const sectionMap: Record<number, [number, number]> = {
-      1: [480, 575], 2: [480, 575],
-      3: [600, 695], 4: [600, 695],
-      5: [840, 935], 6: [840, 935],
-      7: [960, 1055], 8: [960, 1055],
-      9: [1140, 1235], 10: [1140, 1235],
-    };
+    const timeVal = now.getHours() * 60 + now.getMinutes();
     for (const c of todayCourses) {
       for (let s = c.start_section; s <= c.end_section; s++) {
-        const range = sectionMap[s];
+        const range = SECTION_TIME_MAP[s];
         if (range && timeVal >= range[0] && timeVal <= range[1]) {
           return c;
         }
@@ -145,6 +155,8 @@ export default function DashboardPage() {
   }
 
   const currentCourse = getCurrentCourse();
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const [showGPA, setShowGPA] = useState(false);
 
   if (loading) {
@@ -164,8 +176,58 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+    <div className="flex flex-col gap-6 md:gap-8">
+      <Card className="md:hidden">
+        <CardHeader className="flex flex-row items-center gap-3 pb-3">
+          <Avatar className="size-14 shrink-0">
+            <AvatarFallback className="text-base font-medium">
+              {student?.name ? student.name.slice(-2) : "--"}
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <CardTitle className="truncate text-base">{student?.name || "-"}</CardTitle>
+            {student?.department && (
+              <CardDescription className="truncate">
+                {student.department}
+              </CardDescription>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 gap-3 border-t pt-3">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <Calendar className="size-3.5 shrink-0 text-primary" />
+              <span className="truncate text-sm font-medium">
+                {t("dashboard.currentWeek", { week: currentWeek?.week || "-" })}
+              </span>
+            </div>
+            <span className="truncate text-xs text-muted-foreground">
+              {currentWeek?.weekday ? t(`dashboard.weekdayNames.${currentWeek.weekday}`) : "-"}
+              {currentWeek?.term && ` · ${currentWeek.term}`}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowGPA((v) => !v)}
+            className="flex min-w-0 flex-col gap-0.5 text-left transition-opacity active:opacity-70"
+          >
+            <div className="flex items-center gap-1.5">
+              <BarChart3 className="size-3.5 shrink-0 text-primary" />
+              <span className="truncate text-sm font-medium">{t("dashboard.gpaInitial")}</span>
+              {showGPA ? (
+                <EyeOff className="ml-auto size-3 shrink-0 text-muted-foreground" />
+              ) : (
+                <Eye className="ml-auto size-3 shrink-0 text-muted-foreground" />
+              )}
+            </div>
+            <span className="truncate text-base font-semibold tabular-nums">
+              {showGPA ? gpa?.gpa_initial || "-" : "***"}
+            </span>
+          </button>
+        </CardContent>
+      </Card>
+
+      <div className="hidden gap-6 md:grid md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center gap-3 pb-2">
             <GraduationCap className="size-6 text-primary shrink-0" />
@@ -242,26 +304,32 @@ export default function DashboardPage() {
             <p className="text-sm text-muted-foreground">{t("dashboard.noCoursesToday")}</p>
           ) : (
             <div className="flex flex-col gap-3">
-              {todayCourses.map((c, idx) => (
-                <div
-                  key={idx}
-                  className={`flex items-center justify-between rounded-lg border p-3 ${
-                    currentCourse?.name === c.name && currentCourse?.start_section === c.start_section
-                      ? "border-primary bg-primary/5"
-                      : ""
-                  }`}
-                >
-                  <div className="flex flex-col gap-0.5">
-                    <span className="font-medium text-sm">{c.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {c.teacher} · {c.classroom}
-                    </span>
+              {todayCourses.map((c, idx) => {
+                const isCurrent =
+                  currentCourse?.name === c.name &&
+                  currentCourse?.start_section === c.start_section;
+                const isPast = !isCurrent && isCoursePast(c, nowMinutes);
+                return (
+                  <div
+                    key={idx}
+                    className={cn(
+                      "flex items-center justify-between rounded-lg border p-3",
+                      isCurrent && "border-primary bg-primary/5",
+                      isPast && "opacity-50",
+                    )}
+                  >
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-medium text-sm">{c.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {c.teacher} · {c.classroom}
+                      </span>
+                    </div>
+                    <Badge variant="outline" className="shrink-0">
+                      {t("dashboard.sectionRange", { start: c.start_section, end: c.end_section })}
+                    </Badge>
                   </div>
-                  <Badge variant="outline" className="shrink-0">
-                    {t("dashboard.sectionRange", { start: c.start_section, end: c.end_section })}
-                  </Badge>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
@@ -285,7 +353,7 @@ export default function DashboardPage() {
                   <div className="flex flex-col gap-0.5">
                     <span className="font-medium text-sm">{exam.name}</span>
                     <span className="text-xs text-muted-foreground">
-                      {exam.exam_date} {exam.exam_time} · {exam.exam_location}
+                      {exam.exam_time} · {exam.exam_location}
                     </span>
                   </div>
                   {exam.seat_number && (

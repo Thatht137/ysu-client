@@ -25,7 +25,6 @@ import { useTranslation } from "@/lib/i18n/use-translation";
 import { getExams } from "@/lib/api";
 import type { Exam } from "@/lib/types";
 import {
-  CalendarDays,
   CalendarOff,
   CheckCircle2,
   Clock,
@@ -153,10 +152,6 @@ export default function ExamsPage() {
                   </CardHeader>
                   <CardContent className="flex flex-col gap-2 text-sm">
                     <div className="flex items-center gap-2">
-                      <CalendarDays className="size-4 text-muted-foreground" />
-                      <span>{exam.exam_date}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
                       <Clock className="size-4 text-muted-foreground" />
                       <span>{exam.exam_time}</span>
                     </div>
@@ -190,10 +185,6 @@ export default function ExamsPage() {
                       <CardDescription>{exam.exam_name}</CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-col gap-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <CalendarDays className="size-4 text-muted-foreground" />
-                        <span>{exam.exam_date}</span>
-                      </div>
                       <div className="flex items-center gap-2">
                         <Clock className="size-4 text-muted-foreground" />
                         <span>{exam.exam_time}</span>

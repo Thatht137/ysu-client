@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,19 +16,30 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  ResponsiveModal,
+  ResponsiveModalContent,
+  ResponsiveModalDescription,
+  ResponsiveModalFooter,
+  ResponsiveModalHeader,
+  ResponsiveModalTitle,
+  ResponsiveModalBody,
+} from "@/components/responsive-modal";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Field, FieldLabel } from "@/components/ui/field";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/lib/auth-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
+import { useMobileHeaderRight } from "@/lib/mobile-header-store";
+import { cn } from "@/lib/utils";
 import {
   getEvaluationTypes,
   getPendingEvaluations,
@@ -43,7 +54,7 @@ import type {
   Question,
   EvaluationAnswer,
 } from "@/lib/types";
-import { ClipboardCheck, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronRight, ClipboardCheck, Sparkles } from "lucide-react";
 
 interface BatchTaskResult {
   task: EvaluationTask;
@@ -89,11 +100,6 @@ function renderScoreBlock(
   return <span className="font-medium truncate">{renderPreviewValue(v)}</span>;
 }
 
-function truncateText(text: string, maxLen = 40): string {
-  if (text.length <= maxLen) return text;
-  return text.slice(0, maxLen) + "...";
-}
-
 function formatAnswerPreview(
   detail: EvaluationDetail,
   answers: Record<string, EvaluationAnswer>,
@@ -112,7 +118,7 @@ function formatAnswerPreview(
     } else {
       answer = a.text || "-";
     }
-    return { order: q.order, text: q.text || "", answer: truncateText(answer) };
+    return { order: q.order, text: q.text || "", answer };
   });
 }
 
@@ -158,7 +164,11 @@ export default function EvaluationPage() {
   const [batchTasks, setBatchTasks] = useState<BatchTaskResult[]>([]);
   const [batchCurrentIdx, setBatchCurrentIdx] = useState(0);
   const [batchPhase, setBatchPhase] = useState<"fill" | "submit">("fill");
+  const [batchDetailIdx, setBatchDetailIdx] = useState<number | null>(null);
+  const [batchTextAnswer, setBatchTextAnswer] = useState("");
   const abortRef = useRef(false);
+
+
 
   useEffect(() => {
     if (!credential) return;
@@ -174,6 +184,12 @@ export default function EvaluationPage() {
     }
     load();
   }, [credential, t]);
+
+  useEffect(() => {
+    if (selectedType || types.length === 0 || !types[0].code) return;
+    handleSelectType(types[0].code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [types, selectedType]);
 
   async function refreshTypes() {
     if (!credential) return;
@@ -239,10 +255,11 @@ export default function EvaluationPage() {
     return Object.values(answers);
   }
 
-  function autoFillMaxScore(targetAnswers?: Record<string, EvaluationAnswer>, targetDetail?: EvaluationDetail | null): Record<string, EvaluationAnswer> {
+  function autoFillMaxScore(targetAnswers?: Record<string, EvaluationAnswer>, targetDetail?: EvaluationDetail | null, textAnswer?: string): Record<string, EvaluationAnswer> {
     const d = targetDetail || detail;
     if (!d) return {};
     const next: Record<string, EvaluationAnswer> = targetAnswers ? { ...targetAnswers } : { ...answers };
+    const text = textAnswer?.trim() || "优秀";
     for (const q of d.questions) {
       if (q.question_type === "01") {
         const best = q.options.length > 0
@@ -268,7 +285,7 @@ export default function EvaluationPage() {
           tmid: q.tmid,
           question_type: q.question_type || "",
           option_ids: [],
-          text: "优秀",
+          text,
         };
       }
     }
@@ -371,6 +388,7 @@ export default function EvaluationPage() {
       return;
     }
     setSelectedTaskIds(new Set());
+    setBatchTextAnswer("");
     setBatchSelectOpen(true);
   }
 
@@ -416,10 +434,10 @@ export default function EvaluationPage() {
     setBatchPhase("fill");
     abortRef.current = false;
     setBatchProgressOpen(true);
-    runBatchFill(initialResults);
+    runBatchFill(initialResults, batchTextAnswer);
   }
 
-  async function runBatchFill(initialResults: BatchTaskResult[]) {
+  async function runBatchFill(initialResults: BatchTaskResult[], textAnswer: string) {
     if (!credential) return;
     const results = [...initialResults];
     for (let i = 0; i < results.length; i++) {
@@ -439,7 +457,7 @@ export default function EvaluationPage() {
             text: "",
           };
         }
-        const filled = autoFillMaxScore(initial, d);
+        const filled = autoFillMaxScore(initial, d, textAnswer);
         const err = validateAnswers(filled, d);
         if (err) {
           results[i] = { ...results[i], detail: d, answers: filled, status: "failed", error: err };
@@ -466,6 +484,7 @@ export default function EvaluationPage() {
     setBatchCurrentIdx(results.length);
     if (!abortRef.current) {
       setBatchProgressOpen(false);
+      setBatchDetailIdx(null);
       setBatchPreviewOpen(true);
     }
   }
@@ -526,6 +545,50 @@ export default function EvaluationPage() {
     toast.info(t("evaluation.cancel"));
   }
 
+  const selectedTypeObj = types.find((typ) => typ.code === selectedType);
+  const hasBatchTasks = !!selectedType && tasks.some((task) => getTaskStatus(task, t).active);
+
+  useMobileHeaderRight(
+    types.length > 0 ? (
+      <div className="flex items-center gap-1">
+        {hasBatchTasks && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={openBatchSelect}
+            className="h-8 px-2"
+            aria-label={t("evaluation.batchAuto")}
+          >
+            <Sparkles className="size-4" />
+          </Button>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-8 px-2 text-sm">
+              <span className="max-w-[7rem] truncate">
+                {selectedTypeObj?.name || t("evaluation.title")}
+              </span>
+              <ChevronDown className="ml-0.5 size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[10rem]">
+            {types.map((type) => (
+              <DropdownMenuItem
+                key={type.code}
+                onSelect={() => handleSelectType(type.code || "")}
+                className="flex items-center justify-between gap-3"
+              >
+                <span>{type.name}</span>
+                {type.count > 0 && <Badge variant="secondary">{type.count}</Badge>}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    ) : null,
+    [types, selectedType, selectedTypeObj, hasBatchTasks, t],
+  );
+
   if (loadingTypes) {
     return (
       <div className="flex flex-col gap-4">
@@ -537,7 +600,7 @@ export default function EvaluationPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card>
+      <Card className="hidden md:block">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -553,7 +616,7 @@ export default function EvaluationPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {types.map((type) => (
               <Button
                 key={type.code}
@@ -608,13 +671,11 @@ export default function EvaluationPage() {
                       onClick={() => handleOpenTask(task)}
                     >
                       <CardHeader className="pb-2">
-                        <div className="flex items-start justify-between">
-                          <div className="min-w-0">
-                            <CardTitle className="text-base truncate">{task.course_name}</CardTitle>
-                            <CardDescription className="truncate">{task.teacher_name}</CardDescription>
-                          </div>
-                          <Badge variant={status.variant} className="shrink-0">{status.label}</Badge>
-                        </div>
+                        <CardTitle className="text-base truncate">{task.course_name}</CardTitle>
+                        <CardDescription className="truncate">{task.teacher_name}</CardDescription>
+                        <CardAction>
+                          <Badge variant={status.variant}>{status.label}</Badge>
+                        </CardAction>
                       </CardHeader>
                       <CardContent className="flex flex-col gap-0.5 text-sm text-muted-foreground">
                         <span className="truncate">{task.term_name} · {task.class_name}</span>
@@ -632,124 +693,126 @@ export default function EvaluationPage() {
       )}
 
       {/* Main evaluation dialog - enlarged */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-5xl w-[90vw] max-h-[90vh] overflow-auto">
-          <DialogHeader>
-            <DialogTitle>{detail?.name || t("evaluation.title")}</DialogTitle>
-            <DialogDescription>
+      <ResponsiveModal open={dialogOpen} onOpenChange={setDialogOpen}>
+        <ResponsiveModalContent className="sm:max-w-5xl w-[90vw] max-h-[90vh] overflow-auto">
+          <ResponsiveModalHeader>
+            <ResponsiveModalTitle>{detail?.name || t("evaluation.title")}</ResponsiveModalTitle>
+            <ResponsiveModalDescription>
               {selectedTask?.course_name} - {selectedTask?.teacher_name}
-            </DialogDescription>
-          </DialogHeader>
+            </ResponsiveModalDescription>
+          </ResponsiveModalHeader>
 
-          {loadingDetail ? (
-            <div className="flex flex-col gap-4">
-              <Skeleton className="h-8" />
-              <Skeleton className="h-32" />
-              <Skeleton className="h-32" />
-            </div>
-          ) : (
-            <div className="flex flex-col gap-6">
-              <div className="flex justify-end">
-                <Button variant="outline" size="sm" onClick={applyAutoFill}>
-                  <Sparkles data-icon="inline-start" />
-                  {t("evaluation.autoFill")}
-                </Button>
+          <ResponsiveModalBody>
+            {loadingDetail ? (
+              <div className="flex flex-col gap-4">
+                <Skeleton className="h-8" />
+                <Skeleton className="h-32" />
+                <Skeleton className="h-32" />
               </div>
+            ) : (
+              <div className="flex flex-col gap-6">
+                <div className="flex justify-end">
+                  <Button variant="outline" size="sm" onClick={applyAutoFill}>
+                    <Sparkles data-icon="inline-start" />
+                    {t("evaluation.autoFill")}
+                  </Button>
+                </div>
 
-              {detail?.questions.map((q) => (
-                <div key={q.tmid} className="flex flex-col gap-3">
-                  <div className="font-medium">
-                    {q.order}. {q.text}
-                    {q.max_score > 0 && (
-                      <span className="text-sm text-muted-foreground ml-2">
-                        ({q.max_score})
-                      </span>
+                {detail?.questions.map((q) => (
+                  <div key={q.tmid} className="flex flex-col gap-3">
+                    <div className="font-medium">
+                      {q.order}. {q.text}
+                      {q.max_score > 0 && (
+                        <span className="text-sm text-muted-foreground ml-2">
+                          ({q.max_score})
+                        </span>
+                      )}
+                    </div>
+                    {q.question_type === "01" && q.options.length > 0 && (
+                      <RadioGroup
+                        value={answers[q.tmid]?.option_ids?.[0] || ""}
+                        onValueChange={(v) =>
+                          handleAnswerChange(q, {
+                            tmid: q.tmid,
+                            question_type: q.question_type || "",
+                            option_ids: [v],
+                            text: "",
+                          })
+                        }
+                      >
+                        <div className="flex flex-col gap-2">
+                          {q.options.map((opt) => (
+                            <div key={opt.wid} className="flex items-center gap-2">
+                              <RadioGroupItem value={opt.wid} id={`${q.tmid}-${opt.wid}`} />
+                              <Label htmlFor={`${q.tmid}-${opt.wid}`}>
+                                {opt.text}
+                                {opt.score > 0 && (
+                                  <span className="text-xs text-muted-foreground ml-1">
+                                    ({opt.score})
+                                  </span>
+                                )}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      </RadioGroup>
+                    )}
+                    {q.question_type === "07" && q.options.length > 0 && (
+                      <div className="flex flex-col gap-2">
+                        {q.options.map((opt) => {
+                          const selected = answers[q.tmid]?.option_ids?.includes(opt.wid) || false;
+                          return (
+                            <div key={opt.wid} className="flex items-center gap-2">
+                              <Checkbox
+                                id={`${q.tmid}-${opt.wid}`}
+                                checked={selected}
+                                onCheckedChange={(checked) => {
+                                  const current = answers[q.tmid]?.option_ids || [];
+                                  const next = checked
+                                    ? [...current, opt.wid]
+                                    : current.filter((id) => id !== opt.wid);
+                                  handleAnswerChange(q, {
+                                    tmid: q.tmid,
+                                    question_type: q.question_type || "",
+                                    option_ids: next,
+                                    text: "",
+                                  });
+                                }}
+                              />
+                              <Label htmlFor={`${q.tmid}-${opt.wid}`}>
+                                {opt.text}
+                                {opt.score > 0 && (
+                                  <span className="text-xs text-muted-foreground ml-1">
+                                    ({opt.score})
+                                  </span>
+                                )}
+                              </Label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {q.question_type !== "01" && q.question_type !== "07" && (
+                      <Textarea
+                        placeholder="请输入答案"
+                        value={answers[q.tmid]?.text || ""}
+                        onChange={(e) =>
+                          handleAnswerChange(q, {
+                            tmid: q.tmid,
+                            question_type: q.question_type || "",
+                            option_ids: [],
+                            text: e.target.value,
+                          })
+                        }
+                      />
                     )}
                   </div>
-                  {q.question_type === "01" && q.options.length > 0 && (
-                    <RadioGroup
-                      value={answers[q.tmid]?.option_ids?.[0] || ""}
-                      onValueChange={(v) =>
-                        handleAnswerChange(q, {
-                          tmid: q.tmid,
-                          question_type: q.question_type || "",
-                          option_ids: [v],
-                          text: "",
-                        })
-                      }
-                    >
-                      <div className="flex flex-col gap-2">
-                        {q.options.map((opt) => (
-                          <div key={opt.wid} className="flex items-center gap-2">
-                            <RadioGroupItem value={opt.wid} id={`${q.tmid}-${opt.wid}`} />
-                            <Label htmlFor={`${q.tmid}-${opt.wid}`}>
-                              {opt.text}
-                              {opt.score > 0 && (
-                                <span className="text-xs text-muted-foreground ml-1">
-                                  ({opt.score})
-                                </span>
-                              )}
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
-                    </RadioGroup>
-                  )}
-                  {q.question_type === "07" && q.options.length > 0 && (
-                    <div className="flex flex-col gap-2">
-                      {q.options.map((opt) => {
-                        const selected = answers[q.tmid]?.option_ids?.includes(opt.wid) || false;
-                        return (
-                          <div key={opt.wid} className="flex items-center gap-2">
-                            <Checkbox
-                              id={`${q.tmid}-${opt.wid}`}
-                              checked={selected}
-                              onCheckedChange={(checked) => {
-                                const current = answers[q.tmid]?.option_ids || [];
-                                const next = checked
-                                  ? [...current, opt.wid]
-                                  : current.filter((id) => id !== opt.wid);
-                                handleAnswerChange(q, {
-                                  tmid: q.tmid,
-                                  question_type: q.question_type || "",
-                                  option_ids: next,
-                                  text: "",
-                                });
-                              }}
-                            />
-                            <Label htmlFor={`${q.tmid}-${opt.wid}`}>
-                              {opt.text}
-                              {opt.score > 0 && (
-                                <span className="text-xs text-muted-foreground ml-1">
-                                  ({opt.score})
-                                </span>
-                              )}
-                            </Label>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {q.question_type !== "01" && q.question_type !== "07" && (
-                    <Textarea
-                      placeholder="请输入答案"
-                      value={answers[q.tmid]?.text || ""}
-                      onChange={(e) =>
-                        handleAnswerChange(q, {
-                          tmid: q.tmid,
-                          question_type: q.question_type || "",
-                          option_ids: [],
-                          text: e.target.value,
-                        })
-                      }
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </ResponsiveModalBody>
 
-          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+          <ResponsiveModalFooter className="flex flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               {t("evaluation.cancel")}
             </Button>
@@ -761,38 +824,47 @@ export default function EvaluationPage() {
               {submitting && <Spinner data-icon="inline-start" />}
               {submitting ? t("evaluation.submitting") : t("evaluation.submit")}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </ResponsiveModalFooter>
+        </ResponsiveModalContent>
+      </ResponsiveModal>
 
       {/* Preview dialog */}
-      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="sm:max-w-xl overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>{t("evaluation.previewResult")}</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-3 text-sm">
+      <ResponsiveModal open={previewOpen} onOpenChange={setPreviewOpen}>
+        <ResponsiveModalContent className="sm:max-w-xl overflow-hidden">
+          <ResponsiveModalHeader>
+            <ResponsiveModalTitle>{t("evaluation.previewResult")}</ResponsiveModalTitle>
+          </ResponsiveModalHeader>
+          <ResponsiveModalBody className="flex flex-col gap-3 text-sm">
             {previewResult && Object.entries(previewResult).map(([k, v]) => (
               <div key={k} className="flex flex-col gap-1.5">
                 <span className="text-muted-foreground text-xs">{t(`evaluation.previewKeys.${k}` as never) || k}</span>
                 {renderScoreBlock(k, v, t)}
               </div>
             ))}
-          </div>
-          <DialogFooter>
+          </ResponsiveModalBody>
+          <ResponsiveModalFooter>
             <Button onClick={() => setPreviewOpen(false)}>{t("evaluation.close")}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </ResponsiveModalFooter>
+        </ResponsiveModalContent>
+      </ResponsiveModal>
 
       {/* Batch selection dialog */}
-      <Dialog open={batchSelectOpen} onOpenChange={setBatchSelectOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{t("evaluation.batchSelectTitle")}</DialogTitle>
-            <DialogDescription>{t("evaluation.batchSelectDesc")}</DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-4">
+      <ResponsiveModal open={batchSelectOpen} onOpenChange={setBatchSelectOpen}>
+        <ResponsiveModalContent className="sm:max-w-2xl">
+          <ResponsiveModalHeader>
+            <ResponsiveModalTitle>{t("evaluation.batchSelectTitle")}</ResponsiveModalTitle>
+            <ResponsiveModalDescription>{t("evaluation.batchSelectDesc")}</ResponsiveModalDescription>
+          </ResponsiveModalHeader>
+          <ResponsiveModalBody className="flex flex-col gap-4">
+            <Field>
+              <FieldLabel htmlFor="batch-text-answer">{t("evaluation.batchTextAnswerLabel")}</FieldLabel>
+              <Input
+                id="batch-text-answer"
+                value={batchTextAnswer}
+                onChange={(e) => setBatchTextAnswer(e.target.value)}
+                placeholder={t("evaluation.batchTextAnswerPlaceholder")}
+              />
+            </Field>
             <div className="flex items-center gap-3">
               <Button variant="outline" size="sm" onClick={selectAllTasks}>
                 {t("evaluation.selectAll")}
@@ -804,7 +876,7 @@ export default function EvaluationPage() {
                 {t("evaluation.selectedCount", { count: selectedTaskIds.size })}
               </span>
             </div>
-            <div className="flex flex-col gap-2 max-h-[50vh] overflow-auto">
+            <div className="flex flex-col gap-2 md:max-h-[50vh] md:overflow-auto">
               {tasks
                 .filter((task) => getTaskStatus(task, t).active)
                 .map((task) => (
@@ -816,39 +888,40 @@ export default function EvaluationPage() {
                     <Checkbox
                       checked={selectedTaskIds.has(task.wid || "")}
                       onCheckedChange={() => toggleTaskSelection(task.wid || "")}
+                      onClick={(e) => e.stopPropagation()}
                       className="mt-0.5"
                     />
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-medium text-sm">{task.course_name}</span>
-                      <span className="text-xs text-muted-foreground">
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="truncate font-medium text-sm">{task.course_name}</span>
+                      <span className="truncate text-xs text-muted-foreground">
                         {task.teacher_name} · {task.term_name}
                       </span>
                     </div>
                   </div>
                 ))}
             </div>
-          </div>
-          <DialogFooter>
+          </ResponsiveModalBody>
+          <ResponsiveModalFooter>
             <Button variant="outline" onClick={() => setBatchSelectOpen(false)}>
               {t("evaluation.cancel")}
             </Button>
             <Button onClick={goToBatchPreview} disabled={selectedTaskIds.size === 0}>
               {t("evaluation.nextStep")}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </ResponsiveModalFooter>
+        </ResponsiveModalContent>
+      </ResponsiveModal>
 
       {/* Batch progress dialog */}
-      <Dialog open={batchProgressOpen} onOpenChange={(v) => { if (!v) abortBatch(); }}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{t("evaluation.batchProgressTitle")}</DialogTitle>
-            <DialogDescription>
+      <ResponsiveModal open={batchProgressOpen} onOpenChange={(v) => { if (!v) abortBatch(); }}>
+        <ResponsiveModalContent className="sm:max-w-lg">
+          <ResponsiveModalHeader>
+            <ResponsiveModalTitle>{t("evaluation.batchProgressTitle")}</ResponsiveModalTitle>
+            <ResponsiveModalDescription>
               {batchPhase === "fill" ? t("evaluation.batchPhaseFill") : t("evaluation.batchPhaseSubmit")}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-4">
+            </ResponsiveModalDescription>
+          </ResponsiveModalHeader>
+          <ResponsiveModalBody className="flex flex-col gap-4">
             <Progress
               value={
                 batchTasks.length > 0
@@ -861,7 +934,7 @@ export default function EvaluationPage() {
                 ? `${batchCurrentIdx + 1} / ${batchTasks.length} · ${batchTasks[batchCurrentIdx]?.task.course_name || ""}`
                 : `${t("evaluation.batchSuccess", { success: batchTasks.filter((r) => r.status === "submitted").length, failed: batchTasks.filter((r) => r.status === "failed").length })}`}
             </div>
-            <div className="flex flex-col gap-2 max-h-[40vh] overflow-auto">
+            <div className="flex flex-col gap-2 md:max-h-[40vh] md:overflow-auto">
               {batchTasks.map((r, idx) => {
                 const statusMap = {
                   pending: { label: t("evaluation.batchTaskStatusPending"), color: "text-muted-foreground" },
@@ -873,8 +946,8 @@ export default function EvaluationPage() {
                 };
                 const s = statusMap[r.status];
                 return (
-                  <div key={idx} className="flex items-center justify-between rounded-lg border p-2 text-sm">
-                    <div className="flex flex-col gap-0.5 min-w-0">
+                  <div key={idx} className="flex items-center justify-between gap-2 rounded-lg border p-2 text-sm">
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="font-medium truncate">{r.task.course_name}</span>
                       <span className="text-xs text-muted-foreground truncate">{r.task.teacher_name}</span>
                     </div>
@@ -883,81 +956,119 @@ export default function EvaluationPage() {
                 );
               })}
             </div>
-          </div>
-          <DialogFooter>
+          </ResponsiveModalBody>
+          <ResponsiveModalFooter>
             <Button variant="destructive" onClick={abortBatch}>
               {t("evaluation.batchAbort")}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </ResponsiveModalFooter>
+        </ResponsiveModalContent>
+      </ResponsiveModal>
 
       {/* Batch preview dialog */}
-      <Dialog open={batchPreviewOpen} onOpenChange={setBatchPreviewOpen}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-auto overflow-x-hidden">
-          <DialogHeader>
-            <DialogTitle>{t("evaluation.batchPreviewTitle")}</DialogTitle>
-            <DialogDescription>{t("evaluation.batchPreviewDesc")}</DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3">
-            {batchTasks.map((r, idx) => (
-              <Card key={idx} className={r.status === "failed" ? "opacity-60 overflow-hidden" : "overflow-hidden"}>
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between">
-                    <div className="min-w-0">
+      <ResponsiveModal
+        open={batchPreviewOpen}
+        onOpenChange={(v) => {
+          setBatchPreviewOpen(v);
+          if (!v) setBatchDetailIdx(null);
+        }}
+      >
+        <ResponsiveModalContent className="sm:max-w-3xl max-h-[90vh] overflow-hidden">
+          {batchDetailIdx === null ? (
+            <>
+              <ResponsiveModalHeader>
+                <ResponsiveModalTitle>{t("evaluation.batchPreviewTitle")}</ResponsiveModalTitle>
+                <ResponsiveModalDescription>{t("evaluation.batchPreviewDesc")}</ResponsiveModalDescription>
+              </ResponsiveModalHeader>
+              <ResponsiveModalBody className="flex flex-col gap-2 pt-1 md:gap-3">
+                {batchTasks.map((r, idx) => (
+                  <Card
+                    key={idx}
+                    className={cn(
+                      "cursor-pointer py-3 transition-colors hover:bg-muted/40 md:py-4",
+                      r.status === "failed" && "opacity-60",
+                    )}
+                    onClick={() => setBatchDetailIdx(idx)}
+                  >
+                    <CardHeader className="py-0 md:py-0">
                       <CardTitle className="text-base truncate">{r.task.course_name}</CardTitle>
                       <CardDescription className="truncate">{r.task.teacher_name}</CardDescription>
-                    </div>
-                    <Badge variant={r.status === "filled" ? "default" : r.status === "failed" ? "destructive" : "secondary"}>
-                      {r.status === "filled"
-                        ? t("evaluation.batchTaskStatusSuccess")
-                        : r.status === "failed"
-                          ? t("evaluation.batchTaskStatusFailed")
-                          : t("evaluation.batchTaskStatusPending")}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-3 text-sm">
-                  {r.status === "filled" && r.scoreResult && (
-                    <div className="flex flex-col gap-2 rounded-md bg-muted/50 p-2">
-                      {Object.entries(r.scoreResult).map(([k, v]) => (
-                        <div key={k} className="flex flex-col gap-1">
-                          <span className="text-muted-foreground text-xs">{t(`evaluation.previewKeys.${k}` as never) || k}</span>
-                          {renderScoreBlock(k, v, t)}
+                      <CardAction className="self-center">
+                        <div className="flex items-center gap-1.5">
+                          <Badge variant={r.status === "filled" ? "default" : r.status === "failed" ? "destructive" : "secondary"}>
+                            {r.status === "filled"
+                              ? t("evaluation.batchTaskStatusSuccess")
+                              : r.status === "failed"
+                                ? t("evaluation.batchTaskStatusFailed")
+                                : t("evaluation.batchTaskStatusPending")}
+                          </Badge>
+                          <ChevronRight className="size-4 text-muted-foreground" />
                         </div>
-                      ))}
-                    </div>
-                  )}
-                  {r.status === "filled" && r.detail.questions.length > 0 && (
-                    <div className="flex flex-col gap-1.5">
-                      <span className="text-xs font-medium text-muted-foreground">{t("evaluation.batchAnswers")}</span>
-                      {formatAnswerPreview(r.detail, r.answers).map((item) => (
-                        <div key={item.order} className="grid grid-cols-[1fr_auto] gap-2 items-center">
-                          <span className="text-muted-foreground truncate" title={item.text}>
-                            {item.order}. {item.text}
-                          </span>
-                          <span className="font-medium truncate text-right" title={item.answer}>{item.answer}</span>
+                      </CardAction>
+                    </CardHeader>
+                  </Card>
+                ))}
+              </ResponsiveModalBody>
+              <ResponsiveModalFooter className="flex flex-col sm:flex-row gap-2">
+                <Button variant="outline" onClick={() => setBatchPreviewOpen(false)}>
+                  {t("evaluation.cancel")}
+                </Button>
+                <Button onClick={runBatchSubmit} disabled={batchTasks.filter((r) => r.status === "filled").length === 0}>
+                  {t("evaluation.batchContinue")}
+                </Button>
+              </ResponsiveModalFooter>
+            </>
+          ) : (
+            (() => {
+              const r = batchTasks[batchDetailIdx];
+              if (!r) return null;
+              return (
+                <>
+                  <ResponsiveModalHeader>
+                    <ResponsiveModalTitle className="truncate">{r.task.course_name}</ResponsiveModalTitle>
+                    <ResponsiveModalDescription className="truncate">{r.task.teacher_name}</ResponsiveModalDescription>
+                  </ResponsiveModalHeader>
+                  <ResponsiveModalBody className="flex flex-col gap-4 text-sm">
+                    {r.status === "filled" && r.scoreResult && (
+                      <div className="flex flex-col gap-2 rounded-md bg-muted/50 p-3">
+                        {Object.entries(r.scoreResult).map(([k, v]) => (
+                          <div key={k} className="flex flex-col gap-1">
+                            <span className="text-muted-foreground text-xs">{t(`evaluation.previewKeys.${k}` as never) || k}</span>
+                            {renderScoreBlock(k, v, t)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {r.status === "filled" && r.detail.questions.length > 0 && (
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs font-medium text-muted-foreground">{t("evaluation.batchAnswers")}</span>
+                        <div className="flex flex-col divide-y divide-border">
+                          {formatAnswerPreview(r.detail, r.answers).map((item) => (
+                            <div key={item.order} className="flex flex-col gap-1 py-2 md:flex-row md:items-start md:justify-between md:gap-3">
+                              <span className="text-muted-foreground" title={item.text}>
+                                {item.order}. {item.text}
+                              </span>
+                              <span className="font-medium md:shrink-0 md:text-right" title={item.answer}>{item.answer}</span>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                  {r.status === "failed" && r.error && (
-                    <span className="text-destructive text-xs">{r.error}</span>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <DialogFooter className="flex flex-col sm:flex-row gap-2">
-            <Button variant="outline" onClick={() => setBatchPreviewOpen(false)}>
-              {t("evaluation.cancel")}
-            </Button>
-            <Button onClick={runBatchSubmit} disabled={batchTasks.filter((r) => r.status === "filled").length === 0}>
-              {t("evaluation.batchContinue")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                      </div>
+                    )}
+                    {r.status === "failed" && r.error && (
+                      <div className="text-destructive">{r.error}</div>
+                    )}
+                  </ResponsiveModalBody>
+                  <ResponsiveModalFooter>
+                    <Button onClick={() => setBatchDetailIdx(null)} className="w-full">
+                      {t("evaluation.close")}
+                    </Button>
+                  </ResponsiveModalFooter>
+                </>
+              );
+            })()
+          )}
+        </ResponsiveModalContent>
+      </ResponsiveModal>
     </div>
   );
 }
