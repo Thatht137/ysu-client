@@ -7,6 +7,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import {
   Select,
   SelectContent,
@@ -167,11 +173,11 @@ export default function GradesPage() {
           <CardDescription>{t("grades.description")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">{t("grades.termLabel")}</label>
+          <FieldGroup className="flex flex-row flex-wrap items-end gap-3">
+            <Field className="w-48">
+              <FieldLabel htmlFor="grades-term">{t("grades.termLabel")}</FieldLabel>
               <Select value={term} onValueChange={setTerm}>
-                <SelectTrigger className="w-48">
+                <SelectTrigger id="grades-term">
                   <SelectValue placeholder={t("grades.allTerms")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -183,21 +189,25 @@ export default function GradesPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">{t("grades.courseNameLabel")}</label>
+            </Field>
+            <Field className="w-48">
+              <FieldLabel htmlFor="grades-course-name">{t("grades.courseNameLabel")}</FieldLabel>
               <Input
+                id="grades-course-name"
                 value={courseName}
                 onChange={(e) => setCourseName(e.target.value)}
                 placeholder={t("grades.courseNamePlaceholder")}
-                className="w-48"
               />
-            </div>
-            <Button onClick={handleSearch}>
-              <Search className="size-4" />
+            </Field>
+            <Button onClick={handleSearch} disabled={loading}>
+              {loading ? (
+                <Spinner data-icon="inline-start" />
+              ) : (
+                <Search data-icon="inline-start" />
+              )}
               {t("grades.search")}
             </Button>
-          </div>
+          </FieldGroup>
         </CardContent>
       </Card>
 

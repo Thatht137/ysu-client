@@ -7,11 +7,31 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { useAuthStore } from "@/lib/auth-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { getExams } from "@/lib/api";
 import type { Exam } from "@/lib/types";
-import { MapPin, Clock, CalendarDays, CheckCircle2 } from "lucide-react";
+import {
+  CalendarDays,
+  CalendarOff,
+  CheckCircle2,
+  Clock,
+  MapPin,
+  Search,
+} from "lucide-react";
 
 function isExamCompleted(exam: Exam): boolean {
   if (!exam.exam_date) return false;
@@ -86,18 +106,38 @@ export default function ExamsPage() {
           <CardDescription>{t("exams.description")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">{t("exams.termLabel")}</label>
-              <Input value={term} onChange={(e) => setTerm(e.target.value)} placeholder={t("exams.termPlaceholder")} className="w-48" />
-            </div>
-            <Button onClick={handleQuery}>{t("exams.query")}</Button>
-          </div>
+          <FieldGroup className="flex flex-row flex-wrap items-end gap-3">
+            <Field className="w-48">
+              <FieldLabel htmlFor="exams-term">{t("exams.termLabel")}</FieldLabel>
+              <Input
+                id="exams-term"
+                value={term}
+                onChange={(e) => setTerm(e.target.value)}
+                placeholder={t("exams.termPlaceholder")}
+              />
+            </Field>
+            <Button onClick={handleQuery} disabled={loading}>
+              {loading ? (
+                <Spinner data-icon="inline-start" />
+              ) : (
+                <Search data-icon="inline-start" />
+              )}
+              {t("exams.query")}
+            </Button>
+          </FieldGroup>
         </CardContent>
       </Card>
 
       {exams.length === 0 ? (
-        <p className="text-muted-foreground text-center py-12">{t("exams.noData")}</p>
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <CalendarOff />
+            </EmptyMedia>
+            <EmptyTitle>{t("exams.noData")}</EmptyTitle>
+            <EmptyDescription>{t("exams.description")}</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <div className="flex flex-col gap-6">
           {upcomingExams.length > 0 && (

@@ -46,7 +46,6 @@ import {
   LayoutDashboard,
   LogOut,
   Moon,
-  ScrollText,
   Sun,
   User,
   Globe,
@@ -84,7 +83,6 @@ export default function DashboardLayout({
     { title: t("app.schedule"), url: "/dashboard/schedule", icon: Calendar },
     { title: t("app.exams"), url: "/dashboard/exams", icon: FileText },
     { title: t("app.trainingPlan"), url: "/dashboard/training-plan", icon: BookOpen },
-    { title: t("app.academic"), url: "/dashboard/academic", icon: ScrollText },
     { title: t("app.evaluation"), url: "/dashboard/evaluation", icon: ClipboardCheck },
   ];
 
@@ -123,9 +121,10 @@ export default function DashboardLayout({
         className="[&_[data-sidebar=menu-button]]:py-3"
       >
         <SidebarHeader>
-          <div className="flex items-center gap-2 px-2 py-3">
-            <GraduationCap className="size-6 shrink-0" />
-            <span className="font-semibold group-data-[collapsible=icon]:hidden">{t("app.name")}</span>
+          <div className="flex items-center gap-2 px-2 py-3 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-3 group-data-[collapsible=icon]:px-0">
+            <GraduationCap className="size-6 shrink-0 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-data-[collapsible=icon]:rotate-[12deg] group-data-[collapsible=icon]:scale-110" />
+            <span className="font-semibold transition-opacity duration-300 group-data-[collapsible=icon]:hidden">{t("app.name")}</span>
+            <SidebarTrigger className="ml-auto transition-transform duration-300 hover:scale-110 active:scale-95 group-data-[collapsible=icon]:ml-0" />
           </div>
         </SidebarHeader>
         <SidebarContent>
@@ -139,7 +138,7 @@ export default function DashboardLayout({
                       asChild
                       isActive={pathname === item.url}
                       tooltip={item.title}
-                      className="py-3"
+                      className="py-3 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:translate-x-1 active:scale-[0.98] data-[active=true]:shadow-sm [&_svg]:transition-transform [&_svg]:duration-300 hover:[&_svg]:scale-110 data-[active=true]:[&_svg]:scale-110"
                     >
                       <Link href={item.url}>
                         <item.icon />
@@ -157,22 +156,22 @@ export default function DashboardLayout({
       <main className="flex-1 overflow-auto">
         <header className="flex items-center justify-between gap-4 border-b px-6 py-4">
           <div className="flex items-center gap-3">
-            <SidebarTrigger />
-            <h1 className="text-lg font-semibold">
+            <h1 className="text-lg font-semibold animate-in fade-in slide-in-from-left-2 duration-300">
               {navItems.find((i) => i.url === pathname)?.title || t("app.name")}
             </h1>
           </div>
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
-              size="sm"
+              size="icon-sm"
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              aria-label={t("app.theme")}
             >
-              <Sun className="size-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-              <Moon className="absolute size-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+              <Sun className="rotate-0 scale-100 transition-all duration-300 dark:-rotate-90 dark:scale-0" />
+              <Moon className="absolute rotate-90 scale-0 transition-all duration-300 dark:rotate-0 dark:scale-100" />
             </Button>
             <Button variant="ghost" size="sm" onClick={toggleLocale}>
-              <Globe className="size-4 mr-1" />
+              <Globe data-icon="inline-start" />
               {locale === "zh" ? "中文" : "EN"}
             </Button>
             <DropdownMenu>
@@ -193,18 +192,20 @@ export default function DashboardLayout({
                   )}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setStudentDialogOpen(true)}>
-                  <User className="mr-2 size-4" />
+                  <User />
                   {t("app.studentInfo")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleLogout}>
-                  <LogOut className="mr-2 size-4" />
+                  <LogOut />
                   {t("app.logout")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </header>
-        <div className="p-8">{children}</div>
+        <div key={pathname} className="p-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          {children}
+        </div>
       </main>
 
       <Dialog open={studentDialogOpen} onOpenChange={setStudentDialogOpen}>

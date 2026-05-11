@@ -12,7 +12,15 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldSet,
+  FieldLegend,
+  FieldDescription,
+} from "@/components/ui/field";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   ToggleGroup,
@@ -192,7 +200,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-svh items-center justify-center p-6">
-      <Card className="w-full max-w-sm">
+      <Card className="w-full max-w-sm animate-in fade-in zoom-in-95 duration-500">
         <CardHeader>
           <CardTitle>{t("login.title")}</CardTitle>
           <CardDescription>
@@ -203,108 +211,116 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           {step === "credentials" ? (
-            <form onSubmit={handleSubmitCredentials} className="flex flex-col gap-5">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="username">{t("login.usernameLabel")}</Label>
-                <Input
-                  id="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder={t("login.usernamePlaceholder")}
-                  autoComplete="username"
-                  onBlur={handleCheckCaptcha}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="password">{t("login.passwordLabel")}</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={t("login.passwordPlaceholder")}
-                  autoComplete="current-password"
-                />
-              </div>
-              {needsCaptcha && captchaImage && (
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="captcha">{t("login.captchaLabel")}</Label>
-                  <img
-                    src={captchaImage}
-                    alt="captcha"
-                    className="rounded-md border cursor-pointer"
-                    onClick={handleCheckCaptcha}
-                  />
+            <form onSubmit={handleSubmitCredentials}>
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="username">{t("login.usernameLabel")}</FieldLabel>
                   <Input
-                    id="captcha"
-                    value={captcha}
-                    onChange={(e) => setCaptcha(e.target.value)}
-                    placeholder={t("login.captchaPlaceholder")}
+                    id="username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder={t("login.usernamePlaceholder")}
+                    autoComplete="username"
+                    onBlur={handleCheckCaptcha}
                   />
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="remember"
-                  checked={remember}
-                  onCheckedChange={(c) => setRemember(c === true)}
-                />
-                <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">
-                  {t("login.remember")}
-                </Label>
-              </div>
-              <Button type="submit" disabled={loading}>
-                {loading ? t("login.loggingIn") : t("login.submit")}
-              </Button>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="password">{t("login.passwordLabel")}</FieldLabel>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={t("login.passwordPlaceholder")}
+                    autoComplete="current-password"
+                  />
+                </Field>
+                {needsCaptcha && captchaImage && (
+                  <Field>
+                    <FieldLabel htmlFor="captcha">{t("login.captchaLabel")}</FieldLabel>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={captchaImage}
+                      alt="captcha"
+                      className="rounded-md border cursor-pointer transition-opacity hover:opacity-80"
+                      onClick={handleCheckCaptcha}
+                    />
+                    <Input
+                      id="captcha"
+                      value={captcha}
+                      onChange={(e) => setCaptcha(e.target.value)}
+                      placeholder={t("login.captchaPlaceholder")}
+                    />
+                  </Field>
+                )}
+                <Field orientation="horizontal">
+                  <Checkbox
+                    id="remember"
+                    checked={remember}
+                    onCheckedChange={(c) => setRemember(c === true)}
+                  />
+                  <FieldLabel htmlFor="remember" className="text-sm font-normal cursor-pointer">
+                    {t("login.remember")}
+                  </FieldLabel>
+                </Field>
+                <Button type="submit" disabled={loading}>
+                  {loading && <Spinner data-icon="inline-start" />}
+                  {loading ? t("login.loggingIn") : t("login.submit")}
+                </Button>
+              </FieldGroup>
             </form>
           ) : (
-            <form onSubmit={handleSubmitMFA} className="flex flex-col gap-5">
-              <div className="flex flex-col gap-2">
-                <Label>{t("login.mfaMethod")}</Label>
-                <ToggleGroup
-                  type="single"
-                  value={mfaMethod}
-                  onValueChange={(v) =>
-                    v && setMfaMethod(v as "sms" | "cpdaily")
-                  }
-                  className="justify-start"
+            <form onSubmit={handleSubmitMFA}>
+              <FieldGroup>
+                <FieldSet>
+                  <FieldLegend variant="label">{t("login.mfaMethod")}</FieldLegend>
+                  <ToggleGroup
+                    type="single"
+                    value={mfaMethod}
+                    onValueChange={(v) =>
+                      v && setMfaMethod(v as "sms" | "cpdaily")
+                    }
+                    className="justify-start"
+                  >
+                    <ToggleGroupItem value="cpdaily">{t("login.mfaMethodCpdaily")}</ToggleGroupItem>
+                    <ToggleGroupItem value="sms">{t("login.mfaMethodSms")}</ToggleGroupItem>
+                  </ToggleGroup>
+                </FieldSet>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleRequestMFACode}
+                  disabled={loading}
                 >
-                  <ToggleGroupItem value="cpdaily">{t("login.mfaMethodCpdaily")}</ToggleGroupItem>
-                  <ToggleGroupItem value="sms">{t("login.mfaMethodSms")}</ToggleGroupItem>
-                </ToggleGroup>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleRequestMFACode}
-                disabled={loading}
-              >
-                {loading ? t("login.mfaRequesting") : t("login.mfaRequest")}
-              </Button>
-              {mobileHint && (
-                <p className="text-sm text-muted-foreground">
-                  {t("login.mfaSent")} {mobileHint}
-                </p>
-              )}
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="mfaCode">{t("login.mfaCodeLabel")}</Label>
-                <Input
-                  id="mfaCode"
-                  value={mfaCode}
-                  onChange={(e) => setMfaCode(e.target.value)}
-                  placeholder={t("login.mfaCodePlaceholder")}
-                />
-              </div>
-              <Button type="submit" disabled={loading}>
-                {loading ? t("login.mfaVerifying") : t("login.mfaVerify")}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setStep("credentials")}
-              >
-                {t("login.back")}
-              </Button>
+                  {loading && <Spinner data-icon="inline-start" />}
+                  {loading ? t("login.mfaRequesting") : t("login.mfaRequest")}
+                </Button>
+                {mobileHint && (
+                  <FieldDescription>
+                    {t("login.mfaSent")} {mobileHint}
+                  </FieldDescription>
+                )}
+                <Field>
+                  <FieldLabel htmlFor="mfaCode">{t("login.mfaCodeLabel")}</FieldLabel>
+                  <Input
+                    id="mfaCode"
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value)}
+                    placeholder={t("login.mfaCodePlaceholder")}
+                  />
+                </Field>
+                <Button type="submit" disabled={loading}>
+                  {loading && <Spinner data-icon="inline-start" />}
+                  {loading ? t("login.mfaVerifying") : t("login.mfaVerify")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setStep("credentials")}
+                >
+                  {t("login.back")}
+                </Button>
+              </FieldGroup>
             </form>
           )}
         </CardContent>

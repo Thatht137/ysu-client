@@ -6,6 +6,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { Progress } from "@/components/ui/progress";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import {
   Dialog,
   DialogContent,
@@ -34,7 +43,7 @@ import type {
   Question,
   EvaluationAnswer,
 } from "@/lib/types";
-import { Sparkles } from "lucide-react";
+import { ClipboardCheck, Sparkles } from "lucide-react";
 
 interface BatchTaskResult {
   task: EvaluationTask;
@@ -165,6 +174,16 @@ export default function EvaluationPage() {
     }
     load();
   }, [credential, t]);
+
+  async function refreshTypes() {
+    if (!credential) return;
+    try {
+      const updated = await getEvaluationTypes(credential);
+      setTypes(updated);
+    } catch {
+      // silent: refresh is best-effort
+    }
+  }
 
   async function handleSelectType(code: string) {
     if (!credential) return;
@@ -332,6 +351,7 @@ export default function EvaluationPage() {
       });
       toast.success(t("evaluation.submit"));
       setDialogOpen(false);
+      refreshTypes();
       if (selectedType) {
         handleSelectType(selectedType);
       }
@@ -494,6 +514,7 @@ export default function EvaluationPage() {
     const success = results.filter((r) => r.status === "submitted").length;
     const failed = results.filter((r) => r.status === "failed").length;
     toast.success(t("evaluation.batchSuccess", { success, failed }));
+    refreshTypes();
     if (selectedType) {
       handleSelectType(selectedType);
     }
@@ -525,7 +546,7 @@ export default function EvaluationPage() {
             </div>
             {selectedType && tasks.filter((task) => getTaskStatus(task, t).active).length > 0 && (
               <Button variant="outline" size="sm" onClick={openBatchSelect}>
-                <Sparkles className="size-4 mr-1" />
+                <Sparkles data-icon="inline-start" />
                 {t("evaluation.batchAuto")}
               </Button>
             )}
@@ -563,7 +584,15 @@ export default function EvaluationPage() {
             {loadingTasks ? (
               <Skeleton className="h-48" />
             ) : tasks.length === 0 ? (
-              <p className="text-center text-muted-foreground py-12">{t("evaluation.noTasks")}</p>
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <ClipboardCheck />
+                  </EmptyMedia>
+                  <EmptyTitle>{t("evaluation.noTasks")}</EmptyTitle>
+                  <EmptyDescription>{t("evaluation.description")}</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
                 {tasks.map((task) => {
@@ -571,7 +600,11 @@ export default function EvaluationPage() {
                   return (
                     <Card
                       key={task.wid}
-                      className={status.active ? "cursor-pointer" : "opacity-60"}
+                      className={
+                        status.active
+                          ? "cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                          : "opacity-60"
+                      }
                       onClick={() => handleOpenTask(task)}
                     >
                       <CardHeader className="pb-2">
@@ -618,7 +651,7 @@ export default function EvaluationPage() {
             <div className="flex flex-col gap-6">
               <div className="flex justify-end">
                 <Button variant="outline" size="sm" onClick={applyAutoFill}>
-                  <Sparkles className="size-4 mr-1" />
+                  <Sparkles data-icon="inline-start" />
                   {t("evaluation.autoFill")}
                 </Button>
               </div>
@@ -721,9 +754,11 @@ export default function EvaluationPage() {
               {t("evaluation.cancel")}
             </Button>
             <Button variant="secondary" onClick={handlePreview} disabled={submitting || loadingDetail}>
+              {submitting && <Spinner data-icon="inline-start" />}
               {submitting ? t("evaluation.previewing") : t("evaluation.preview")}
             </Button>
             <Button onClick={handleSubmit} disabled={submitting || loadingDetail}>
+              {submitting && <Spinner data-icon="inline-start" />}
               {submitting ? t("evaluation.submitting") : t("evaluation.submit")}
             </Button>
           </DialogFooter>
@@ -814,14 +849,13 @@ export default function EvaluationPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4">
-            <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-              <div
-                className="bg-primary h-full transition-all duration-300"
-                style={{
-                  width: `${batchTasks.length > 0 ? ((batchCurrentIdx + 1) / batchTasks.length) * 100 : 0}%`,
-                }}
-              />
-            </div>
+            <Progress
+              value={
+                batchTasks.length > 0
+                  ? ((batchCurrentIdx + 1) / batchTasks.length) * 100
+                  : 0
+              }
+            />
             <div className="text-sm text-muted-foreground">
               {batchCurrentIdx < batchTasks.length
                 ? `${batchCurrentIdx + 1} / ${batchTasks.length} · ${batchTasks[batchCurrentIdx]?.task.course_name || ""}`
@@ -832,9 +866,9 @@ export default function EvaluationPage() {
                 const statusMap = {
                   pending: { label: t("evaluation.batchTaskStatusPending"), color: "text-muted-foreground" },
                   filling: { label: t("evaluation.batchTaskStatusProcessing"), color: "text-primary" },
-                  filled: { label: t("evaluation.batchTaskStatusSuccess"), color: "text-green-600" },
+                  filled: { label: t("evaluation.batchTaskStatusSuccess"), color: "text-primary" },
                   submitting: { label: t("evaluation.batchTaskStatusProcessing"), color: "text-primary" },
-                  submitted: { label: t("evaluation.batchTaskStatusSuccess"), color: "text-green-600" },
+                  submitted: { label: t("evaluation.batchTaskStatusSuccess"), color: "text-primary" },
                   failed: { label: t("evaluation.batchTaskStatusFailed"), color: "text-destructive" },
                 };
                 const s = statusMap[r.status];

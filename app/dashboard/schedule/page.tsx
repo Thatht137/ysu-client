@@ -7,6 +7,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +31,7 @@ import { useTranslation } from "@/lib/i18n/use-translation";
 import { getExperimentalSchedule, getClassPeriods, getCurrentWeek } from "@/lib/api";
 import { cacheGet, cacheSet, cacheKey } from "@/lib/cache";
 import type { Course, ClassPeriod, CurrentWeek } from "@/lib/types";
+import { CalendarOff, ChevronLeft, ChevronRight, Search } from "lucide-react";
 
 function parseWeeks(weeksStr: string): number[] {
   const result = new Set<number>();
@@ -44,6 +58,13 @@ function isCourseActiveInWeek(course: Course, week: number): boolean {
   return weeks.includes(week);
 }
 
+function coursesSignature(courses: Course[]): string {
+  return courses
+    .map((c) => `${c.code ?? ""}|${c.name ?? ""}|${c.teacher ?? ""}|${c.classroom ?? ""}`)
+    .sort()
+    .join("\n");
+}
+
 interface GridCell {
   courses: Course[];
 }
@@ -59,7 +80,11 @@ export default function SchedulePage() {
   const [loading, setLoading] = useState(true);
   const [overlapDialog, setOverlapDialog] = useState<{ day: number; section: number; courses: Course[] } | null>(null);
 
-  const WEEKDAYS = ["", t("dashboard.weekday", { day: 1 }), t("dashboard.weekday", { day: 2 }), t("dashboard.weekday", { day: 3 }), t("dashboard.weekday", { day: 4 }), t("dashboard.weekday", { day: 5 }), t("dashboard.weekday", { day: 6 }), t("dashboard.weekday", { day: 7 })];
+  const WEEKDAYS = ["", t("dashboard.weekdayNames.1"), t("dashboard.weekdayNames.2"), t("dashboard.weekdayNames.3"), t("dashboard.weekdayNames.4"), t("dashboard.weekdayNames.5"), t("dashboard.weekdayNames.6"), t("dashboard.weekdayNames.7")];
+
+  function shiftWeek(delta: number) {
+    setSelectedWeek((w) => Math.max(1, (w || 1) + delta));
+  }
 
   useEffect(() => {
     if (!credential) return;
@@ -156,23 +181,17 @@ export default function SchedulePage() {
           section++;
           continue;
         }
-        if (cell.courses.length === 1) {
-          const course = cell.courses[0];
-          let end = section;
-          while (
-            end + 1 <= maxSection &&
-            grid[end + 1][day].courses.length === 1 &&
-            grid[end + 1][day].courses[0].code === course.code &&
-            grid[end + 1][day].courses[0].name === course.name
-          ) {
-            end++;
-          }
-          blocks.push({ day, start: section, end, courses: [course] });
-          section = end + 1;
-        } else {
-          blocks.push({ day, start: section, end: section, courses: cell.courses });
-          section++;
+        const sig = coursesSignature(cell.courses);
+        let end = section;
+        while (
+          end + 1 <= maxSection &&
+          grid[end + 1][day].courses.length === cell.courses.length &&
+          coursesSignature(grid[end + 1][day].courses) === sig
+        ) {
+          end++;
         }
+        blocks.push({ day, start: section, end, courses: cell.courses });
+        section = end + 1;
       }
     }
     return blocks;
@@ -207,35 +226,76 @@ export default function SchedulePage() {
           <CardDescription>{t("schedule.description")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">{t("schedule.termLabel")}</label>
-              <Input value={term} onChange={(e) => setTerm(e.target.value)} placeholder={t("schedule.termPlaceholder")} className="w-48" />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">{t("schedule.weekLabel")}</label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  value={selectedWeek || ""}
-                  onChange={(e) => setSelectedWeek(parseInt(e.target.value, 10) || 0)}
-                  placeholder={t("schedule.weeks")}
-                  className="w-24"
-                />
+          <FieldGroup className="flex flex-row flex-wrap items-end gap-3">
+            <Field className="w-48">
+              <FieldLabel htmlFor="schedule-term">{t("schedule.termLabel")}</FieldLabel>
+              <Input
+                id="schedule-term"
+                value={term}
+                onChange={(e) => setTerm(e.target.value)}
+                placeholder={t("schedule.termPlaceholder")}
+              />
+            </Field>
+            <Field className="min-w-[16rem]">
+              <FieldLabel htmlFor="schedule-week">{t("schedule.weekLabel")}</FieldLabel>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={() => shiftWeek(-1)}
+                    aria-label={t("schedule.weekPrev")}
+                  >
+                    <ChevronLeft />
+                  </Button>
+                  <Input
+                    id="schedule-week"
+                    type="number"
+                    value={selectedWeek || ""}
+                    onChange={(e) => setSelectedWeek(parseInt(e.target.value, 10) || 0)}
+                    placeholder={t("schedule.weeks")}
+                    className="w-20 text-center"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={() => shiftWeek(1)}
+                    aria-label={t("schedule.weekNext")}
+                  >
+                    <ChevronRight />
+                  </Button>
+                </div>
                 {currentWeek?.week && (
                   <Badge variant="secondary">{t("schedule.currentWeekBadge", { week: currentWeek.week })}</Badge>
                 )}
               </div>
-            </div>
-            <Button onClick={handleQuery}>{t("schedule.query")}</Button>
-          </div>
+            </Field>
+            <Button onClick={handleQuery} disabled={loading}>
+              {loading ? (
+                <Spinner data-icon="inline-start" />
+              ) : (
+                <Search data-icon="inline-start" />
+              )}
+              {t("schedule.query")}
+            </Button>
+          </FieldGroup>
         </CardContent>
       </Card>
 
       <Card>
         <CardContent className="pt-6">
           {courses.length === 0 ? (
-            <p className="text-center text-muted-foreground py-12">{t("schedule.noData")}</p>
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <CalendarOff />
+                </EmptyMedia>
+                <EmptyTitle>{t("schedule.noData")}</EmptyTitle>
+                <EmptyDescription>{t("schedule.description")}</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           ) : (
             <div className="overflow-auto">
               <div
