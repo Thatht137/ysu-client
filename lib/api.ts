@@ -29,36 +29,93 @@ import type {
   TrainingPlan,
   ClassPeriod,
 } from "./types";
+import { useAuthStore } from "./auth-store";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:11920";
+
+// 冷启动单飞:第一批 /jwxt/* 请求会触发服务端的 cas.authorize() 拿 ST,
+// 不加约束时多个并发请求会各自打一次 CAS 网关。让首个请求做 bootstrapper,
+// 其它并发请求等它回填 jwxtSession 后再发,稳态下 1 次 CAS 调用就够服务整个 dashboard。
+let inflightBootstrap: Promise<void> | null = null;
 
 async function _fetch<T>(
   path: string,
   options?: RequestInit,
   credential?: string | null,
 ): Promise<T> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...((options?.headers as Record<string, string>) || {}),
+  const pathNeedsJwxt = path.startsWith("/jwxt/") && !!credential;
+
+  if (
+    pathNeedsJwxt &&
+    !useAuthStore.getState().jwxtSession &&
+    inflightBootstrap
+  ) {
+    await inflightBootstrap;
+  }
+
+  const doFetch = async (): Promise<T> => {
+    const auth = useAuthStore.getState();
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...((options?.headers as Record<string, string>) || {}),
+    };
+    if (credential) {
+      headers["X-CAS-Credential"] = credential;
+    }
+    // 业务路由从 store 回传 JWXT session,允许服务端跳过 CAS authorize。
+    // 登录类路由不读这个 header,服务端不会拒绝多余的 header,直接忽略即可。
+    if (auth.jwxtSession) {
+      headers["X-JWXT-Session"] = auth.jwxtSession;
+    }
+    const res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+    });
+
+    // 不论成功失败,先把可能旋转过的 CAS / JWXT 凭据更新到 store。
+    // 注:CORS 必须在 expose_headers 中声明这两个 header,否则浏览器 JS 读不到。
+    const rotatedCas = res.headers.get("X-CAS-Credential");
+    if (rotatedCas && rotatedCas !== credential) {
+      auth.setCredential(rotatedCas, auth.username ?? undefined);
+    }
+    const rotatedJwxt = res.headers.get("X-JWXT-Session");
+    if (rotatedJwxt && rotatedJwxt !== auth.jwxtSession) {
+      auth.setJwxtSession(rotatedJwxt);
+    }
+
+    if (!res.ok) {
+      const err: ApiError = await res.json().catch(() => ({ detail: res.statusText }));
+      const error = new Error(err.detail || res.statusText);
+      (error as Error & { code?: string; status?: number }).code = err.code;
+      (error as Error & { code?: string; status?: number }).status = res.status;
+      throw error;
+    }
+    if (res.status === 204) {
+      return undefined as T;
+    }
+    return res.json();
   };
-  if (credential) {
-    headers["X-CAS-Credential"] = credential;
+
+  if (
+    pathNeedsJwxt &&
+    !useAuthStore.getState().jwxtSession &&
+    !inflightBootstrap
+  ) {
+    const p = doFetch();
+    // bootstrapper 的 promise 总会 resolve,失败也让 siblings 醒过来自行重试;
+    // finally 里清空 inflight,保证下一波冷启动有人能再次接棒。
+    inflightBootstrap = p
+      .then(
+        () => {},
+        () => {},
+      )
+      .finally(() => {
+        inflightBootstrap = null;
+      });
+    return p;
   }
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
-  if (!res.ok) {
-    const err: ApiError = await res.json().catch(() => ({ detail: res.statusText }));
-    const error = new Error(err.detail || res.statusText);
-    (error as Error & { code?: string; status?: number }).code = err.code;
-    (error as Error & { code?: string; status?: number }).status = res.status;
-    throw error;
-  }
-  if (res.status === 204) {
-    return undefined as T;
-  }
-  return res.json();
+
+  return doFetch();
 }
 
 // ── Auth ────────────────────────────────────────────────
