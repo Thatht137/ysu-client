@@ -64,7 +64,8 @@ export default function SchedulePage() {
     }
 
     let refreshing = false;
-    if (cachedCourses || cachedPeriods || cachedWeek) {
+    const hasCache = cachedCourses || cachedPeriods || cachedWeek;
+    if (hasCache) {
       setLoading(false);
       useRefreshStore.getState().start();
       refreshing = true;
@@ -73,9 +74,9 @@ export default function SchedulePage() {
     async function load() {
       try {
         const [c, p, w] = await Promise.all([
-          getExperimentalSchedule(credential!, undefined, "all").catch(() => []),
-          getClassPeriods(credential!).catch(() => []),
-          getCurrentWeek(credential!).catch(() => null),
+          getExperimentalSchedule(credential!, undefined, "all"),
+          getClassPeriods(credential!),
+          getCurrentWeek(credential!),
         ]);
         setCourses(c);
         setPeriods(p.filter((x) => x.is_in_use).sort((a, b) => a.section - b.section));
@@ -83,7 +84,6 @@ export default function SchedulePage() {
         if (w?.week) {
           const cachedWeekValue = cachedWeek?.week;
           setSelectedWeek((curr) => {
-            // Preserve user's manual week change during background refresh
             if (curr === 0 || curr === cachedWeekValue) return w.week;
             return curr;
           });
@@ -91,8 +91,13 @@ export default function SchedulePage() {
         cacheSet(cacheKey(["schedule", credential!]), c);
         cacheSet(cacheKey(["periods", credential!]), p.filter((x) => x.is_in_use).sort((a, b) => a.section - b.section));
         cacheSet(cacheKey(["week", credential!]), w);
+        useRefreshStore.getState().markFresh();
       } catch (err) {
-        toast.error((err as Error).message || t("app.updating"));
+        if (hasCache) {
+          useRefreshStore.getState().markStale();
+        } else {
+          toast.error((err as Error).message || t("app.updating"));
+        }
       } finally {
         setLoading(false);
         if (refreshing) useRefreshStore.getState().end();

@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Toaster } from "@/components/ui/sonner"
 import { I18nProvider } from "@/lib/i18n/context"
+import { SDKProvider } from "@/components/sdk-provider"
 import { cn } from "@/lib/utils";
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' })
@@ -46,12 +47,14 @@ export default function RootLayout({
     >
       <body>
         <I18nProvider>
-          <ThemeProvider>
-            <TooltipProvider>
-              {children}
-              <Toaster />
-            </TooltipProvider>
-          </ThemeProvider>
+          <SDKProvider>
+            <ThemeProvider>
+              <TooltipProvider>
+                {children}
+                <Toaster />
+              </TooltipProvider>
+            </ThemeProvider>
+          </SDKProvider>
         </I18nProvider>
       </body>
     </html>

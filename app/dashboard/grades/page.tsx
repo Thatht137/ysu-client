@@ -103,7 +103,8 @@ export default function GradesPage() {
     if (cachedGrades) setGrades(cachedGrades);
     if (cachedGpa) setGpa(cachedGpa);
     let refreshing = false;
-    if (cachedGrades || cachedGpa) {
+    const hasCache = cachedGrades || cachedGpa;
+    if (hasCache) {
       setLoading(false);
       useRefreshStore.getState().start();
       refreshing = true;
@@ -123,8 +124,13 @@ export default function GradesPage() {
         if (weekInfo?.term) {
           setTerm((prev) => (prev === ALL_TERM ? weekInfo.term! : prev));
         }
+        useRefreshStore.getState().markFresh();
       } catch (err) {
-        if (!cachedGrades) toast.error((err as Error).message || t("app.updating"));
+        if (hasCache) {
+          useRefreshStore.getState().markStale();
+        } else {
+          toast.error((err as Error).message || t("app.updating"));
+        }
       } finally {
         setLoading(false);
         if (refreshing) useRefreshStore.getState().end();

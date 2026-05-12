@@ -2,6 +2,7 @@
 
 import { useMobileHeaderStore } from "@/lib/mobile-header-store";
 import { RefreshIndicator } from "@/components/refresh-indicator";
+import { StaleIndicator } from "@/components/stale-indicator";
 
 interface Props {
   title: string;
@@ -14,6 +15,7 @@ export function MobileTopBar({ title }: Props) {
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <h1 className="truncate text-base font-semibold">{title}</h1>
         <RefreshIndicator />
+        <StaleIndicator />
       </div>
       <div className="flex items-center gap-1">{rightSlot}</div>
     </header>

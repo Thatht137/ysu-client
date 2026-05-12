@@ -63,7 +63,8 @@ export default function DashboardPage() {
     if (cachedExams) setExams(cachedExams);
 
     let refreshing = false;
-    if (cachedStudent || cachedWeek || cachedGpa || cachedCourses || cachedExams) {
+    const hasCache = cachedStudent || cachedWeek || cachedGpa || cachedCourses || cachedExams;
+    if (hasCache) {
       setLoading(false);
       useRefreshStore.getState().start();
       refreshing = true;
@@ -88,8 +89,13 @@ export default function DashboardPage() {
         cacheSet(cacheKey(["gpa", credential!]), g);
         cacheSet(cacheKey(["schedule", credential!]), c);
         cacheSet(cacheKey(["exams", credential!]), e);
+        useRefreshStore.getState().markFresh();
       } catch (err) {
-        if (!cachedStudent) toast.error((err as Error).message || t("app.updating"));
+        if (hasCache) {
+          useRefreshStore.getState().markStale();
+        } else {
+          toast.error((err as Error).message || t("app.updating"));
+        }
       } finally {
         setLoading(false);
         if (refreshing) useRefreshStore.getState().end();

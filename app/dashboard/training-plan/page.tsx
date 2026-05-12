@@ -95,7 +95,8 @@ export default function TrainingPlanPage() {
     if (cachedWarnings) setWarnings(cachedWarnings);
 
     let refreshing = false;
-    if (cachedPlans || cachedCompletion || cachedWarnings) {
+    const hasCache = cachedPlans || cachedCompletion || cachedWarnings;
+    if (hasCache) {
       setLoading(false);
       useRefreshStore.getState().start();
       refreshing = true;
@@ -114,8 +115,11 @@ export default function TrainingPlanPage() {
         cacheSet(cacheKey(["training-plan", credential!]), p);
         cacheSet(cacheKey(["academic-completion", credential!]), c);
         cacheSet(cacheKey(["academic-warnings", credential!]), w);
+        useRefreshStore.getState().markFresh();
       } catch (err) {
-        if (!cachedPlans) {
+        if (hasCache) {
+          useRefreshStore.getState().markStale();
+        } else {
           toast.error((err as Error).message || t("app.updating"));
         }
       } finally {

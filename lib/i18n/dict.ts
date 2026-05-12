@@ -20,6 +20,8 @@ export const zh = {
     themeSystem: "跟随系统",
     language: "语言",
     updating: "正在更新数据...",
+    sessionExpired: "会话已过期，请重新登录",
+    staleDataTooltip: "当前显示缓存数据，刷新失败",
   },
   me: {
     profileFallback: "未登录",
@@ -357,6 +359,8 @@ export const en = {
     themeSystem: "System",
     language: "Language",
     updating: "Updating data...",
+    sessionExpired: "Session expired, please log in again",
+    staleDataTooltip: "Showing cached data, refresh failed",
   },
   me: {
     profileFallback: "Not signed in",

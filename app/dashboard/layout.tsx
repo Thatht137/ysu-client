@@ -54,6 +54,7 @@ import {
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { MobileTopBar } from "@/components/mobile-top-bar";
 import { RefreshIndicator } from "@/components/refresh-indicator";
+import { StaleIndicator } from "@/components/stale-indicator";
 
 export default function DashboardLayout({
   children,
@@ -77,9 +78,16 @@ export default function DashboardLayout({
     setLoadingStudent(true);
     getStudentInfo(credential)
       .then((s) => setStudentInfo(s))
-      .catch(() => {})
+      .catch((err) => {
+        const e = err as Error & { code?: string; status?: number };
+        if (e.code === "AUTH_REQUIRED" || e.status === 401) {
+          clearCredential();
+          toast.error(t("app.sessionExpired"));
+          router.replace("/login");
+        }
+      })
       .finally(() => setLoadingStudent(false));
-  }, [credential]);
+  }, [credential, clearCredential, router, t]);
 
   const navItems = [
     { title: t("app.overview"), url: "/dashboard", icon: LayoutDashboard },
@@ -178,6 +186,7 @@ export default function DashboardLayout({
               {navItems.find((i) => i.url === pathname)?.title || t("app.name")}
             </h1>
             <RefreshIndicator />
+            <StaleIndicator />
           </div>
           <div className="flex items-center gap-3">
             <Button

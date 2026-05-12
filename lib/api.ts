@@ -1,5 +1,10 @@
+/**
+ * API 调用层 —— 从 ``fetch`` 远程 ``ysu-api`` 迁移到本地 SDK 直连源站。
+ *
+ * 保持原有函数签名(``credential`` 参数在 JWXT 函数中变为可选,兼容现有调用方),
+ * 内部通过 ``lib/cas.ts`` / ``lib/jwxt.ts`` 直接调用。
+ */
 import type {
-  ApiError,
   CalculateScoreRequest,
   CaptchaResponse,
   Course,
@@ -30,344 +35,694 @@ import type {
   ClassPeriod,
 } from "./types";
 import { useAuthStore } from "./auth-store";
+import { resetSDK } from "./sdk";
+import {
+  fetchCaptcha as _fetchCaptcha,
+  loginStep1 as _loginStep1,
+  requestMFACode as _requestMFACode,
+  submitMFACode as _submitMFACode,
+  isAuthenticated as _isAuthenticated,
+  CASCredential,
+  getJar as getCasJar,
+} from "./cas";
+import {
+  CASError,
+  NotAuthenticatedError,
+} from "./cas";
+import {
+  NotLoggedInError,
+  JWXTBusinessError,
+} from "./jwxt";
+import {
+  queryStudentInfo as _queryStudentInfo,
+  queryGrades as _queryGrades,
+  queryGpaStats as _queryGpaStats,
+  queryGradeStatistics as _queryGradeStatistics,
+  queryGradeDistribution as _queryGradeDistribution,
+  queryGradeRanking as _queryGradeRanking,
+  querySchedule as _querySchedule,
+  queryScheduleExperimental as _queryScheduleExperimental,
+  queryUnscheduledCourses as _queryUnscheduledCourses,
+  queryClassPeriods as _queryClassPeriods,
+  queryTermCalendar as _queryTermCalendar,
+  queryCurrentWeek as _queryCurrentWeek,
+  queryExams as _queryExams,
+  queryTrainingPlan as _queryTrainingPlan,
+  queryAcademicCompletion as _queryAcademicCompletion,
+  queryAcademicWarnings as _queryAcademicWarnings,
+  queryEvaluationTypes as _queryEvaluationTypes,
+  queryPendingEvaluations as _queryPendingEvaluations,
+  getEvaluationDetail as _getEvaluationDetail,
+  calculateEvaluationScore as _calculateEvaluationScore,
+  submitEvaluation as _submitEvaluation,
+} from "./jwxt";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:11920";
-
-// 冷启动单飞:第一批 /jwxt/* 请求会触发服务端的 cas.authorize() 拿 ST,
-// 不加约束时多个并发请求会各自打一次 CAS 网关。让首个请求做 bootstrapper,
-// 其它并发请求等它回填 jwxtSession 后再发,稳态下 1 次 CAS 调用就够服务整个 dashboard。
+// 冷启动单飞:多个并发 JWXT 请求同时触发时,只让第一个做 authorize,
+// 其它等待完成后复用同一份 cookie jar,避免各自打一次 CAS 网关。
 let inflightBootstrap: Promise<void> | null = null;
 
-async function _fetch<T>(
-  path: string,
-  options?: RequestInit,
-  credential?: string | null,
-): Promise<T> {
-  const pathNeedsJwxt = path.startsWith("/jwxt/") && !!credential;
+function apiError(message: string, code?: string, status?: number): Error {
+  const err = new Error(message);
+  (err as Error & { code?: string; status?: number }).code = code;
+  (err as Error & { code?: string; status?: number }).status = status;
+  return err;
+}
 
-  if (
-    pathNeedsJwxt &&
-    !useAuthStore.getState().jwxtSession &&
-    inflightBootstrap
-  ) {
-    await inflightBootstrap;
+function mapSdkError(e: unknown): Error {
+  if (e instanceof NotLoggedInError || e instanceof NotAuthenticatedError) {
+    return apiError(e.message, "AUTH_REQUIRED", 401);
   }
-
-  const doFetch = async (): Promise<T> => {
-    const auth = useAuthStore.getState();
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      ...((options?.headers as Record<string, string>) || {}),
-    };
-    if (credential) {
-      headers["X-CAS-Credential"] = credential;
-    }
-    // 业务路由从 store 回传 JWXT session,允许服务端跳过 CAS authorize。
-    // 登录类路由不读这个 header,服务端不会拒绝多余的 header,直接忽略即可。
-    if (auth.jwxtSession) {
-      headers["X-JWXT-Session"] = auth.jwxtSession;
-    }
-    const res = await fetch(`${API_BASE}${path}`, {
-      ...options,
-      headers,
-    });
-
-    // 不论成功失败,先把可能旋转过的 CAS / JWXT 凭据更新到 store。
-    // 注:CORS 必须在 expose_headers 中声明这两个 header,否则浏览器 JS 读不到。
-    const rotatedCas = res.headers.get("X-CAS-Credential");
-    if (rotatedCas && rotatedCas !== credential) {
-      auth.setCredential(rotatedCas, auth.username ?? undefined);
-    }
-    const rotatedJwxt = res.headers.get("X-JWXT-Session");
-    if (rotatedJwxt && rotatedJwxt !== auth.jwxtSession) {
-      auth.setJwxtSession(rotatedJwxt);
-    }
-
-    if (!res.ok) {
-      const err: ApiError = await res.json().catch(() => ({ detail: res.statusText }));
-      const error = new Error(err.detail || res.statusText);
-      (error as Error & { code?: string; status?: number }).code = err.code;
-      (error as Error & { code?: string; status?: number }).status = res.status;
-      throw error;
-    }
-    if (res.status === 204) {
-      return undefined as T;
-    }
-    return res.json();
-  };
-
-  if (
-    pathNeedsJwxt &&
-    !useAuthStore.getState().jwxtSession &&
-    !inflightBootstrap
-  ) {
-    const p = doFetch();
-    // bootstrapper 的 promise 总会 resolve,失败也让 siblings 醒过来自行重试;
-    // finally 里清空 inflight,保证下一波冷启动有人能再次接棒。
-    inflightBootstrap = p
-      .then(
-        () => {},
-        () => {},
-      )
-      .finally(() => {
-        inflightBootstrap = null;
-      });
-    return p;
+  if (e instanceof JWXTBusinessError) {
+    return apiError(
+      e.msg ?? e.message,
+      String(e.code ?? "JWXT_BUSINESS_ERROR"),
+      400,
+    );
   }
+  if (e instanceof CASError) {
+    return apiError(e.message, "CAS_ERROR", 500);
+  }
+  if (e instanceof Error) {
+    return apiError(e.message, "SDK_ERROR", 500);
+  }
+  return apiError(String(e), "UNKNOWN_ERROR", 500);
+}
 
-  return doFetch();
+/** Uint8Array → base64(前端无 Buffer,用 btoa 的 TypedArray 版)。 */
+function uint8ToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]!);
+  }
+  return btoa(binary);
 }
 
 // ── Auth ────────────────────────────────────────────────
 
-export function fetchCaptcha(username: string): Promise<CaptchaResponse> {
-  return _fetch("/auth/captcha", {
-    method: "POST",
-    body: JSON.stringify({ username }),
-  });
+export async function fetchCaptcha(username: string): Promise<CaptchaResponse> {
+  try {
+    const challenge = await _fetchCaptcha(username);
+    if (!challenge) return { needed: false };
+    return {
+      needed: true,
+      image_base64: uint8ToBase64(challenge.imagePng),
+    };
+  } catch (e) {
+    throw mapSdkError(e);
+  }
 }
 
-export function loginStep1(payload: Step1Request): Promise<Step1Response> {
-  return _fetch("/auth/login/step1", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+export async function loginStep1(payload: Step1Request): Promise<Step1Response> {
+  try {
+    const result = await _loginStep1(
+      payload.username,
+      payload.password,
+      { captcha: payload.captcha },
+    );
+    const credential =
+      result.authenticated || result.needsMfa
+        ? (await CASCredential.fromJar(getCasJar())).toJSON()
+        : undefined;
+    return {
+      authenticated: result.authenticated,
+      needs_mfa: result.needsMfa,
+      username: result.username,
+      credential,
+    };
+  } catch (e) {
+    throw mapSdkError(e);
+  }
 }
 
-export function requestMFACode(
+export async function requestMFACode(
   payload: MFARequestCodeRequest,
-  credential: string,
+  _credential?: string,
 ): Promise<MFAChallengeResponse> {
-  return _fetch(
-    "/auth/login/mfa/request",
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    },
-    credential,
-  );
+  try {
+    const challenge = await _requestMFACode(
+      payload.username,
+      payload.method,
+    );
+    return {
+      method: challenge.method,
+      method_code: challenge.methodCode,
+      mobile_hint: challenge.mobileHint,
+      username: challenge.username,
+    };
+  } catch (e) {
+    throw mapSdkError(e);
+  }
 }
 
-export function submitMFACode(
+export async function submitMFACode(
   payload: MFASubmitRequest,
-  credential: string,
+  _credential?: string,
 ): Promise<LoginResponse> {
-  return _fetch(
-    "/auth/login/mfa/submit",
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    },
-    credential,
-  );
+  try {
+    const challenge = {
+      method: payload.method as "sms" | "cpdaily",
+      methodCode: payload.method_code,
+      mobileHint: "",
+      username: payload.username,
+      raw: {},
+    };
+    const credential = await _submitMFACode(challenge, payload.code);
+    const json = credential.toJSON();
+    useAuthStore.getState().setCredential(json, payload.username);
+    return { credential: json };
+  } catch (e) {
+    throw mapSdkError(e);
+  }
 }
 
-export function login(payload: LoginRequest): Promise<LoginResponse> {
-  return _fetch("/auth/login", {
-    method: "POST",
-    body: JSON.stringify(payload),
+export async function login(payload: LoginRequest): Promise<LoginResponse> {
+  const step1 = await loginStep1({
+    username: payload.username,
+    password: payload.password,
+    captcha: payload.captcha,
   });
+  if (step1.authenticated) {
+    const credential = await CASCredential.fromJar(getCasJar());
+    const json = credential.toJSON();
+    useAuthStore.getState().setCredential(json, payload.username);
+    return { credential: json };
+  }
+  if (step1.needs_mfa && payload.mfa_code) {
+    return submitMFACode({
+      method: payload.mfa_method!,
+      method_code: payload.mfa_method!,
+      username: payload.username,
+      code: payload.mfa_code,
+    });
+  }
+  throw apiError("登录未完成,需要 MFA", "MFA_REQUIRED", 400);
 }
 
-export function checkAuthStatus(credential: string): Promise<StatusResponse> {
-  return _fetch("/auth/status", undefined, credential);
+export async function checkAuthStatus(_credential?: string): Promise<StatusResponse> {
+  try {
+    const authenticated = await _isAuthenticated();
+    return { authenticated };
+  } catch (e) {
+    throw mapSdkError(e);
+  }
+}
+
+// ── JWXT helper ─────────────────────────────────────────
+
+/** 带并发锁的 JWXT 调用 wrapper。 */
+async function withJWXT<T>(fn: () => Promise<T>): Promise<T> {
+  if (inflightBootstrap) {
+    await inflightBootstrap;
+  }
+  try {
+    return await fn();
+  } catch (e) {
+    throw mapSdkError(e);
+  }
 }
 
 // ── Student Info ────────────────────────────────────────
 
-export function getStudentInfo(credential: string): Promise<StudentInfo> {
-  return _fetch("/jwxt/student/info", undefined, credential);
+export async function getStudentInfo(_credential?: string): Promise<StudentInfo> {
+  return withJWXT(async () => {
+    const info = await _queryStudentInfo();
+    return {
+      name: info.name,
+      name_pinyin: info.namePinyin,
+      student_id: info.studentId,
+      gender: info.gender,
+      nation: info.nation,
+      nationality: info.nationality,
+      department: info.department,
+      major: info.major,
+      class_name: info.className,
+      grade_level: info.gradeLevel,
+      enrollment_date: info.enrollmentDate,
+      expected_graduation: info.expectedGraduation,
+      education_level: info.educationLevel,
+      campus: info.campus,
+      student_status: info.studentStatus,
+      discipline: info.discipline,
+      study_duration: info.studyDuration,
+      foreign_language: info.foreignLanguage,
+    };
+  });
 }
 
 // ── Grades ──────────────────────────────────────────────
 
-export function getGrades(
-  credential: string,
-  params?: { term?: string; course_name?: string; page_size?: number; page_number?: number },
+export async function getGrades(
+  _credential: string,
+  params?: {
+    term?: string;
+    course_name?: string;
+    page_size?: number;
+    page_number?: number;
+  },
 ): Promise<Grade[]> {
-  const qs = new URLSearchParams();
-  if (params?.term) qs.set("term", params.term);
-  if (params?.course_name) qs.set("course_name", params.course_name);
-  if (params?.page_size) qs.set("page_size", String(params.page_size));
-  if (params?.page_number) qs.set("page_number", String(params.page_number));
-  return _fetch(`/jwxt/grades?${qs.toString()}`, undefined, credential);
+  return withJWXT(async () => {
+    const rows = await _queryGrades({
+      term: params?.term,
+      courseName: params?.course_name,
+      pageSize: params?.page_size ?? 100,
+      pageNumber: params?.page_number ?? 1,
+    });
+    return rows.map((r) => ({
+      course_name: r.courseName,
+      course_code: r.courseCode,
+      class_id: r.classId,
+      score: r.score,
+      grade_level: r.gradeLevel,
+      grade_point: r.gradePoint,
+      credit: r.credit,
+      hours: r.hours,
+      term: r.term,
+      course_type: r.courseType,
+      course_category: r.courseCategory,
+      exam_type: r.examType,
+      study_mode: r.studyMode,
+      is_major: r.isMajor,
+      is_retake: r.isRetake,
+      grade_level_type: r.gradeLevelType,
+      department: r.department,
+      is_pass: r.isPass,
+      is_valid: r.isValid,
+      special_reason: r.specialReason,
+      is_degree_course: r.isDegreeCourse,
+      project_name: r.projectName,
+    }));
+  });
 }
 
-export function getGPAStats(credential: string, student_id?: string): Promise<GPAStats> {
-  const qs = new URLSearchParams();
-  if (student_id) qs.set("student_id", student_id);
-  return _fetch(`/jwxt/gpa?${qs.toString()}`, undefined, credential);
+export async function getGPAStats(
+  _credential: string,
+  student_id?: string,
+): Promise<GPAStats> {
+  return withJWXT(async () => {
+    const stats = await _queryGpaStats({
+      studentId: student_id,
+    });
+    return {
+      plan_name: stats.planName,
+      study_type: stats.studyType,
+      required_credit_earned: stats.requiredCreditEarned,
+      elective_credit_earned: stats.electiveCreditEarned,
+      degree_credit_earned: stats.degreeCreditEarned,
+      required_credit_failed: stats.requiredCreditFailed,
+      gpa_initial: stats.gpaInitial,
+      gpa_highest: stats.gpaHighest,
+      required_gpa_highest: stats.requiredGpaHighest,
+      degree_gpa_initial: stats.degreeGpaInitial,
+      degree_gpa_highest: stats.degreeGpaHighest,
+      weighted_avg: stats.weightedAvg,
+      arithmetic_avg: stats.arithmeticAvg,
+      degree_weighted_avg: stats.degreeWeightedAvg,
+    };
+  });
 }
 
-export function getGradeStatistics(
-  credential: string,
-  params: { class_id?: string; course_code?: string; term?: string },
+export async function getGradeStatistics(
+  _credential: string,
+  params?: { class_id?: string; course_code?: string; term?: string },
 ): Promise<GradeStatistics> {
-  const qs = new URLSearchParams();
-  if (params.class_id) qs.set("class_id", params.class_id);
-  if (params.course_code) qs.set("course_code", params.course_code);
-  if (params.term) qs.set("term", params.term);
-  return _fetch(`/jwxt/grades/statistics?${qs.toString()}`, undefined, credential);
+  return withJWXT(async () => {
+    const s = await _queryGradeStatistics({
+      term: params?.term,
+      classId: params?.class_id,
+      courseCode: params?.course_code,
+    });
+    return {
+      scope: s.scope,
+      term: s.term,
+      class_id: s.classId,
+      course_code: s.courseCode,
+      highest_score: s.highestScore,
+      lowest_score: s.lowestScore,
+      average_score: s.averageScore,
+    };
+  });
 }
 
-export function getGradeDistribution(
-  credential: string,
-  params: { class_id?: string; course_code?: string; term?: string },
+export async function getGradeDistribution(
+  _credential: string,
+  params?: { class_id?: string; course_code?: string; term?: string },
 ): Promise<GradeDistribution[]> {
-  const qs = new URLSearchParams();
-  if (params.class_id) qs.set("class_id", params.class_id);
-  if (params.course_code) qs.set("course_code", params.course_code);
-  if (params.term) qs.set("term", params.term);
-  return _fetch(`/jwxt/grades/distribution?${qs.toString()}`, undefined, credential);
+  return withJWXT(async () => {
+    const rows = await _queryGradeDistribution({
+      term: params?.term,
+      classId: params?.class_id,
+      courseCode: params?.course_code,
+    });
+    return rows.map((r) => ({
+      scope: r.scope,
+      term: r.term,
+      class_id: r.classId,
+      course_code: r.courseCode,
+      level_code: r.levelCode,
+      level_name: r.levelName,
+      count: r.count,
+    }));
+  });
 }
 
-export function getGradeRanking(
-  credential: string,
-  params: { class_id?: string; course_code?: string; term?: string; student_id?: string },
+export async function getGradeRanking(
+  _credential: string,
+  params?: {
+    class_id?: string;
+    course_code?: string;
+    term?: string;
+    student_id?: string;
+  },
 ): Promise<GradeRanking> {
-  const qs = new URLSearchParams();
-  if (params.class_id) qs.set("class_id", params.class_id);
-  if (params.course_code) qs.set("course_code", params.course_code);
-  if (params.term) qs.set("term", params.term);
-  if (params.student_id) qs.set("student_id", params.student_id);
-  return _fetch(`/jwxt/grades/ranking?${qs.toString()}`, undefined, credential);
+  return withJWXT(async () => {
+    const r = await _queryGradeRanking({
+      term: params?.term,
+      studentId: params?.student_id,
+      classId: params?.class_id,
+      courseCode: params?.course_code,
+    });
+    return {
+      scope: r.scope,
+      term: r.term,
+      student_id: r.studentId,
+      class_id: r.classId,
+      course_code: r.courseCode,
+      score: r.score,
+      rank: r.rank,
+      total: r.total,
+      ranking_type: r.rankingType,
+    };
+  });
 }
 
 // ── Schedule ────────────────────────────────────────────
 
-export function getSchedule(credential: string, term?: string): Promise<Course[]> {
-  const qs = new URLSearchParams();
-  if (term) qs.set("term", term);
-  return _fetch(`/jwxt/schedule?${qs.toString()}`, undefined, credential);
+export async function getSchedule(
+  _credential: string,
+  term?: string,
+): Promise<Course[]> {
+  return withJWXT(async () => {
+    const rows = await _querySchedule({ term });
+    return rows.map(mapCourse);
+  });
 }
 
-export function getExperimentalSchedule(
-  credential: string,
+export async function getExperimentalSchedule(
+  _credential: string,
   term?: string,
   course_category = "all",
 ): Promise<Course[]> {
-  const qs = new URLSearchParams();
-  if (term) qs.set("term", term);
-  qs.set("course_category", course_category);
-  return _fetch(`/jwxt/schedule/experimental?${qs.toString()}`, undefined, credential);
+  return withJWXT(async () => {
+    const rows = await _queryScheduleExperimental({
+      term,
+      courseCategory: course_category,
+    });
+    return rows.map(mapCourse);
+  });
 }
 
-export function getUnscheduledCourses(
-  credential: string,
+export async function getUnscheduledCourses(
+  _credential: string,
   term?: string,
   course_category = "all",
 ): Promise<Course[]> {
-  const qs = new URLSearchParams();
-  if (term) qs.set("term", term);
-  qs.set("course_category", course_category);
-  return _fetch(`/jwxt/schedule/unscheduled?${qs.toString()}`, undefined, credential);
+  return withJWXT(async () => {
+    const rows = await _queryUnscheduledCourses({
+      term,
+      courseCategory: course_category,
+    });
+    return rows.map(mapCourse);
+  });
 }
 
-export function getClassPeriods(credential: string): Promise<ClassPeriod[]> {
-  return _fetch("/jwxt/class-periods", undefined, credential);
+function mapCourse(r: {
+  name?: string;
+  code?: string;
+  teacher?: string;
+  classroom?: string;
+  weekDay?: number;
+  startSection?: number;
+  endSection?: number;
+  weeks?: string;
+  credit?: string;
+  courseType?: string;
+}): Course {
+  return {
+    name: r.name ?? "",
+    code: r.code,
+    teacher: r.teacher,
+    classroom: r.classroom,
+    week_day: r.weekDay ?? 0,
+    start_section: r.startSection ?? 0,
+    end_section: r.endSection ?? 0,
+    weeks: r.weeks,
+    credit: r.credit,
+    course_type: r.courseType,
+  };
 }
 
-export function getTermCalendar(credential: string, term?: string): Promise<TermCalendar> {
-  const qs = new URLSearchParams();
-  if (term) qs.set("term", term);
-  return _fetch(`/jwxt/term-calendar?${qs.toString()}`, undefined, credential);
+export async function getClassPeriods(_credential?: string): Promise<ClassPeriod[]> {
+  return withJWXT(async () => {
+    const rows = await _queryClassPeriods();
+    return rows.map((r) => ({
+      name: r.name,
+      section: r.section,
+      start_time: r.startTime,
+      end_time: r.endTime,
+      is_in_use: r.isInUse,
+    }));
+  });
 }
 
-export function getCurrentWeek(
-  credential: string,
+export async function getTermCalendar(
+  _credential: string,
+  term?: string,
+): Promise<TermCalendar> {
+  return withJWXT(async () => {
+    const c = await _queryTermCalendar({ term });
+    return {
+      term: c.term,
+      start_date: c.startDate,
+      total_weeks: c.totalWeeks,
+      teaching_weeks: c.teachingWeeks,
+      is_in_use: c.isInUse,
+    };
+  });
+}
+
+export async function getCurrentWeek(
+  _credential: string,
   term?: string,
   date?: string,
 ): Promise<CurrentWeek> {
-  const qs = new URLSearchParams();
-  if (term) qs.set("term", term);
-  if (date) qs.set("date", date);
-  return _fetch(`/jwxt/current-week?${qs.toString()}`, undefined, credential);
+  return withJWXT(async () => {
+    const w = await _queryCurrentWeek({ term, date });
+    return {
+      week: w.week,
+      weekday: w.weekday,
+      term: w.term,
+      date: w.date,
+    };
+  });
 }
 
 // ── Exams ───────────────────────────────────────────────
 
-export function getExams(credential: string, term?: string): Promise<Exam[]> {
-  const qs = new URLSearchParams();
-  if (term) qs.set("term", term);
-  return _fetch(`/jwxt/exams?${qs.toString()}`, undefined, credential);
+export async function getExams(
+  _credential: string,
+  term?: string,
+): Promise<Exam[]> {
+  return withJWXT(async () => {
+    const rows = await _queryExams({ term });
+    return rows.map((r) => ({
+      name: r.name,
+      exam_name: r.examName,
+      exam_date: r.examDate,
+      exam_time: r.examTime,
+      exam_location: r.examLocation,
+      seat_number: r.seatNumber,
+    }));
+  });
 }
 
 // ── Training Plan / Academic ────────────────────────────
 
-export function getTrainingPlan(
-  credential: string,
+export async function getTrainingPlan(
+  _credential: string,
   params?: { page_size?: number; page_number?: number },
 ): Promise<TrainingPlan[]> {
-  const qs = new URLSearchParams();
-  if (params?.page_size) qs.set("page_size", String(params.page_size));
-  if (params?.page_number) qs.set("page_number", String(params.page_number));
-  return _fetch(`/jwxt/training-plan?${qs.toString()}`, undefined, credential);
+  return withJWXT(async () => {
+    const rows = await _queryTrainingPlan({
+      pageSize: params?.page_size ?? 500,
+      pageNumber: params?.page_number ?? 1,
+    });
+    return rows.map((r) => ({
+      course_name: r.courseName,
+      course_code: r.courseCode,
+      credit: r.credit,
+      course_type: r.courseType,
+      required: r.required,
+      term: r.term,
+      course_group: r.courseGroup,
+    }));
+  });
 }
 
-export function getAcademicCompletion(credential: string): Promise<AcademicCompletion> {
-  return _fetch("/jwxt/academic-completion", undefined, credential);
+export async function getAcademicCompletion(
+  _credential: string,
+): Promise<AcademicCompletion> {
+  return withJWXT(async () => {
+    const c = await _queryAcademicCompletion();
+    return {
+      plan_name: c.planName,
+      total_required: c.totalRequired,
+      completed: c.completed,
+      elective: c.elective,
+      passed: c.passed,
+    };
+  });
 }
 
-export function getAcademicWarnings(credential: string): Promise<AcademicWarning[]> {
-  return _fetch("/jwxt/academic-warnings", undefined, credential);
+export async function getAcademicWarnings(
+  _credential: string,
+): Promise<AcademicWarning[]> {
+  return withJWXT(async () => {
+    const rows = await _queryAcademicWarnings();
+    return rows.map((r) => ({
+      warning_type: r.warningType,
+      warning_level: r.warningLevel,
+      description: r.description,
+      term: r.term,
+    }));
+  });
 }
 
 // ── Evaluation ──────────────────────────────────────────
 
-export function getEvaluationTypes(credential: string, term?: string): Promise<EvaluationType[]> {
-  const qs = new URLSearchParams();
-  if (term) qs.set("term", term);
-  return _fetch(`/jwxt/evaluation/types?${qs.toString()}`, undefined, credential);
+export async function getEvaluationTypes(
+  _credential: string,
+  term?: string,
+): Promise<EvaluationType[]> {
+  return withJWXT(async () => {
+    const rows = await _queryEvaluationTypes({ term });
+    return rows.map((r) => ({
+      name: r.name,
+      code: r.code,
+      count: r.count,
+    }));
+  });
 }
 
-export function getPendingEvaluations(
-  credential: string,
+export async function getPendingEvaluations(
+  _credential: string,
   eval_type: string,
   term?: string,
 ): Promise<EvaluationTask[]> {
-  const qs = new URLSearchParams();
-  qs.set("eval_type", eval_type);
-  if (term) qs.set("term", term);
-  return _fetch(`/jwxt/evaluation/pending?${qs.toString()}`, undefined, credential);
+  return withJWXT(async () => {
+    const rows = await _queryPendingEvaluations(eval_type, { term });
+    return rows.map((r) => ({
+      wid: r.wid,
+      wjid: r.wjid,
+      name: r.name,
+      course_name: r.courseName,
+      teacher_name: r.teacherName,
+      teacher_id: r.teacherId,
+      term: r.term,
+      term_name: r.termName,
+      eval_type: r.evalType,
+      eval_type_name: r.evalTypeName,
+      category: r.category,
+      category_name: r.categoryName,
+      start_time: r.startTime,
+      end_time: r.endTime,
+      sequence: r.sequence,
+      class_name: r.className,
+      group_no: r.groupNo,
+    }));
+  });
 }
 
-export function getEvaluationDetail(
-  credential: string,
+export async function getEvaluationDetail(
+  _credential: string,
   group_no: string,
   eval_type: string,
   sequence = 1,
 ): Promise<EvaluationDetail> {
-  const qs = new URLSearchParams();
-  qs.set("group_no", group_no);
-  qs.set("eval_type", eval_type);
-  qs.set("sequence", String(sequence));
-  return _fetch(`/jwxt/evaluation/detail?${qs.toString()}`, undefined, credential);
+  return withJWXT(async () => {
+    const d = await _getEvaluationDetail(group_no, eval_type, { sequence });
+    return {
+      wjid: d.wjid,
+      name: d.name,
+      deadline: d.deadline,
+      questions:
+        d.questions?.map((q) => ({
+          tmid: q.tmid,
+          wjid: q.wjid,
+          text: q.text,
+          question_type: q.questionType,
+          max_score: q.maxScore,
+          order: q.order,
+          options:
+            q.options?.map((o) => ({
+              wid: o.wid,
+              text: o.text,
+              score: o.score,
+              score_ratio: o.scoreRatio,
+              question_id: o.questionId,
+            })) ?? [],
+        })) ?? [],
+      teachers: d.teachers as Record<string, unknown>[],
+    };
+  });
 }
 
-export function calculateScore(
-  credential: string,
+export async function calculateScore(
+  _credential: string,
   payload: CalculateScoreRequest,
 ): Promise<Record<string, unknown>> {
-  return _fetch(
-    "/jwxt/evaluation/calculate-score",
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    },
-    credential,
-  );
+  return withJWXT(async () => {
+    return _calculateEvaluationScore(
+      payload.group_no,
+      payload.wjid,
+      payload.eval_type,
+      payload.answers.map((a) => ({
+        tmid: a.tmid,
+        questionType: a.question_type ?? "",
+        optionIds: a.option_ids ?? [],
+        text: a.text ?? "",
+      })),
+      {
+        teacherRelationId: payload.teacher_relation_id,
+        courseName: payload.course_name,
+        teacherName: payload.teacher_name,
+        sequence: payload.sequence,
+      },
+    );
+  });
 }
 
-export function submitEvaluation(
-  credential: string,
+export async function submitEvaluation(
+  _credential: string,
   payload: SubmitEvaluationRequest,
 ): Promise<{ detail: string }> {
-  return _fetch(
-    "/jwxt/evaluation/submit",
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    },
-    credential,
-  );
+  return withJWXT(async () => {
+    await _submitEvaluation(
+      payload.group_no,
+      payload.wjid,
+      payload.eval_type,
+      payload.answers.map((a) => ({
+        tmid: a.tmid,
+        questionType: a.question_type ?? "",
+        optionIds: a.option_ids ?? [],
+        text: a.text ?? "",
+      })),
+      {
+        teacherRelationId: payload.teacher_relation_id,
+        courseName: payload.course_name,
+        teacherName: payload.teacher_name,
+        sequence: payload.sequence,
+      },
+    );
+    return { detail: "ok" };
+  });
 }
