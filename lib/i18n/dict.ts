@@ -31,6 +31,19 @@ export const zh = {
     sectionPreferences: "偏好设置",
     sectionAccount: "账户",
   },
+  about: {
+    title: "关于",
+    version: "版本",
+    build: "构建",
+    copyright: "版权所有",
+    license: "许可证",
+    disclaimer: "免责声明",
+    disclaimerText: "本应用为第三方客户端，与燕山大学官方无从属关系。",
+    credits: "鸣谢",
+    github: "源代码",
+    openSource: "开源项目",
+    checkUpdate: "检查更新",
+  },
   login: {
     title: "燕大终端",
     usernameLabel: "学号",
@@ -68,6 +81,10 @@ export const zh = {
     failed: "自动登录失败，请重新登录",
     mfaDescription: "请输入验证码完成登录",
     captchaRequired: "需要验证码，无法自动登录",
+  },
+  logout: {
+    confirm: "确定要退出登录吗？",
+    cancel: "取消",
   },
   dashboard: {
     currentWeek: "第 {week} 周",
@@ -378,6 +395,19 @@ export const en = {
     sectionPreferences: "Preferences",
     sectionAccount: "Account",
   },
+  about: {
+    title: "About",
+    version: "Version",
+    build: "Build",
+    copyright: "Copyright",
+    license: "License",
+    disclaimer: "Disclaimer",
+    disclaimerText: "This app is a third-party client. It is not developed by Yanshan University and has no affiliation with it.",
+    credits: "Credits",
+    github: "Source Code",
+    openSource: "Open Source",
+    checkUpdate: "Check for Updates",
+  },
   login: {
     title: "YSU Terminal",
     usernameLabel: "Student ID",
@@ -415,6 +445,10 @@ export const en = {
     failed: "Auto-login failed, please log in again",
     mfaDescription: "Enter the verification code to complete login",
     captchaRequired: "Captcha required, cannot auto-login",
+  },
+  logout: {
+    confirm: "Are you sure you want to log out?",
+    cancel: "Cancel",
   },
   dashboard: {
     currentWeek: "Week {week}",

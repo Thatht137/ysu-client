@@ -281,7 +281,7 @@ export default function DashboardPage() {
           {currentCourse && (
             <Badge variant="default" className="gap-1">
               <Clock className="size-3" />
-              {t("dashboard.currentCourse")}: {currentCourse.name}
+              {t("dashboard.currentCourse")}
             </Badge>
           )}
         </CardHeader>

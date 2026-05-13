@@ -8,6 +8,14 @@ import { useTheme } from "next-themes";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ToggleGroup,
@@ -30,6 +38,7 @@ import { useTranslation } from "@/lib/i18n/use-translation";
 import { getStudentInfo } from "@/lib/api";
 import { cacheGet, cacheSet, cacheKey } from "@/lib/cache";
 import { resetSDK } from "@/lib/sdk";
+import { APP_VERSION, APP_BUILD } from "@/lib/version";
 import type { StudentInfo } from "@/lib/types";
 
 export default function MePage() {
@@ -43,6 +52,7 @@ export default function MePage() {
   const [student, setStudent] = useState<StudentInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
@@ -63,6 +73,7 @@ export default function MePage() {
   }, [credential]);
 
   function handleLogout() {
+    setLogoutDialogOpen(false);
     clearCredential();
     resetSDK();
     toast.success(t("app.logout"));
@@ -201,25 +212,55 @@ export default function MePage() {
       <Section title={t("me.sectionAccount")}>
         <Card>
           <CardContent className="flex flex-col py-1">
-            <Button
-              variant="ghost"
+            <button
+              type="button"
               onClick={handleRelogin}
-              className="w-full justify-start"
+              className="flex items-center gap-3 py-3 transition-colors active:bg-muted/60"
             >
-              <LogIn data-icon="inline-start" />
-              {t("app.relogin")}
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={handleLogout}
-              className="w-full justify-start text-destructive hover:bg-destructive/10 hover:text-destructive"
+              <LogIn className="size-5 shrink-0 text-muted-foreground" />
+              <span className="flex-1 text-left text-sm">{t("app.relogin")}</span>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setLogoutDialogOpen(true)}
+              className="flex items-center gap-3 border-t border-border py-3 text-destructive transition-colors active:bg-destructive/10"
             >
-              <LogOut data-icon="inline-start" />
-              {t("app.logout")}
-            </Button>
+              <LogOut className="size-5 shrink-0" />
+              <span className="flex-1 text-left text-sm">{t("app.logout")}</span>
+            </button>
           </CardContent>
         </Card>
       </Section>
+
+      <div className="flex items-center justify-between px-1 pt-2 text-sm">
+        <Link
+          href="/dashboard/about"
+          className="text-primary underline underline-offset-2"
+        >
+          {t("about.title")}
+        </Link>
+        <span className="font-mono text-xs text-muted-foreground">
+          v{APP_VERSION} · {APP_BUILD}
+        </span>
+      </div>
+
+      <Dialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("app.logout")}</DialogTitle>
+            <DialogDescription>{t("logout.confirm")}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setLogoutDialogOpen(false)}>
+              {t("logout.cancel")}
+            </Button>
+            <Button variant="destructive" onClick={handleLogout}>
+              {t("app.logout")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

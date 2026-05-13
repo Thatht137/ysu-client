@@ -9,6 +9,7 @@ import { useTranslation } from "@/lib/i18n/use-translation";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -45,6 +46,7 @@ import {
   ClipboardCheck,
   FileText,
   GraduationCap,
+  Info,
   LayoutDashboard,
   LogIn,
   LogOut,
@@ -57,6 +59,8 @@ import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { MobileTopBar } from "@/components/mobile-top-bar";
 import { RefreshIndicator } from "@/components/refresh-indicator";
 import { StaleIndicator } from "@/components/stale-indicator";
+import { AboutContent } from "@/components/about-content";
+import { APP_VERSION, APP_BUILD } from "@/lib/version";
 
 export default function DashboardLayout({
   children,
@@ -64,13 +68,15 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
+  const rawPathname = usePathname();
+  const pathname = rawPathname.replace(/\/$/, "");
   const { theme, setTheme } = useTheme();
   const { isAuthenticated, hasHydrated, username, clearCredential } = useAuthStore();
   const { t, locale, setLocale } = useTranslation();
 
   const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null);
   const [studentDialogOpen, setStudentDialogOpen] = useState(false);
+  const [aboutDialogOpen, setAboutDialogOpen] = useState(false);
   const [loadingStudent, setLoadingStudent] = useState(false);
 
   const credential = useAuthStore((s) => s.credential);
@@ -108,8 +114,12 @@ export default function DashboardLayout({
     "/dashboard/evaluation": t("app.evaluation"),
     "/dashboard/student": t("app.studentInfo"),
     "/dashboard/me": t("app.me"),
+    "/dashboard/about": t("about.title"),
   };
   const pageTitle = titleByPath[pathname] ?? t("app.name");
+
+  const primaryPaths = new Set(["/dashboard", "/dashboard/schedule", "/dashboard/grades", "/dashboard/evaluation", "/dashboard/me"]);
+  const showBack = !primaryPaths.has(pathname);
 
   useEffect(() => {
     if (hasHydrated && !isAuthenticated) {
@@ -199,14 +209,23 @@ export default function DashboardLayout({
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
+        <SidebarFooter>
+          <button
+            onClick={() => setAboutDialogOpen(true)}
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          >
+            <Info className="size-3.5" />
+            <span>v{APP_VERSION} ({APP_BUILD})</span>
+          </button>
+        </SidebarFooter>
         <SidebarRail />
       </Sidebar>
-      <main className="min-w-0 flex-1 overflow-x-hidden pb-16 md:overflow-auto md:pb-0">
-        <MobileTopBar title={pageTitle} />
+      <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden pt-12 pb-16 md:overflow-auto md:pb-0 md:pt-0">
+        <MobileTopBar title={pageTitle} showBack={showBack} />
         <header className="hidden items-center justify-between gap-4 border-b px-6 py-4 md:flex">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold animate-in fade-in slide-in-from-left-2 duration-300">
-              {navItems.find((i) => i.url === pathname)?.title || t("app.name")}
+              {pageTitle}
             </h1>
             <RefreshIndicator />
             <StaleIndicator />
@@ -250,6 +269,10 @@ export default function DashboardLayout({
                   <LogIn />
                   {t("app.relogin")}
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setAboutDialogOpen(true)}>
+                  <Info />
+                  {t("about.title")}
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut />
                   {t("app.logout")}
@@ -258,7 +281,7 @@ export default function DashboardLayout({
             </DropdownMenu>
           </div>
         </header>
-        <div key={pathname} className="p-4 animate-in fade-in slide-in-from-bottom-2 duration-500 md:p-8">
+        <div key={pathname} className="flex flex-1 flex-col p-4 animate-in fade-in slide-in-from-bottom-2 duration-500 md:p-8">
           {children}
         </div>
       </main>
@@ -304,6 +327,15 @@ export default function DashboardLayout({
               ))}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={aboutDialogOpen} onOpenChange={setAboutDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("about.title")}</DialogTitle>
+          </DialogHeader>
+          <AboutContent />
         </DialogContent>
       </Dialog>
     </SidebarProvider>
