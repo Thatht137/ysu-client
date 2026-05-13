@@ -556,6 +556,8 @@ async function emapPost(
   return datas as Record<string, unknown>;
 }
 
+let inflightAuth: Promise<unknown> | null = null;
+
 async function ensureAuthorized(): Promise<void> {
   await getCredentialApplied();
   await hydrationDone;
@@ -565,7 +567,16 @@ async function ensureAuthorized(): Promise<void> {
       return;
     }
   }
-  await authorize(JWXT_PORTAL_URL, jwxtJar);
+  if (inflightAuth) {
+    await inflightAuth;
+    return;
+  }
+  inflightAuth = authorize(JWXT_PORTAL_URL, jwxtJar);
+  try {
+    await inflightAuth;
+  } finally {
+    inflightAuth = null;
+  }
 }
 
 async function reauthorize(): Promise<void> {
