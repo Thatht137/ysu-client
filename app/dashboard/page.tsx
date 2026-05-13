@@ -127,23 +127,30 @@ export default function DashboardPage() {
       .slice(0, 3);
   }, [exams]);
 
-  function getCurrentCourse(): Course | null {
+  const [nowMinutes, setNowMinutes] = useState(() => {
     const now = new Date();
-    const timeVal = now.getHours() * 60 + now.getMinutes();
+    return now.getHours() * 60 + now.getMinutes();
+  });
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const now = new Date();
+      setNowMinutes(now.getHours() * 60 + now.getMinutes());
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const currentCourse = useMemo(() => {
     for (const c of todayCourses) {
       for (let s = c.start_section; s <= c.end_section; s++) {
         const range = SECTION_TIME_MAP[s];
-        if (range && timeVal >= range[0] && timeVal <= range[1]) {
+        if (range && nowMinutes >= range[0] && nowMinutes <= range[1]) {
           return c;
         }
       }
     }
     return null;
-  }
-
-  const currentCourse = getCurrentCourse();
-  const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  }, [todayCourses, nowMinutes]);
 
   if (loading) {
     return (

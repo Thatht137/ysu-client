@@ -37,6 +37,7 @@ import {
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { isCapacitor } from "@/lib/platform";
 import { useSettingsStore } from "@/lib/settings-store";
+import { useLongPress } from "@/hooks/use-long-press";
 import {
   APP_VERSION,
   APP_BUILD,
@@ -206,6 +207,7 @@ export function AboutContent() {
               onRetry={handleCheck}
               onReset={handleReset}
               onOpenMirror={openMirrorDialog}
+              onLongPress={openMirrorDialog}
               t={t}
             />
           ) : (
@@ -350,6 +352,23 @@ export function AboutContent() {
               />
             )}
           </div>
+          <Separator />
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">
+              {t("update.resetToFactory")}
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setShowMirrorDialog(false);
+                handleReset();
+              }}
+            >
+              <RotateCcw className="size-3.5" />
+              {t("update.resetToFactory")}
+            </Button>
+          </div>
           <DialogFooter>
             <Button onClick={confirmMirror}>{t("update.confirm")}</Button>
           </DialogFooter>
@@ -370,6 +389,7 @@ function UpdateSection({
   onRetry,
   onReset,
   onOpenMirror,
+  onLongPress,
   t,
 }: {
   state: UpdateState;
@@ -382,14 +402,18 @@ function UpdateSection({
   onRetry: () => void;
   onReset: () => void;
   onOpenMirror: () => void;
+  onLongPress: () => void;
   t: (key: string) => string;
 }) {
+  const longPressHandlers = useLongPress(onLongPress);
+
   switch (state) {
     case "idle":
       return (
         <button
           type="button"
           onClick={onCheck}
+          {...longPressHandlers}
           className="flex items-center gap-3 py-3 transition-colors active:bg-muted/60"
         >
           <CircleFadingArrowUp className="size-5 shrink-0 text-muted-foreground" />

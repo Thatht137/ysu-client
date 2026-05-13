@@ -139,15 +139,21 @@ export function ScheduleMobile({
 
   if (courses.length === 0) {
     return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <CalendarOff />
-          </EmptyMedia>
-          <EmptyTitle>{t("schedule.noData")}</EmptyTitle>
-          <EmptyDescription>{t("schedule.description")}</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        className="flex flex-1 select-none"
+      >
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <CalendarOff />
+            </EmptyMedia>
+            <EmptyTitle>{t("schedule.noData")}</EmptyTitle>
+            <EmptyDescription>{t("schedule.description")}</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      </div>
     );
   }
 

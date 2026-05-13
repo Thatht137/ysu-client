@@ -146,6 +146,18 @@
     }
 }
 
+@custom-media --mobile (max-width: 767px);
+
+@media (--mobile) {
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 [data-sonner-toaster] .cn-toast-mobile {
   padding: 0.625rem 0.75rem;
   font-size: 0.8125rem;
