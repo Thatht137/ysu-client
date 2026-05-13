@@ -17,6 +17,7 @@ export const APP_OPEN_SOURCE: readonly { name: string; url: string }[] = [
   { name: 'Lucide', url: 'https://lucide.dev' },
 ];
 
-export const APP_PEOPLE: readonly { name: string; url: string }[] = [
-  { name: 'Youwenqwq', url: 'https://github.com/Youwenqwq' },
+export const APP_PEOPLE: readonly { name: string; url?: string; contribution?: string }[] = [
+  { name: 'Rainight', url: 'https://github.com/KamijoToma', contribution: '为本项目提供了 AI 资源支持' },
+  { name: 'Xiaomi Mimo', url: 'https://mimo.xiaomi.com/', contribution: '为本项目提供了 Token Plan' },
 ];
