@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -53,9 +54,24 @@ export function ResponsiveModalContent({
   ...props
 }: ResponsiveModalContentProps) {
   const isMobile = useIsMobile();
+  const [maxHeight, setMaxHeight] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    const vp = window.visualViewport;
+    if (!vp) return;
+    const update = () => setMaxHeight(Math.floor(vp.height * 0.92));
+    update();
+    vp.addEventListener("resize", update);
+    return () => vp.removeEventListener("resize", update);
+  }, [isMobile]);
+
   if (isMobile) {
     return (
-      <DrawerContent className={cn("max-h-[92svh]", drawerClassName)}>
+      <DrawerContent
+        className={cn("max-h-[92dvh]", drawerClassName)}
+        style={maxHeight != null ? { maxHeight } : undefined}
+      >
         {children}
       </DrawerContent>
     );

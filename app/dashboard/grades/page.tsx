@@ -488,20 +488,22 @@ export default function GradesPage() {
                       GP {g.grade_point}
                     </span>
                   )}
-                  {g.is_pass ? (
-                    <Badge variant="default" className="text-[10px]">
-                      {t("grades.table.pass")}
-                    </Badge>
-                  ) : (
-                    <Badge variant="destructive" className="text-[10px]">
-                      {t("grades.table.fail")}
-                    </Badge>
-                  )}
-                  {g.is_degree_course && (
-                    <Badge variant="outline" className="text-[10px]">
-                      {t("grades.degreeCourse")}
-                    </Badge>
-                  )}
+                  <div className="flex items-center gap-1">
+                    {g.is_degree_course && (
+                      <Badge variant="outline" className="text-[10px]">
+                        {t("grades.degreeCourse")}
+                      </Badge>
+                    )}
+                    {g.is_pass ? (
+                      <Badge variant="default" className="text-[10px]">
+                        {t("grades.table.pass")}
+                      </Badge>
+                    ) : (
+                      <Badge variant="destructive" className="text-[10px]">
+                        {t("grades.table.fail")}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               </div>
             </button>
