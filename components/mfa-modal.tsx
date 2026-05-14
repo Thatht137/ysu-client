@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +40,7 @@ export function MFAModal() {
   const [localHint, setLocalHint] = useState(mobileHint);
   const [localMethodCode, setLocalMethodCode] = useState(methodCode);
   const [countdown, setCountdown] = useState(0);
+  const requestingRef = useRef(false);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -56,14 +57,17 @@ export function MFAModal() {
   }, [countdown]);
 
   useEffect(() => {
-    if (!open) {
-      setCountdown(0);
-      setCode("");
-    }
-  }, [open]);
+    if (!open) return;
+    setCode("");
+    setMfaMethod("cpdaily");
+    setLocalHint(mobileHint);
+    setLocalMethodCode(methodCode);
+    setCountdown(methodCode ? COUNTDOWN_SECONDS : 0);
+  }, [open, mobileHint, methodCode]);
 
   async function handleRequestCode() {
-    if (!username || countdown > 0) return;
+    if (!username || countdown > 0 || requestingRef.current) return;
+    requestingRef.current = true;
     setLoading(true);
     try {
       const res = await requestMFACode(
@@ -77,6 +81,7 @@ export function MFAModal() {
       toast.error((err as Error).message || t("login.errorMfaRequestFailed"));
     } finally {
       setLoading(false);
+      requestingRef.current = false;
     }
   }
 
@@ -130,9 +135,10 @@ export function MFAModal() {
                   ? t("login.mfaRequesting")
                   : t("login.mfaRequest")}
             </Button>
-            {localHint && (
+            {localMethodCode && (
               <FieldDescription>
-                {t("login.mfaSent")} {localHint}
+                {t("login.mfaSent")}{" "}
+                {localHint || t("login.mfaSentCpdailyApp")}
               </FieldDescription>
             )}
             <Field>
