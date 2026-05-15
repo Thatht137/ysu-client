@@ -119,9 +119,11 @@ export default function GradesPage() {
           getCurrentWeek(credential!).catch(() => null),
         ]);
         setGrades(g);
-        setGpa(gp);
+        if (gp !== null) {
+          setGpa(gp);
+          cacheSet(cacheKey(["gpa", credential!]), gp);
+        }
         cacheSet(cacheKey(["grades", credential!]), g);
-        cacheSet(cacheKey(["gpa", credential!]), gp);
         if (weekInfo?.term) {
           setTerm((prev) => (prev === ALL_TERM ? weekInfo.term! : prev));
         }

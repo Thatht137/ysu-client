@@ -111,13 +111,17 @@ export default function SchedulePage() {
     setLoading(true);
     try {
       const [c, w] = await Promise.all([
-        getExperimentalSchedule(credential, term || undefined, "all").catch(() => []),
+        getExperimentalSchedule(credential, term || undefined, "all").catch(() => null),
         getCurrentWeek(credential!, term || undefined).catch(() => null),
       ]);
-      setCourses(c);
-      setCurrentWeek(w);
-      cacheSet(cacheKey(["schedule", credential!]), c);
-      cacheSet(cacheKey(["week", credential!]), w);
+      if (c !== null) {
+        setCourses(c);
+        cacheSet(cacheKey(["schedule", credential!]), c);
+      }
+      if (w !== null) {
+        setCurrentWeek(w);
+        cacheSet(cacheKey(["week", credential!]), w);
+      }
       setFilterDrawerOpen(false);
     } catch (err) {
       toast.error((err as Error).message || t("app.updating"));

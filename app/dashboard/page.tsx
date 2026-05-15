@@ -35,6 +35,42 @@ function isCoursePast(course: Course, nowMinutes: number): boolean {
   return !!endRange && nowMinutes > endRange[1];
 }
 
+async function withRetry<T>(fn: () => Promise<T>, retries = 2, delay = 800): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      if (i < retries) {
+        await new Promise((r) => setTimeout(r, delay * (i + 1)));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+function getExamEndTime(exam: Exam): Date | null {
+  if (!exam.exam_date) return null;
+  const base = new Date(exam.exam_date.replace(/-/g, "/"));
+  if (Number.isNaN(base.getTime())) return null;
+
+  if (exam.exam_time) {
+    const times = exam.exam_time.match(/\d{1,2}:\d{2}/g);
+    if (times && times.length >= 2) {
+      const [h, m] = times[times.length - 1].split(":").map(Number);
+      base.setHours(h, m, 0, 0);
+      return base;
+    } else if (times && times.length === 1) {
+      const [h, m] = times[0].split(":").map(Number);
+      base.setHours(h, m, 0, 0);
+      return base;
+    }
+  }
+  base.setHours(23, 59, 59, 999);
+  return base;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const credential = useAuthStore((s) => s.credential);
@@ -73,26 +109,35 @@ export default function DashboardPage() {
     async function load() {
       try {
         const [s, w, g, c, e] = await Promise.all([
-          getStudentInfo(credential!),
-          getCurrentWeek(credential!).catch(() => null),
-          getGPAStats(credential!).catch(() => null),
-          getExperimentalSchedule(credential!, undefined, "all").catch(() => []),
-          getExams(credential!).catch(() => []),
+          withRetry(() => getStudentInfo(credential!)),
+          withRetry(() => getCurrentWeek(credential!)).catch(() => null),
+          withRetry(() => getGPAStats(credential!)).catch(() => null),
+          withRetry(() => getExperimentalSchedule(credential!, undefined, "all")).catch(() => null),
+          withRetry(() => getExams(credential!)).catch(() => null),
         ]);
         setStudent(s);
-        setCurrentWeek(w);
-        setGpa(g);
-        setCourses(c);
-        setExams(e);
+        if (w !== null) {
+          setCurrentWeek(w);
+          cacheSet(cacheKey(["week", credential!]), w);
+        }
+        if (g !== null) {
+          setGpa(g);
+          cacheSet(cacheKey(["gpa", credential!]), g);
+        }
+        if (c !== null) {
+          setCourses(c);
+          cacheSet(cacheKey(["schedule", credential!]), c);
+        }
+        if (e !== null) {
+          setExams(e);
+          cacheSet(cacheKey(["exams", credential!]), e);
+        }
         cacheSet(cacheKey(["student", credential!]), s);
-        cacheSet(cacheKey(["week", credential!]), w);
-        cacheSet(cacheKey(["gpa", credential!]), g);
-        cacheSet(cacheKey(["schedule", credential!]), c);
-        cacheSet(cacheKey(["exams", credential!]), e);
         useRefreshStore.getState().markFresh();
       } catch (err) {
         if (hasCache) {
           useRefreshStore.getState().markStale();
+          toast.error(t("app.networkError"));
         } else {
           toast.error((err as Error).message || t("app.updating"));
         }
@@ -115,14 +160,19 @@ export default function DashboardPage() {
     const now = new Date();
     return exams
       .filter((e) => {
-        if (!e.exam_date) return false;
-        const d = new Date(e.exam_date.replace(/-/g, "/"));
-        return d >= new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        const end = getExamEndTime(e);
+        if (!end) return false;
+        return end >= now;
       })
       .sort((a, b) => {
         const da = new Date((a.exam_date || "").replace(/-/g, "/")).getTime();
         const db = new Date((b.exam_date || "").replace(/-/g, "/")).getTime();
-        return da - db;
+        if (da !== db) return da - db;
+        const ta = a.exam_time?.match(/\d{1,2}:\d{2}/g);
+        const tb = b.exam_time?.match(/\d{1,2}:\d{2}/g);
+        const ha = ta ? parseInt(ta[0], 10) : 0;
+        const hb = tb ? parseInt(tb[0], 10) : 0;
+        return ha - hb;
       })
       .slice(0, 3);
   }, [exams]);
