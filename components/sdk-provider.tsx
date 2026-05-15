@@ -52,8 +52,15 @@ export function SDKProvider({ children }: { children: React.ReactNode }) {
     }
 
     initSDK()
-      .then(() => checkAuthStatus())
-      .then((status) => {
+      .then(async () => {
+        let status = await checkAuthStatus();
+        if (!status.authenticated) {
+          // Cookie restoration may not be immediately effective on
+          // Capacitor; wait briefly and retry once before concluding
+          // the session is actually expired.
+          await new Promise((r) => setTimeout(r, 800));
+          status = await checkAuthStatus();
+        }
         if (!status.authenticated) {
           toast.error(t("app.sessionExpired"));
         }
@@ -62,9 +69,9 @@ export function SDKProvider({ children }: { children: React.ReactNode }) {
         const e = err as Error & { code?: string; status?: number };
         if (e.code === "AUTH_REQUIRED" || e.status === 401) {
           toast.error(t("app.sessionExpired"));
-        } else {
-          toast.error(t("app.networkError"));
         }
+        // Silently ignore non-auth errors during startup to avoid
+        // false alarms caused by transient network issues.
       });
   }, [hasHydrated, settingsHydrated, setUpdateStatus, t, updateMirror]);
 
