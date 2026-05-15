@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,12 +18,18 @@ import {
   getCurrentWeek,
   getCurrentLesson,
 } from "@/lib/api";
-import { ArrowLeft, RefreshCw, Trash2, Bug } from "lucide-react";
+import { RefreshCw, Trash2, Bug } from "lucide-react";
 import { toast } from "sonner";
 import { clearAllCache } from "@/lib/cache";
+import { fetchWithJar } from "@/lib/cookie";
 
 interface DiagnosticResult {
-  platform: string;
+  platform: {
+    name: string;
+    userAgent: string;
+    screen: string;
+    capacitorPlatform?: string;
+  };
   authStore: {
     credentialExists: boolean;
     username: string | null;
@@ -54,7 +59,6 @@ interface DiagnosticResult {
 }
 
 export default function DebugPage() {
-  const router = useRouter();
   const { t } = useTranslation();
   const credential = useAuthStore((s) => s.credential);
   const username = useAuthStore((s) => s.username);
@@ -68,7 +72,19 @@ export default function DebugPage() {
   async function runDiagnostics() {
     setLoading(true);
     try {
-      const platform = isCapacitor() ? "Capacitor" : isTauri() ? "Tauri" : "Web";
+      const platformName = isCapacitor() ? "Capacitor" : isTauri() ? "Tauri" : "Web";
+      const screenInfo = typeof window !== "undefined"
+        ? `${window.screen.width}x${window.screen.height} (${window.innerWidth}x${window.innerHeight})`
+        : "N/A";
+      let capacitorPlatform: string | undefined;
+      if (isCapacitor()) {
+        try {
+          const { Capacitor } = await import("@capacitor/core");
+          capacitorPlatform = Capacitor.getPlatform();
+        } catch {
+          // ignore
+        }
+      }
 
       const casJar = getCasJar();
       const casCookies = await casJar.getAllCookies();
@@ -79,7 +95,12 @@ export default function DebugPage() {
       const rememberMe = await loadRememberedCredentials();
 
       const result: DiagnosticResult = {
-        platform,
+        platform: {
+          name: platformName,
+          userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "N/A",
+          screen: screenInfo,
+          capacitorPlatform,
+        },
         authStore: {
           credentialExists: !!credential,
           username: username || null,
@@ -145,13 +166,30 @@ export default function DebugPage() {
           result.apiTests.currentWeek = { ok: false, error: (e as Error).message };
         }
 
-        // Mobile auth test - we can't easily test without valid course params
-        result.apiTests.mobileAuth = { ok: null };
+        // Mobile auth test: access /jwmobile directly
+        // Authenticated → 404, Unauthenticated → 401
+        try {
+          const resp = await fetchWithJar(jwxtJar, {
+            method: "GET",
+            url: "https://jwxt.ysu.edu.cn/jwmobile",
+            redirect: "manual",
+            timeoutMs: 10000,
+          });
+          if (resp.status === 404) {
+            result.apiTests.mobileAuth = { ok: true };
+          } else if (resp.status === 401) {
+            result.apiTests.mobileAuth = { ok: false, error: t("debug.unauthenticated") };
+          } else {
+            result.apiTests.mobileAuth = { ok: false, error: `HTTP ${resp.status}` };
+          }
+        } catch (e) {
+          result.apiTests.mobileAuth = { ok: false, error: (e as Error).message };
+        }
       }
 
       setDiag(result);
     } catch (err) {
-      toast.error((err as Error).message || "诊断失败");
+      toast.error((err as Error).message || t("debug.diagnosticsFailed"));
     } finally {
       setLoading(false);
     }
@@ -163,7 +201,7 @@ export default function DebugPage() {
 
   function handleClearCache() {
     clearAllCache();
-    toast.success("缓存已清除");
+    toast.success(t("debug.cacheCleared"));
     runDiagnostics();
   }
 
@@ -182,9 +220,6 @@ export default function DebugPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon-sm" onClick={() => router.back()}>
-          <ArrowLeft className="size-4" />
-        </Button>
         <h1 className="text-lg font-semibold flex items-center gap-2">
           <Bug className="size-5" />
           Debug
@@ -192,7 +227,7 @@ export default function DebugPage() {
         <div className="flex-1" />
         <Button variant="outline" size="sm" onClick={runDiagnostics} disabled={loading}>
           {loading ? <Spinner className="size-3.5" /> : <RefreshCw className="size-3.5" />}
-          刷新
+          {t("debug.refresh")}
         </Button>
       </div>
 
@@ -206,36 +241,53 @@ export default function DebugPage() {
         <>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">平台</CardTitle>
+              <CardTitle className="text-sm">{t("debug.platform")}</CardTitle>
             </CardHeader>
-            <CardContent>
-              <span className="text-sm font-mono">{diag.platform}</span>
+            <CardContent className="flex flex-col gap-1.5 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">{t("debug.platformType")}</span>
+                <span className="font-mono text-xs">{diag.platform.name}</span>
+              </div>
+              {diag.platform.capacitorPlatform && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{t("debug.platformCapacitor")}</span>
+                  <span className="font-mono text-xs">{diag.platform.capacitorPlatform}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">{t("debug.platformScreen")}</span>
+                <span className="font-mono text-xs">{diag.platform.screen}</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-muted-foreground">{t("debug.platformUserAgent")}</span>
+                <span className="break-all text-[10px] font-mono text-muted-foreground">{diag.platform.userAgent}</span>
+              </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">认证状态</CardTitle>
+              <CardTitle className="text-sm">{t("debug.authState")}</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-1.5 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Credential</span>
+                <span className="text-muted-foreground">{t("debug.credential")}</span>
                 {statusBadge(diag.authStore.credentialExists)}
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Username</span>
+                <span className="text-muted-foreground">{t("debug.username")}</span>
                 <span className="font-mono text-xs">{diag.authStore.username || "-"}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Authenticated</span>
+                <span className="text-muted-foreground">{t("debug.authenticated")}</span>
                 {statusBadge(diag.authStore.isAuthenticated)}
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Hydrated</span>
+                <span className="text-muted-foreground">{t("debug.hydrated")}</span>
                 {statusBadge(diag.authStore.hasHydrated)}
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">JWXT Session</span>
+                <span className="text-muted-foreground">{t("debug.jwxtSession")}</span>
                 {statusBadge(diag.authStore.jwxtSessionExists)}
               </div>
             </CardContent>
@@ -243,15 +295,15 @@ export default function DebugPage() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">安全存储</CardTitle>
+              <CardTitle className="text-sm">{t("debug.secureStorage")}</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-1.5 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">CASTGC</span>
+                <span className="text-muted-foreground">{t("debug.castgc")}</span>
                 {statusBadge(diag.secureStorage.castgcExists)}
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Remember Me</span>
+                <span className="text-muted-foreground">{t("debug.rememberMe")}</span>
                 {statusBadge(diag.secureStorage.rememberMeExists)}
               </div>
             </CardContent>
@@ -259,15 +311,15 @@ export default function DebugPage() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">API 测试</CardTitle>
+              <CardTitle className="text-sm">{t("debug.apiTests")}</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-1.5 text-sm">
               {[
-                { label: "CAS Auth", test: diag.apiTests.casAuth },
-                { label: "Student Info", test: diag.apiTests.studentInfo },
-                { label: "Schedule", test: diag.apiTests.schedule },
-                { label: "Current Week", test: diag.apiTests.currentWeek },
-                { label: "Mobile Auth", test: diag.apiTests.mobileAuth },
+                { label: t("debug.casAuth"), test: diag.apiTests.casAuth },
+                { label: t("debug.studentInfo"), test: diag.apiTests.studentInfo },
+                { label: t("debug.schedule"), test: diag.apiTests.schedule },
+                { label: t("debug.currentWeek"), test: diag.apiTests.currentWeek },
+                { label: t("debug.mobileAuth"), test: diag.apiTests.mobileAuth },
               ].map((item) => (
                 <div key={item.label} className="flex flex-col gap-0.5">
                   <div className="flex items-center justify-between">
@@ -286,12 +338,12 @@ export default function DebugPage() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">CAS Jar ({diag.casJar.cookieCount})</CardTitle>
+              <CardTitle className="text-sm">{t("debug.casJar")} ({diag.casJar.cookieCount})</CardTitle>
             </CardHeader>
             <CardContent>
               <ScrollArea className="h-32 rounded-md border bg-muted/30 p-2">
                 {diag.casJar.cookies.length === 0 ? (
-                  <span className="text-xs text-muted-foreground">Empty</span>
+                  <span className="text-xs text-muted-foreground">{t("debug.empty")}</span>
                 ) : (
                   <ul className="flex flex-col gap-1">
                     {diag.casJar.cookies.map((c, i) => (
@@ -307,12 +359,12 @@ export default function DebugPage() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">JWXT Jar ({diag.jwxtJar.cookieCount})</CardTitle>
+              <CardTitle className="text-sm">{t("debug.jwxtJar")} ({diag.jwxtJar.cookieCount})</CardTitle>
             </CardHeader>
             <CardContent>
               <ScrollArea className="h-32 rounded-md border bg-muted/30 p-2">
                 {diag.jwxtJar.cookies.length === 0 ? (
-                  <span className="text-xs text-muted-foreground">Empty</span>
+                  <span className="text-xs text-muted-foreground">{t("debug.empty")}</span>
                 ) : (
                   <ul className="flex flex-col gap-1">
                     {diag.jwxtJar.cookies.map((c, i) => (
@@ -328,7 +380,7 @@ export default function DebugPage() {
 
           <Button variant="destructive" onClick={handleClearCache} className="w-full">
             <Trash2 className="size-4 mr-2" />
-            清除所有缓存
+            {t("debug.clearCache")}
           </Button>
         </>
       )}
