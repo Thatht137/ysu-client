@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -89,6 +89,7 @@ export default function GradesPage() {
   const [rankingResult, setRankingResult] = useState<GradeRanking | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [statsScope, setStatsScope] = useState<"class" | "course">("class");
+  const didAutoSelectTerm = useRef(false);
 
   const terms = useMemo(
     () => Array.from(new Set(grades.map((g) => g.term).filter(Boolean))).sort(),
@@ -140,7 +141,8 @@ export default function GradesPage() {
   }, [credential, t]);
 
   useEffect(() => {
-    if (terms.length > 0 && term === ALL_TERM) {
+    if (terms.length > 0 && term === ALL_TERM && !didAutoSelectTerm.current) {
+      didAutoSelectTerm.current = true;
       const latest = terms[terms.length - 1];
       if (latest) setTerm(latest);
     }
