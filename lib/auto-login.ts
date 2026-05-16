@@ -9,6 +9,7 @@ import {
   prepareLogin,
   getJar,
 } from "./cas";
+import { checkRateLimit, recordLoginAttempt } from "./rate-limit";
 import { resetJWXT } from "./jwxt";
 import { initSDK } from "./sdk";
 import { useAuthStore } from "./auth-store";
@@ -30,6 +31,20 @@ export async function tryAutoLogin(): Promise<boolean> {
       resetJWXT();
 
       await prepareLogin();
+      const limit = checkRateLimit();
+      if (!limit.allowed) {
+        const totalSeconds = Math.ceil(limit.retryAfterMs / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        const message =
+          limit.reason === "window"
+            ? `15分钟内登录次数已达上限，请 ${minutes}:${seconds.toString().padStart(2, "0")} 后再试`
+            : `登录过于频繁，请 ${seconds} 秒后再试`;
+        toast.error(message);
+        return false;
+      }
+      recordLoginAttempt();
+
       if (await checkCaptchaNeeded(remembered.username)) {
         toast.error(getText("autoLogin.captchaRequired"));
         return false;
