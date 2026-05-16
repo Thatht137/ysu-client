@@ -21,19 +21,22 @@
 
 ## 功能
 
-- **CAS 认证**：登录时自动处理图形验证码与 SMS / cpdaily MFA。会话跨重启持久化
-  （CASTGC 通过 SecureStorage 加密存储，Android 端启动时恢复到原生 cookie store）。
+- **CAS 认证**：登录时自动处理图形验证码与 SMS / cpdaily MFA；内置登录速率限制保护，
+  防止频繁登录触发风控。会话跨重启持久化（CASTGC 通过 SecureStorage 加密存储，
+  Android 端启动时恢复到原生 cookie store）。
 - **总览**：当前教学周、今日课程（按节次时间高亮当前 / 已过课程）、待考考试、绩点速览。
 - **成绩**：按学期 / 课程名筛选，单门成绩可下钻至教学班 / 全课程两个维度的
-  统计、等级分布与个人排名。
+  统计、等级分布与个人排名；支持学期 GPA 计算与学位课程标识。
 - **学分绩点**：必修 / 选修 / 学位课各项学分与初始 / 最高绩点。
-- **课表**：理论课表 + 实验选课合并显示，按周次切换，处理重叠课程。桌面 / 移动端双布局。
+- **课表**：理论课表 + 实验选课合并显示，按周次切换，处理重叠课程；
+  实时高亮当前课程，支持课程活动签到 / 签退。桌面 / 移动端双布局。
 - **考试**：按学期查询，区分未完成 / 已完成。
 - **培养方案**：课程列表 + 学业完成情况 + 学业预警。
 - **评教**：单选 / 多选 / 填空题；一键最高分自动填写；**批量评教**支持选择多条任务，
   自动填写 → 预检得分 → 二次确认 → 批量提交，可中途中断。
 - **Android 应用**：基于 Capacitor 的 WebView 壳应用，通过原生 HTTP 桥接绕过
-  WebView fetch 限制，会话持久化，支持 @capgo/capacitor-updater OTA 热更新。
+  WebView fetch 限制，会话持久化，支持 @capgo/capacitor-updater OTA 热更新与
+  APK 外壳版本检测。
 - **体验**：i18n（中 / 英）、深 / 浅 / 跟随系统主题（按 `d` 切换）、桌面 + 移动端
   响应式布局、24h 本地缓存（基于 `localStorage`）、数据过期提示。
 
@@ -81,10 +84,11 @@ npx cap sync         # 同步 web 资源 + 插件到 android/
 npx cap open android # 在 Android Studio 中打开
 ```
 
-在 Android Studio 中：**Build > Build Bundle(s) / APK(s) > Build APK(s)**。
+在 Android Studio 中：**Build > Build Bundle(s) / APK(s) > Build APK(s)**；
+或执行 `npm run release` 自动完成静态导出、APK 构建并创建带版本标签的 GitHub Release。
 
-OTA 更新通过 `npm run release` 推送，该脚本会构建项目、创建带版本标签的 GitHub Release
-并上传产物。
+OTA 更新同样通过 `npm run release` 推送，该脚本会上传产物并生成 `version.json` 供
+APK 外壳版本检测使用。
 
 ## 目录速览
 
@@ -125,7 +129,9 @@ lib/
 ├── cas.ts                  # CAS SSO：登录、验证码、MFA、TGC 持久化
 ├── cookie.ts               # RFC 6265 cookie jar + CapacitorHttp 桥接
 ├── jwxt.ts                 # JWXT 会话管理 + 自动重授权
+├── jwmobile.ts             # 今日校园移动端 API 封装
 ├── mfa-modal-store.ts      # MFA 弹窗状态
+├── rate-limit.ts           # 登录速率限制
 ├── mobile-header-store.ts  # 各页面向移动端顶栏注入右侧操作
 ├── platform.ts             # 平台检测（web / native）
 ├── refresh-store.ts        # 全局刷新状态
@@ -133,6 +139,7 @@ lib/
 ├── secure-storage.ts       # SecureStorage 封装（Android Keystore / iOS Keychain）
 ├── settings-store.ts       # 用户设置
 ├── types.ts                # TypeScript 类型定义
+├── update-store.ts         # 更新状态管理
 ├── updater.ts              # Capacitor OTA 更新逻辑
 ├── utils.ts                # 通用工具（cn 等）
 ├── version.ts              # 版本显示逻辑

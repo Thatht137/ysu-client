@@ -26,18 +26,22 @@ updates.
 ## Features
 
 - **CAS Authentication.** Login with automatic handling of CAPTCHA and
-  SMS / cpdaily MFA. Session persisted across app restarts (CASTGC
-  stored encrypted via SecureStorage, restored to native cookie store on Android).
+  SMS / cpdaily MFA; built-in rate-limiting protects against frequent
+  login attempts that could trigger security controls. Session persisted
+  across app restarts (CASTGC stored encrypted via SecureStorage, restored
+  to native cookie store on Android).
 - **Dashboard.** Current teaching week, today's classes (with active and
   past periods highlighted), upcoming exams, and a GPA snapshot.
 - **Grades.** Filter by term / course name. Drill into a single course
   for stats, grade distribution, and personal ranking — both at the
-  teaching-class and whole-course level.
+  teaching-class and whole-course level. Supports term GPA calculation
+  and degree-course badges.
 - **Credits & GPA.** Required / elective / degree-course credits with
   initial and best-attempt GPAs.
 - **Schedule.** Lecture timetable merged with experiment/lab choices,
-  switchable by teaching week, with overlapping-class handling. Desktop
-  and mobile layouts.
+  switchable by teaching week, with overlapping-class handling. Real-time
+  highlight of the current class, with lesson activity sign-in/out support.
+  Desktop and mobile layouts.
 - **Exams.** Per-term view, separating upcoming and finished exams.
 - **Training plan.** Course list, academic completion progress, and
   academic-warning flags.
@@ -47,8 +51,9 @@ updates.
   the resulting scores, double-confirm, then submit in a batch — with
   the option to abort midway.
 - **Android app.** Capacitor WebView shell with native HTTP bridging
-  (bypasses WebView fetch limitations), persistent sessions, and
-  OTA hot updates via @capgo/capacitor-updater.
+  (bypasses WebView fetch limitations), persistent sessions,
+  OTA hot updates via @capgo/capacitor-updater, and APK shell
+  version detection.
 - **UX.** i18n (中 / EN), dark / light / system themes (toggle with
   `d`), responsive desktop and mobile layouts, 24 h localStorage cache,
   and a stale-data indicator.
@@ -97,10 +102,12 @@ npx cap sync         # sync web assets + plugins to android/
 npx cap open android # open in Android Studio
 ```
 
-In Android Studio: **Build > Build Bundle(s) / APK(s) > Build APK(s)**.
+In Android Studio: **Build > Build Bundle(s) / APK(s) > Build APK(s)**;
+or run `npm run release` to automate the static export, APK build, and
+create a version-tagged GitHub Release.
 
-OTA updates are pushed via `npm run release` which builds, creates a
-GitHub release with the version tag, and uploads the artifact.
+OTA updates are also pushed via `npm run release`, which uploads artifacts
+and generates `version.json` for APK shell version detection.
 
 ## Directory layout
 
@@ -141,7 +148,9 @@ lib/
 ├── cas.ts                  # CAS SSO: login, CAPTCHA, MFA, TGC persistence
 ├── cookie.ts               # RFC 6265 cookie jar + CapacitorHttp bridge
 ├── jwxt.ts                 # JWXT session management + auto-reauth
+├── jwmobile.ts             # Today-campus mobile API wrapper
 ├── mfa-modal-store.ts      # MFA modal state
+├── rate-limit.ts           # login rate limiting
 ├── mobile-header-store.ts  # per-page right-slot for the mobile top bar
 ├── platform.ts             # platform detection (web vs native)
 ├── refresh-store.ts        # global refresh state
@@ -149,6 +158,7 @@ lib/
 ├── secure-storage.ts       # SecureStorage wrapper (Android Keystore / iOS Keychain)
 ├── settings-store.ts       # user settings
 ├── types.ts                # TypeScript type definitions
+├── update-store.ts         # update state management
 ├── updater.ts              # Capacitor OTA updater logic
 ├── utils.ts                # general utilities (cn, etc.)
 ├── version.ts              # version display logic
