@@ -46,3 +46,13 @@ capacitor_*_*doc.md
 *.keystore
 *.jks
 gradle.properties
+
+# Website build artifacts
+website/node_modules/
+website/dist/
+website/.astro/
+
+# Claude skills
+.agents/
+.claude/skills/
+skills-lock.json
