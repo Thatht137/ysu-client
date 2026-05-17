@@ -73,7 +73,7 @@ echo "Generating changelog.json..."
 gh api "repos/${REPO}/releases" | jq 'map({
   version: (.tag_name | ltrimstr("v")),
   date: (.published_at | split("T")[0]),
-  changes: (.body | split("\n") | map(select(test("^\\s*[-*]\\s+"))) | map(sub("^\\s*[-*]\\s+"; "")))
+  body: .body
 })' > website/src/data/changelog.json
 
 # Build website
