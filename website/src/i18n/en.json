@@ -18,11 +18,11 @@
     "title": "Features",
     "grades": {
       "title": "Grades",
-      "desc": "Filter by semester, view statistics, distribution, and ranking"
+      "desc": "Filter by semester, view statistics, distribution, auto-calculate current term GPA"
     },
     "schedule": {
       "title": "Schedule",
-      "desc": "Merge theory and lab courses, switch by week, highlight current course"
+      "desc": "Merge theory and lab courses, switch by week, check-in/out supported"
     },
     "exams": {
       "title": "Exams",
@@ -43,6 +43,7 @@
   },
   "screenshots": {
     "title": "Screenshots",
+    "subtitle": "Swipe horizontally to see more",
     "placeholder": "Screenshot placeholder"
   },
   "download": {
@@ -50,8 +51,8 @@
     "latestVersion": "Latest Version",
     "releaseDate": "Release Date",
     "changelogLink": "View Changelog",
-    "githubFallback": "GitHub Releases (mirror)",
-    "systemRequirements": "Requires: Android System WebView Chromium v111+"
+    "githubFallback": "GitHub Releases",
+    "systemRequirements": "Requires: Android System WebView v111+"
   },
   "footer": {
     "disclaimer": "This is a third-party client, not affiliated with Yanshan University.",
@@ -66,6 +67,8 @@
   },
   "privacy": {
     "title": "Privacy & Disclaimer",
+    "noticeLabel": "Important Notice",
+    "noticeShort": "This is a third-party client for the Yanshan University academic affairs system, not affiliated with the university. All data is processed locally without third-party servers.",
     "dataSource": {
       "title": "Data Source & Security",
       "content": "All business logic is implemented locally. Data is fetched from the official academic affairs system and stored locally. No third-party servers are involved. Credentials are encrypted and stored using the device's secure storage (Android Keystore / iOS Keychain)."

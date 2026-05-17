@@ -18,11 +18,11 @@
     "title": "功能亮点",
     "grades": {
       "title": "查成绩",
-      "desc": "按学期筛选，查看统计、分布和排名"
+      "desc": "可按学期筛选，支持查看统计、分布，自动计算本学期绩点"
     },
     "schedule": {
       "title": "看课表",
-      "desc": "合并理论课与实验课，按周切换，实时高亮当前课程"
+      "desc": "合并理论课与实验课，实时更新，按周切换，点击可查看课程活动"
     },
     "exams": {
       "title": "查考试",
@@ -43,6 +43,7 @@
   },
   "screenshots": {
     "title": "应用截图",
+    "subtitle": "左右滑动查看更多",
     "placeholder": "截图占位"
   },
   "download": {
@@ -50,8 +51,8 @@
     "latestVersion": "最新版本",
     "releaseDate": "发布日期",
     "changelogLink": "查看更新日志",
-    "githubFallback": "GitHub Releases 备用下载",
-    "systemRequirements": "系统要求：Android System WebView Chromium v111+"
+    "githubFallback": "GitHub Releases",
+    "systemRequirements": "系统要求：Android System WebView v111+"
   },
   "footer": {
     "disclaimer": "本应用为第三方客户端，与燕山大学官方无任何关联。",
@@ -66,6 +67,8 @@
   },
   "privacy": {
     "title": "隐私声明与免责声明",
+    "noticeLabel": "重要提示",
+    "noticeShort": "本应用为燕山大学教务系统的第三方客户端，与学校官方无任何关联。所有数据均在本地处理，不经过第三方服务器。",
     "dataSource": {
       "title": "数据来源与安全性",
       "content": "燕大终端 App 的所有业务逻辑均在本地实现，从官方教务系统获取数据并保存在本地，中间不经过任何其他服务器。登录之后的凭据数据存储在本地，凭据通过系统安全存储（Android Keystore / iOS Keychain）加密保存。"

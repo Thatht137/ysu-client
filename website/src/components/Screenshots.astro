@@ -1,33 +1,8 @@
 ---
+import ScreenshotCarousel from './ScreenshotCarousel';
+
 const locale = Astro.currentLocale ?? 'zh';
 const t = await import(`../i18n/${locale}.json`).then(m => m.default);
-
-const screenshots = [
-  { src: '/images/screenshots/placeholder.svg', alt: 'Dashboard' },
-  { src: '/images/screenshots/placeholder.svg', alt: 'Schedule' },
-  { src: '/images/screenshots/placeholder.svg', alt: 'Grades' },
-  { src: '/images/screenshots/placeholder.svg', alt: 'Exams' },
-];
 ---
 
-<section id="screenshots" class="px-4 py-20 sm:px-6 lg:px-8">
-  <div class="mx-auto max-w-6xl">
-    <h2 class="text-center text-3xl font-bold tracking-tight sm:text-4xl">
-      {t.screenshots.title}
-    </h2>
-    <div class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-      {screenshots.map((shot) => (
-        <div class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-all hover:shadow-lg">
-          <div class="aspect-[9/19] bg-muted flex items-center justify-center">
-            <img
-              src={shot.src}
-              alt={shot.alt}
-              class="h-full w-full object-cover"
-              onerror="this.style.display='none'; this.parentElement.textContent='Screenshot placeholder'"
-            />
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-</section>
+<ScreenshotCarousel client:load title={t.screenshots.title} />

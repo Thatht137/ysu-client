@@ -56,3 +56,17 @@ website/.astro/
 .agents/
 .claude/skills/
 skills-lock.json
+# Tencent Cloud EdgeOne
+.env
+.edgeone/*
+.tef_dist/*
+
+# EdgeOne build artifacts
+website/.edgeone/
+
+# Backup files
+*.bak
+
+# Superpowers docs (generated)
+/docs/
+

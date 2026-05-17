@@ -26,10 +26,22 @@
 }
 
 html {
+  position: relative;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
   scroll-behavior: smooth;
 }
 
 body {
-  background-color: var(--color-background);
-  color: var(--color-foreground);
+  position: relative;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }

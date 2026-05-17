@@ -1,0 +1,48 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Header from './Header.astro';
+import Footer from './Footer.astro';
+import ScreenshotViewer from './ScreenshotViewer';
+import { ArrowLeft } from 'lucide-react';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+const locale = Astro.currentLocale ?? 'zh';
+const t = await import(`../i18n/${locale}.json`).then(m => m.default);
+
+const homeUrl = getRelativeLocaleUrl(locale, '/');
+
+const screenshots = locale === 'en'
+  ? [
+      { label: 'Grades', src: '/images/screenshots/placeholder.svg', srcDark: '/images/screenshots/placeholder-dark.svg' },
+      { label: 'Schedule', src: '/images/screenshots/placeholder.svg', srcDark: '/images/screenshots/placeholder-dark.svg' },
+      { label: 'Exams', src: '/images/screenshots/placeholder.svg', srcDark: '/images/screenshots/placeholder-dark.svg' },
+      { label: 'GPA', src: '/images/screenshots/placeholder.svg', srcDark: '/images/screenshots/placeholder-dark.svg' },
+    ]
+  : [
+      { label: '成绩查询', src: '/images/screenshots/placeholder.svg', srcDark: '/images/screenshots/placeholder-dark.svg' },
+      { label: '课程表', src: '/images/screenshots/placeholder.svg', srcDark: '/images/screenshots/placeholder-dark.svg' },
+      { label: '考试安排', src: '/images/screenshots/placeholder.svg', srcDark: '/images/screenshots/placeholder-dark.svg' },
+      { label: '绩点统计', src: '/images/screenshots/placeholder.svg', srcDark: '/images/screenshots/placeholder-dark.svg' },
+    ];
+---
+
+<Layout title={`${t.screenshots.title} - ${t.appName}`}>
+  <Header />
+  <main class="mx-auto max-w-6xl px-4 py-12 sm:px-6 overflow-x-hidden">
+    <a
+      href={homeUrl}
+      class="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-8"
+    >
+      <ArrowLeft className="w-4 h-4" />
+      {t.changelog.back}
+    </a>
+
+    <h1 class="text-3xl font-bold">{t.screenshots.title}</h1>
+    <p class="mt-2 text-muted-foreground">{t.screenshots.subtitle}</p>
+
+    <div class="mt-8">
+      <ScreenshotViewer client:load images={screenshots} />
+    </div>
+  </main>
+  <Footer />
+</Layout>

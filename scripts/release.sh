@@ -68,6 +68,14 @@ EOF
 echo "Uploading version.json..."
 gh release upload "${TAG}" version.json --clobber
 
+# Generate changelog.json from GitHub releases
+echo "Generating changelog.json..."
+gh api "repos/${REPO}/releases" | jq 'map({
+  version: (.tag_name | ltrimstr("v")),
+  date: (.published_at | split("T")[0]),
+  changes: (.body | split("\n") | map(select(test("^\\s*[-*]\\s+"))) | map(sub("^\\s*[-*]\\s+"; "")))
+})' > website/src/data/changelog.json
+
 # Build website
 echo "Building website..."
 cd website
@@ -80,8 +88,15 @@ cp dist.zip website/dist/updates/
 cp "${APK_PATH}" website/dist/updates/app-release.apk
 cp version.json website/dist/updates/
 
-echo "Website built with OTA files ready for deployment."
-echo "Deploy website/dist/ to EdgeOne Pages."
+# Deploy to EdgeOne Pages
+echo ""
+echo "========================================"
+echo "Deploying website to EdgeOne Pages..."
+echo "========================================"
+export PAGES_SOURCE=skills
+cd website
+edgeone pages deploy dist
+cd ..
 
 echo "Release ${TAG} published!"
-rm dist.zip version.json
+rm -f dist.zip version.json

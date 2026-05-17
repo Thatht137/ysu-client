@@ -1,4 +1,6 @@
 ---
+import '../styles/global.css';
+
 interface Props {
   title: string;
   description?: string;
@@ -25,7 +27,7 @@ const { title, description = '燕山大学教务系统第三方客户端' } = As
       })();
     </script>
   </head>
-  <body class="min-h-screen bg-background text-foreground antialiased">
+  <body class="min-h-dvh flex flex-col bg-background text-foreground antialiased">
     <slot />
   </body>
 </html>
