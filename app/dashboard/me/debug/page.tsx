@@ -10,7 +10,7 @@ import { useAuthStore } from "@/lib/auth-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { isCapacitor, isTauri, isWeb } from "@/lib/platform";
 import { getJar as getCasJar, isAuthenticated as checkCASAuth } from "@/lib/cas";
-import { getJar as getJwxtJar } from "@/lib/jwxt";
+import { getJar as getJwxtJar, resetJWXT } from "@/lib/jwxt";
 import { ensureMobileAuthorized } from "@/lib/jwmobile";
 import { loadCASTGC, loadRememberedCredentials } from "@/lib/secure-storage";
 import {
@@ -193,6 +193,12 @@ export default function DebugPage() {
     runDiagnostics();
   }
 
+  function handleClearJWXTJar() {
+    resetJWXT();
+    toast.success(t("debug.jwxtJarCleared"));
+    runDiagnostics();
+  }
+
   function statusBadge(value: boolean | null | { ok: boolean | null; error?: string }) {
     if (typeof value === "boolean") {
       if (value === true) return <Badge variant="default" className="text-[10px]">OK</Badge>;
@@ -366,10 +372,16 @@ export default function DebugPage() {
             </CardContent>
           </Card>
 
-          <Button variant="destructive" onClick={handleClearCache} className="w-full">
-            <Trash2 className="size-4 mr-2" />
-            {t("debug.clearCache")}
-          </Button>
+          <div className="flex flex-col gap-2">
+            <Button variant="destructive" onClick={handleClearCache} className="w-full">
+              <Trash2 className="size-4 mr-2" />
+              {t("debug.clearCache")}
+            </Button>
+            <Button variant="outline" onClick={handleClearJWXTJar} className="w-full">
+              <Trash2 className="size-4 mr-2" />
+              {t("debug.clearJWXTJar")}
+            </Button>
+          </div>
         </>
       )}
     </div>
