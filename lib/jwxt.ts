@@ -354,7 +354,11 @@ export class JWXTBusinessError extends JWXTError {
 // ─── JWXTSession ──────────────────────────────────────────────────────── //
 
 function isJwxtCookie(e: CookieEntry): boolean {
-  return e.domain.length > 0 && e.domain.includes(JWXT_COOKIE_DOMAIN_KEYWORD);
+  return (
+    e.domain.length > 0 &&
+    e.domain.includes(JWXT_COOKIE_DOMAIN_KEYWORD) &&
+    e.name !== '_WEU'
+  );
 }
 
 export class JWXTSession {
@@ -401,6 +405,36 @@ let jwxtJar = new SimpleCookieJar();
 let timeoutMs = 30_000;
 let hydrationDone: Promise<void> = Promise.resolve();
 
+/** Per-app WEU cookie entries, keyed by APP_IDS value. */
+const weuStore = new Map<string, CookieEntry>();
+
+/** FIFO mutex to serialize WEU swap + HTTP request cycles. */
+class AsyncMutex {
+  private _queue: Array<() => void> = [];
+  private _locked = false;
+
+  async acquire(): Promise<void> {
+    if (!this._locked) {
+      this._locked = true;
+      return;
+    }
+    return new Promise<void>((resolve) => {
+      this._queue.push(resolve);
+    });
+  }
+
+  release(): void {
+    if (this._queue.length > 0) {
+      const next = this._queue.shift()!;
+      next();
+    } else {
+      this._locked = false;
+    }
+  }
+}
+
+const weuMutex = new AsyncMutex();
+
 export function getJar(): SimpleCookieJar {
   return jwxtJar;
 }
@@ -427,6 +461,7 @@ export function resetJWXT(): void {
   authorized = false;
   ensuredWeuApps.clear();
   inflightWeu.clear();
+  weuStore.clear();
   cachedCurrentTerm = null;
   cachedStudentInfo = null;
   inflightStudentInfo = null;
@@ -520,23 +555,56 @@ function buildGradeStatsRequest(opts: {
 async function emapPost(
   url: string,
   data: Record<string, string>,
+  appId?: string,
 ): Promise<Record<string, unknown>> {
+  const doRequest = async (): Promise<Awaited<ReturnType<typeof fetchWithJar>>> => {
+    try {
+      return await fetchWithJar(jwxtJar, {
+        method: 'POST',
+        url,
+        body: new URLSearchParams(data),
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'X-Requested-With': 'XMLHttpRequest',
+          Accept: 'application/json, text/javascript, */*; q=0.01',
+        },
+        redirect: 'follow',
+        timeoutMs,
+      });
+    } catch (e) {
+      throw new JWXTProtocolError(`request failed for ${url}: ${(e as Error).message}`);
+    }
+  };
+
   let resp: Awaited<ReturnType<typeof fetchWithJar>>;
-  try {
-    resp = await fetchWithJar(jwxtJar, {
-      method: 'POST',
-      url,
-      body: new URLSearchParams(data),
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        Accept: 'application/json, text/javascript, */*; q=0.01',
-      },
-      redirect: 'follow',
-      timeoutMs,
-    });
-  } catch (e) {
-    throw new JWXTProtocolError(`request failed for ${url}: ${(e as Error).message}`);
+
+  if (appId) {
+    // Swap the correct per-app _WEU into the shared jar under mutex.
+    await weuMutex.acquire();
+    try {
+      const entry = weuStore.get(appId);
+      if (entry) {
+        // Remove any existing _WEU cookie(s) from the jar.
+        const allCookies = await jwxtJar.getAllCookies();
+        for (const c of allCookies) {
+          if (c.name === '_WEU') {
+            await jwxtJar.removeCookie(c.domain, c.path, '_WEU');
+          }
+        }
+        // Install the correct per-app _WEU.
+        const host = entry.domain.replace(/^\./, '') || 'localhost';
+        await jwxtJar.setCookie(
+          `_WEU=${entry.value}; Domain=${entry.domain}; Path=${entry.path}`,
+          `https://${host}${entry.path}`,
+          { ignoreError: true },
+        );
+      }
+      resp = await doRequest();
+    } finally {
+      weuMutex.release();
+    }
+  } else {
+    resp = await doRequest();
   }
 
   if (resp.status === 401 || resp.status === 403) {
@@ -609,6 +677,8 @@ async function reauthorize(): Promise<void> {
     }
   }
   await authorize(JWXT_PORTAL_URL, jwxtJar);
+  ensuredWeuApps.clear();
+  weuStore.clear();
 }
 
 const ensuredWeuApps = new Set<string>();
@@ -625,9 +695,15 @@ async function ensureWeu(appId: string): Promise<void> {
   const promise = (async () => {
     const url = `${APP_SHOW_URL}?id=${encodeURIComponent(appId)}`;
     try {
-      // _WEU is issued in the appShow.do 302 response; no need to follow
-      // the redirect to *default/index.do, which only returns HTML.
-      await fetchWithJar(jwxtJar, {
+      // Use a temporary jar to avoid clobbering other apps' _WEU in the shared jar.
+      const tempJar = new SimpleCookieJar();
+      const sessionCookies = await collectCookies(
+        jwxtJar,
+        (e) => e.name !== '_WEU',
+      );
+      await installCookies(tempJar, sessionCookies);
+
+      await fetchWithJar(tempJar, {
         method: 'GET',
         url,
         headers: {
@@ -636,10 +712,18 @@ async function ensureWeu(appId: string): Promise<void> {
         redirect: 'manual',
         timeoutMs,
       });
-      ensuredWeuApps.add(appId);
+
+      // Extract _WEU from the temp jar and store it per-app.
+      const tempCookies = await collectCookies(
+        tempJar,
+        (e) => e.name === '_WEU',
+      );
+      if (tempCookies.length > 0) {
+        weuStore.set(appId, tempCookies[0]!);
+        ensuredWeuApps.add(appId);
+      }
     } catch {
-      // appShow 可能 302 跳转或失败,_WEU 在 cookie jar 上下发了就行
-      // 网络级失败时不标记,下次调用会重试
+      // appShow may fail; WEU will be retried on next call.
     }
   })();
 
@@ -666,9 +750,10 @@ export async function warmupWEU(): Promise<void> {
 async function post(
   path: string,
   data: Record<string, string> = {},
+  appId?: string,
 ): Promise<Record<string, unknown>> {
   const url = buildApiUrl(path);
-  return emapPost(url, data);
+  return emapPost(url, data, appId);
 }
 
 let cachedCurrentTerm: string | null = null;
@@ -687,7 +772,7 @@ async function getCurrentTerm(
   inflightCurrentTerm = (async () => {
     try {
       await ensureWeu(appId);
-      const datas = await post(API_PATHS[pathKey]);
+      const datas = await post(API_PATHS[pathKey], {}, appId);
       const segments = pathKey.split('_');
       const tail = segments[segments.length - 1]!;
       const rows = extractRows(datas, tail);
@@ -738,7 +823,7 @@ export async function queryStudentInfo(): Promise<StudentInfo> {
           pageSize: '12',
           pageNumber: '1',
         };
-        const datas = await post(API_PATHS.xsjbxx, data);
+        const datas = await post(API_PATHS.xsjbxx, data, APP_IDS.xsjbxxgl);
         const rows = extractRows(datas, 'cxxsjbxxlb');
         if (rows.length === 0) {
           throw new JWXTProtocolError('queryStudentInfo returned empty result');
@@ -823,7 +908,7 @@ export async function queryGrades(opts?: {
       pageNumber: String(pageNumber),
       '*order': '-XNXQDM,-KCH,-KXH',
     };
-    const datas = await post(API_PATHS.cjcx, data);
+    const datas = await post(API_PATHS.cjcx, data, APP_IDS.cjcx);
     const rows = extractRows(datas, 'xscjcx');
     return rows.map((r) => parseGrade(r as Record<string, unknown>));
   });
@@ -842,7 +927,7 @@ export async function queryGpaStats(opts?: { studentId?: string }): Promise<GPAS
     const data: Record<string, string> = {};
     for (let i = 1; i <= 6; i++) data[`XH${i}`] = studentId;
 
-    const datas = await post(API_PATHS.cjcx_gpa, data);
+    const datas = await post(API_PATHS.cjcx_gpa, data, APP_IDS.cjcx);
     const rows = extractRows(datas, 'cxzxfaxfjd');
     if (rows.length === 0) {
       throw new JWXTProtocolError('queryGpaStats returned empty result');
@@ -867,7 +952,7 @@ export async function queryGradeStatistics(opts?: {
       classId: opts?.classId,
       courseCode: opts?.courseCode,
     });
-    const datas = await post(API_PATHS.jxbcjtjcx, payload);
+    const datas = await post(API_PATHS.jxbcjtjcx, payload, APP_IDS.cjcx);
     const rows = extractRows(datas, 'jxbcjtjcx');
     if (rows.length === 0) {
       throw new JWXTProtocolError('queryGradeStatistics returned empty result');
@@ -893,7 +978,7 @@ export async function queryGradeDistribution(opts?: {
       courseCode: opts?.courseCode,
     });
     payload['*order'] = '+DJDM';
-    const datas = await post(API_PATHS.jxbcjfbcx, payload);
+    const datas = await post(API_PATHS.jxbcjfbcx, payload, APP_IDS.cjcx);
     const rows = extractRows(datas, 'jxbcjfbcx');
     return rows.map((r) => parseGradeDistribution(r as Record<string, unknown>));
   });
@@ -924,7 +1009,7 @@ export async function queryGradeRanking(opts?: {
       courseCode: opts?.courseCode,
     });
     payload['XH'] = studentId;
-    const datas = await post(API_PATHS.jxbxspmcx, payload);
+    const datas = await post(API_PATHS.jxbxspmcx, payload, APP_IDS.cjcx);
     const rows = extractRows(datas, 'jxbxspmcx');
     if (rows.length === 0) {
       throw new JWXTProtocolError('queryGradeRanking returned empty result');
@@ -942,7 +1027,7 @@ export async function querySchedule(opts?: { term?: string }): Promise<Course[]>
     if (term === undefined) {
       term = await getCurrentTerm(APP_IDS.studentWdksapApp, 'wdksap_dqxnxq');
     }
-    const datas = await post(API_PATHS.wdkb, { XNXQDM: term });
+    const datas = await post(API_PATHS.wdkb, { XNXQDM: term }, APP_IDS.wdkb);
     const rows = extractRows(datas, 'cxxszhxqkb');
     return rows.map((r) => parseCourse(r as Record<string, unknown>));
   });
@@ -1002,7 +1087,7 @@ async function queryCoursesByKblb(args: {
       XNXQDM: term,
       XH: studentId,
       KBLB: kblb,
-    });
+    }, APP_IDS.wdkb_sy);
     const rows = extractRows(datas, rowKey);
     return rows.map((r) => parseCourse(r as Record<string, unknown>));
   });
@@ -1011,7 +1096,7 @@ async function queryCoursesByKblb(args: {
 export async function queryClassPeriods(): Promise<ClassPeriod[]> {
   return runWithReauth(async () => {
     await ensureWeu(APP_IDS.wdkb);
-    const datas = await post(API_PATHS.jc);
+    const datas = await post(API_PATHS.jc, {}, APP_IDS.wdkb);
     const rows = extractRows(datas, 'jc');
     return rows.map((r) => parseClassPeriod(r as Record<string, unknown>));
   });
@@ -1025,7 +1110,7 @@ export async function queryTermCalendar(opts?: { term?: string }): Promise<TermC
       term = await getCurrentTerm(APP_IDS.studentWdksapApp, 'wdksap_dqxnxq');
     }
     const { xn, xq } = splitTerm(term);
-    const datas = await post(API_PATHS.cxxljc, { XN: xn, XQ: xq });
+    const datas = await post(API_PATHS.cxxljc, { XN: xn, XQ: xq }, APP_IDS.wdkb);
     const rows = extractRows(datas, 'cxxljc');
     if (rows.length === 0) {
       throw new JWXTProtocolError('queryTermCalendar returned empty result');
@@ -1052,7 +1137,7 @@ export async function queryCurrentWeek(opts?: {
     inflightCurrentWeek = (async () => {
       try {
         const { xn, xq } = splitTerm(term!);
-        const datas = await post(API_PATHS.dqzc, { XN: xn, XQ: xq, RQ: date });
+        const datas = await post(API_PATHS.dqzc, { XN: xn, XQ: xq, RQ: date }, APP_IDS.wdkb);
         const rows = extractRows(datas, 'dqzc');
         if (rows.length === 0) {
           throw new JWXTProtocolError('queryCurrentWeek returned empty result');
@@ -1084,7 +1169,7 @@ export async function queryExams(opts?: { term?: string }): Promise<Exam[]> {
     };
     const datas = await post(API_PATHS.wdksap, {
       requestParamStr: JSON.stringify(param),
-    });
+    }, APP_IDS.studentWdksapApp);
     const rows = extractRows(datas, 'cxxsksap');
     return rows.map((r) => parseExam(r as Record<string, unknown>));
   });
@@ -1102,7 +1187,7 @@ export async function queryTrainingPlan(opts?: {
   return runWithReauth(async () => {
     await ensureWeu(APP_IDS.xsfacx);
 
-    const firstDatas = await post(API_PATHS.pyfa);
+    const firstDatas = await post(API_PATHS.pyfa, {}, APP_IDS.xsfacx);
     const planRows = extractRows(firstDatas, 'grpyfacx');
     if (planRows.length === 0) {
       throw new JWXTProtocolError('queryTrainingPlan: no training plan found');
@@ -1116,7 +1201,7 @@ export async function queryTrainingPlan(opts?: {
       PYFADM: pyfadm,
       pageSize: String(pageSize),
       pageNumber: String(pageNumber),
-    });
+    }, APP_IDS.xsfacx);
     const rows = extractRows(datas, 'kzkccx');
     return rows.map((r) => parseTrainingPlan(r as Record<string, unknown>));
   });
@@ -1128,7 +1213,7 @@ export async function queryAcademicCompletion(): Promise<AcademicCompletion> {
     const datas = await post(API_PATHS.xywc, {
       SCLBDM: '04',
       '*order': '-CZSJ',
-    });
+    }, APP_IDS.xywccx);
     const rows = extractRows(datas, 'cxxsscfa');
     if (rows.length === 0) {
       throw new JWXTProtocolError('queryAcademicCompletion returned empty result');
@@ -1140,7 +1225,7 @@ export async function queryAcademicCompletion(): Promise<AcademicCompletion> {
 export async function queryAcademicWarnings(): Promise<AcademicWarning[]> {
   return runWithReauth(async () => {
     await ensureWeu(APP_IDS.xyyj);
-    const datas = await post(API_PATHS.xyyj);
+    const datas = await post(API_PATHS.xyyj, {}, APP_IDS.xyyj);
     const rows = extractRows(datas, 'cxxsyjpcjg');
     return rows.map((r) => parseAcademicWarning(r as Record<string, unknown>));
   });
@@ -1155,7 +1240,7 @@ export async function queryEvaluationTypes(opts?: { term?: string }): Promise<Ev
     if (term === undefined) {
       term = await getCurrentTerm(APP_IDS.studentWdksapApp, 'wdksap_dqxnxq');
     }
-    const datas = await post(API_PATHS.pjlx, { XNXQDM: term });
+    const datas = await post(API_PATHS.pjlx, { XNXQDM: term }, APP_IDS.pjapp);
     const rows = extractRows(datas, 'getPjlx');
     return rows.map((r) => parseEvaluationType(r as Record<string, unknown>));
   });
@@ -1182,7 +1267,7 @@ export async function queryPendingEvaluations(
     const datas = await post(API_PATHS.dpwj, {
       PJLXDM: evalType,
       querySetting: JSON.stringify(query),
-    });
+    }, APP_IDS.pjapp);
     const rows = extractRows(datas, 'getDpwj');
     return rows.map((r) => parseEvaluationTask(r as Record<string, unknown>));
   });
@@ -1200,7 +1285,7 @@ export async function getEvaluationDetail(
       GROUPNO: groupNo,
       PJLXDM: evalType,
       XUH: String(sequence),
-    });
+    }, APP_IDS.pjapp);
     const raw = datas['getWjtxxx'];
     if (!raw || typeof raw !== 'object') {
       throw new JWXTProtocolError('getEvaluationDetail returned empty result');
@@ -1240,6 +1325,7 @@ export async function calculateEvaluationScore(
         teacherName,
         sequence,
       }),
+      APP_IDS.pjapp,
     );
   });
 }
@@ -1275,6 +1361,7 @@ export async function submitEvaluation(
         teacherName,
         sequence,
       }),
+      APP_IDS.pjapp,
     );
   });
 }
