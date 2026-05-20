@@ -5,8 +5,44 @@ VERSION=$(node -p "require('./package.json').version")
 TAG="v${VERSION}"
 REPO="Youwenqwq/ysu-client"
 
-# Preflight: ensure gh is authenticated
+# Preflight checks
+echo "Running preflight checks..."
+
+# Ensure gh is authenticated
 gh auth status || { echo "Error: gh CLI not authenticated. Run 'gh auth login'."; exit 1; }
+
+# Ensure on main branch
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [[ "${CURRENT_BRANCH}" != "main" ]]; then
+  echo "Error: Must be on main branch, currently on '${CURRENT_BRANCH}'."
+  exit 1
+fi
+
+# Ensure working directory is clean
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "Error: Working directory has uncommitted changes. Commit or stash them first."
+  exit 1
+fi
+
+# Ensure current commit is pushed to origin
+LOCAL_COMMIT=$(git rev-parse HEAD)
+REMOTE_COMMIT=$(git rev-parse origin/main 2>/dev/null || echo "")
+if [[ "${LOCAL_COMMIT}" != "${REMOTE_COMMIT}" ]]; then
+  echo "Error: Current commit is not pushed to origin/main. Push first: git push origin main"
+  exit 1
+fi
+
+# Ensure tag does not already exist (local or remote)
+if git rev-parse "${TAG}" >/dev/null 2>&1; then
+  echo "Error: Tag ${TAG} already exists locally."
+  exit 1
+fi
+if git ls-remote --tags origin "refs/tags/${TAG}" | grep -q .; then
+  echo "Error: Tag ${TAG} already exists on remote."
+  exit 1
+fi
+
+echo "Preflight checks passed."
 
 # Temp file cleanup trap
 cleanup() {
@@ -36,6 +72,7 @@ APK_VERSION_CODE=$(( V_MAJOR * 10000 + V_MINOR * 100 + V_PATCH ))
 
 echo "Creating GitHub release ${TAG}..."
 gh release create "${TAG}" dist.zip "${APK_PATH}" \
+  --target "$(git rev-parse HEAD)" \
   --title "${TAG}" \
   --generate-notes \
   --latest
