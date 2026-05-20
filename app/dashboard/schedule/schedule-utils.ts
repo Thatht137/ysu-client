@@ -1,5 +1,47 @@
 import type { Course, ClassPeriod } from "@/lib/types";
 
+export function parseTimeToMinutes(timeStr: string | undefined): number | null {
+  if (!timeStr) return null;
+  const [h, m] = timeStr.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
+}
+
+export function buildSectionTimeMap(periods: ClassPeriod[]): Record<number, [number, number]> {
+  const map: Record<number, [number, number]> = {};
+  for (const p of periods) {
+    const start = parseTimeToMinutes(p.start_time);
+    const end = parseTimeToMinutes(p.end_time);
+    if (start !== null && end !== null) {
+      map[p.section] = [start, end];
+    }
+  }
+  return map;
+}
+
+export function isCoursePast(
+  course: Course,
+  nowMinutes: number,
+  timeMap: Record<number, [number, number]>,
+): boolean {
+  const endRange = timeMap[course.end_section];
+  return !!endRange && nowMinutes > endRange[1];
+}
+
+export function isCourseCurrent(
+  course: Course,
+  nowMinutes: number,
+  timeMap: Record<number, [number, number]>,
+): boolean {
+  for (let s = course.start_section; s <= course.end_section; s++) {
+    const range = timeMap[s];
+    if (range && nowMinutes >= range[0] && nowMinutes <= range[1]) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function parseWeeks(weeksStr: string): number[] {
   const result = new Set<number>();
   if (!weeksStr) return [];

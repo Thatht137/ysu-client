@@ -11,10 +11,12 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/use-translation";
+import { useSettingsStore } from "@/lib/settings-store";
 
 export function MobileBottomNav() {
   const pathname = usePathname();
   const { t } = useTranslation();
+  const hasBackground = useSettingsStore((s) => !!s.backgroundImage);
 
   const tabs = [
     { href: "/dashboard", label: t("app.overview"), icon: LayoutDashboard },
@@ -30,7 +32,12 @@ export function MobileBottomNav() {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 pb-[env(safe-area-inset-bottom)] md:hidden"
+      className={cn(
+        "fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-border backdrop-blur pb-[env(safe-area-inset-bottom)] md:hidden",
+        hasBackground
+          ? "bg-background/60 supports-[backdrop-filter]:bg-background/40"
+          : "bg-background/95 supports-[backdrop-filter]:bg-background/80",
+      )}
       aria-label="Primary"
     >
       {tabs.map((tab) => {

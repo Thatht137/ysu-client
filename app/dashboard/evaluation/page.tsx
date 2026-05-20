@@ -255,13 +255,31 @@ export default function EvaluationPage() {
     return Object.values(answers);
   }
 
-  function autoFillMaxScore(targetAnswers?: Record<string, EvaluationAnswer>, targetDetail?: EvaluationDetail | null, textAnswer?: string): Record<string, EvaluationAnswer> {
+  function autoFillMaxScore(
+    targetAnswers?: Record<string, EvaluationAnswer>,
+    targetDetail?: EvaluationDetail | null,
+    textAnswer?: string,
+  ): { answers: Record<string, EvaluationAnswer>; skipped: Question[] } {
     const d = targetDetail || detail;
-    if (!d) return {};
-    const next: Record<string, EvaluationAnswer> = targetAnswers ? { ...targetAnswers } : { ...answers };
+    if (!d) return { answers: {}, skipped: [] };
+    const next: Record<string, EvaluationAnswer> = targetAnswers
+      ? { ...targetAnswers }
+      : { ...answers };
+    const skipped: Question[] = [];
     const text = textAnswer?.trim() || "优秀";
     for (const q of d.questions) {
       if (q.question_type === "01") {
+        const allZero = q.options.length > 0 && q.options.every((o) => o.score === 0);
+        if (allZero) {
+          next[q.tmid] = {
+            tmid: q.tmid,
+            question_type: q.question_type || "",
+            option_ids: [],
+            text: "",
+          };
+          skipped.push(q);
+          continue;
+        }
         const best = q.options.length > 0
           ? [...q.options].sort((a, b) => b.score - a.score)[0]
           : null;
@@ -272,6 +290,17 @@ export default function EvaluationPage() {
           text: "",
         };
       } else if (q.question_type === "07") {
+        const allZero = q.options.length > 0 && q.options.every((o) => o.score === 0);
+        if (allZero) {
+          next[q.tmid] = {
+            tmid: q.tmid,
+            question_type: q.question_type || "",
+            option_ids: [],
+            text: "",
+          };
+          skipped.push(q);
+          continue;
+        }
         const positive = q.options.filter((o) => o.score > 0);
         const toSelect = positive.length > 0 ? positive : q.options;
         next[q.tmid] = {
@@ -289,13 +318,18 @@ export default function EvaluationPage() {
         };
       }
     }
-    return next;
+    return { answers: next, skipped };
   }
 
   function applyAutoFill() {
-    const next = autoFillMaxScore();
+    const { answers: next, skipped } = autoFillMaxScore();
     setAnswers(next);
-    toast.success(t("evaluation.fillSuccess"));
+    if (skipped.length > 0) {
+      const names = skipped.map((q) => `${q.order}. ${q.text || ""}`).join("\n");
+      toast.warning(t("evaluation.autoFillSkipped", { count: skipped.length }) + "\n" + names);
+    } else {
+      toast.success(t("evaluation.fillSuccess"));
+    }
   }
 
   function validateAnswers(targetAnswers?: Record<string, EvaluationAnswer>, targetDetail?: EvaluationDetail | null): string | null {
@@ -457,7 +491,19 @@ export default function EvaluationPage() {
             text: "",
           };
         }
-        const filled = autoFillMaxScore(initial, d, textAnswer);
+        const { answers: filled, skipped } = autoFillMaxScore(initial, d, textAnswer);
+        if (skipped.length > 0) {
+          const names = skipped.map((q) => `${q.order}. ${q.text || ""}`).join("\n");
+          results[i] = {
+            ...results[i],
+            detail: d,
+            answers: filled,
+            status: "failed",
+            error: t("evaluation.autoFillSkipped", { count: skipped.length }) + "\n" + names,
+          };
+          setBatchTasks([...results]);
+          continue;
+        }
         const err = validateAnswers(filled, d);
         if (err) {
           results[i] = { ...results[i], detail: d, answers: filled, status: "failed", error: err };

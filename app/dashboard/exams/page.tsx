@@ -32,12 +32,31 @@ import {
   Search,
 } from "lucide-react";
 
+function getExamEndTime(exam: Exam): Date | null {
+  if (!exam.exam_date) return null;
+  const base = new Date(exam.exam_date.replace(/-/g, "/"));
+  if (Number.isNaN(base.getTime())) return null;
+
+  if (exam.exam_time) {
+    const times = exam.exam_time.match(/\d{1,2}:\d{2}/g);
+    if (times && times.length >= 2) {
+      const [h, m] = times[times.length - 1].split(":").map(Number);
+      base.setHours(h, m, 0, 0);
+      return base;
+    } else if (times && times.length === 1) {
+      const [h, m] = times[0].split(":").map(Number);
+      base.setHours(h, m, 0, 0);
+      return base;
+    }
+  }
+  base.setHours(23, 59, 59, 999);
+  return base;
+}
+
 function isExamCompleted(exam: Exam): boolean {
-  if (!exam.exam_date) return false;
-  const examDate = new Date(exam.exam_date.replace(/-/g, "/"));
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  return examDate < today;
+  const end = getExamEndTime(exam);
+  if (!end) return false;
+  return end < new Date();
 }
 
 export default function ExamsPage() {

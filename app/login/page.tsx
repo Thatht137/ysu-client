@@ -142,8 +142,11 @@ export default function LoginPage() {
           }
           toast.success(t("login.loginSuccess"));
           router.replace("/dashboard");
-        } catch {
-          // user cancelled MFA modal
+        } catch (err) {
+          if (err instanceof Error) {
+            toast.error(err.message || t("login.errorMfaVerifyFailed"));
+          }
+          // 用户取消时 err 为 undefined，静默处理
         }
         return;
       }

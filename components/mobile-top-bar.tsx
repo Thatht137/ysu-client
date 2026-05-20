@@ -3,8 +3,10 @@
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { useMobileHeaderStore } from "@/lib/mobile-header-store";
+import { useSettingsStore } from "@/lib/settings-store";
 import { RefreshIndicator } from "@/components/refresh-indicator";
 import { StaleIndicator } from "@/components/stale-indicator";
+import { cn } from "@/lib/utils";
 
 interface Props {
   title: string;
@@ -14,9 +16,17 @@ interface Props {
 export function MobileTopBar({ title, showBack }: Props) {
   const router = useRouter();
   const rightSlot = useMobileHeaderStore((s) => s.rightSlot);
+  const hasBackground = useSettingsStore((s) => !!s.backgroundImage);
 
   return (
-    <header className="fixed top-0 z-30 flex h-12 w-full items-center justify-between gap-3 bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden">
+    <header
+      className={cn(
+        "fixed top-0 z-30 flex h-12 w-full items-center justify-between gap-3 px-4 backdrop-blur md:hidden",
+        hasBackground
+          ? "bg-background/60 supports-[backdrop-filter]:bg-background/40"
+          : "bg-background/95 supports-[backdrop-filter]:bg-background/80",
+      )}
+    >
       <div className="flex min-w-0 flex-1 items-center gap-2">
         {showBack && (
           <button

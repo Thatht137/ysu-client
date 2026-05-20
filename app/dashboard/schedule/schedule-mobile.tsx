@@ -19,7 +19,7 @@ import { CalendarOff, Layers } from "lucide-react";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 import type { ClassPeriod, Course, CurrentWeek } from "@/lib/types";
-import { computeMergedBlocks, type ScheduleBlock } from "./schedule-utils";
+import { computeMergedBlocks, buildSectionTimeMap, isCourseCurrent, type ScheduleBlock } from "./schedule-utils";
 import { COURSE_BG_CLASSES, courseColorIndex } from "./course-color";
 import { ActivityModal } from "./activity-modal";
 import { SigninModal } from "./signin-modal";
@@ -30,6 +30,7 @@ interface Props {
   currentWeekday: number;
   currentWeek: CurrentWeek | null;
   selectedWeek: number;
+  nowMinutes: number;
   onPrevWeek?: () => void;
   onNextWeek?: () => void;
 }
@@ -63,6 +64,7 @@ export function ScheduleMobile({
   currentWeekday,
   currentWeek,
   selectedWeek,
+  nowMinutes,
   onPrevWeek,
   onNextWeek,
 }: Props) {
@@ -106,6 +108,13 @@ export function ScheduleMobile({
   );
 
   const isCurrentWeek = currentWeek?.week === selectedWeek;
+  const timeMap = useMemo(() => buildSectionTimeMap(periods), [periods]);
+
+  const isBlockCurrent = (block: ScheduleBlock): boolean => {
+    if (!isCurrentWeek || block.day !== currentWeek?.weekday) return false;
+    if (block.courses.length !== 1) return false;
+    return isCourseCurrent(block.courses[0], nowMinutes, timeMap);
+  };
 
   const { sectionToRow, totalRows, lunchRow, dinnerRow } = useMemo(() => {
     const map = new Map<number, number>();
@@ -272,6 +281,7 @@ export function ScheduleMobile({
                 className={cn(
                   "relative z-10 m-0.5 flex flex-col gap-0.5 overflow-hidden rounded-md p-1 text-left transition-opacity active:opacity-60",
                   COURSE_BG_CLASSES[colorIdx],
+                  isBlockCurrent(block) && "ring-1 ring-primary",
                 )}
                 style={blockStyle(block)}
               >

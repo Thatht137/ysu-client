@@ -35,6 +35,7 @@ import {
   User,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/auth-store";
+import { useSettingsStore } from "@/lib/settings-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { getStudentInfo } from "@/lib/api";
 import { cacheGet, cacheSet, cacheKey } from "@/lib/cache";
@@ -50,6 +51,7 @@ export default function MePage() {
   const username = useAuthStore((s) => s.username);
   const clearCredential = useAuthStore((s) => s.clearCredential);
   const hasUpdate = useUpdateStore((s) => s.hasUpdate);
+  const backgroundImage = useSettingsStore((s) => s.backgroundImage);
   const { t, locale, setLocale } = useTranslation();
   const { theme, setTheme } = useTheme();
 
@@ -219,6 +221,21 @@ export default function MePage() {
                 <ToggleGroupItem value="en">EN</ToggleGroupItem>
               </ToggleGroup>
             </div>
+            <Link
+              href="/dashboard/me/background"
+              className="flex items-center justify-between gap-3 py-1 transition-colors active:opacity-70"
+            >
+              <span className="text-sm">{t("app.backgroundImage")}</span>
+              <div className="flex items-center gap-2">
+                {backgroundImage && (
+                  <div
+                    className="size-8 rounded-md border bg-cover bg-center"
+                    style={{ backgroundImage: `url(${backgroundImage})` }}
+                  />
+                )}
+                <ChevronRight className="size-4 text-muted-foreground" />
+              </div>
+            </Link>
           </CardContent>
         </Card>
       </Section>
