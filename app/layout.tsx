@@ -9,6 +9,7 @@ import { I18nProvider } from "@/lib/i18n/context"
 import { SDKProvider } from "@/components/sdk-provider"
 import { MFAModal } from "@/components/mfa-modal"
 import { BackgroundImage } from "@/components/background-image"
+import { BackButtonHandler } from "@/components/back-button-handler"
 import { cn } from "@/lib/utils";
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' })
@@ -53,6 +54,7 @@ export default function RootLayout({
             <SDKProvider>
               <TooltipProvider>
                 <BackgroundImage />
+                <BackButtonHandler />
                 {children}
                 <Toaster />
                 <MFAModal />
