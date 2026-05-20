@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -44,6 +44,19 @@ export default function SchedulePage() {
   const [term, setTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+
+  const [nowMinutes, setNowMinutes] = useState(() => {
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes();
+  });
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const now = new Date();
+      setNowMinutes(now.getHours() * 60 + now.getMinutes());
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   function shiftWeek(delta: number) {
     setSelectedWeek((w) => Math.max(1, (w || 1) + delta));
@@ -238,6 +251,7 @@ export default function SchedulePage() {
             currentWeekday={currentWeekday}
             currentWeek={currentWeek}
             selectedWeek={selectedWeek}
+            nowMinutes={nowMinutes}
             onPrevWeek={() => shiftWeek(-1)}
             onNextWeek={() => shiftWeek(1)}
           />
@@ -249,7 +263,9 @@ export default function SchedulePage() {
               courses={filteredCourses}
               periods={periods}
               currentWeekday={currentWeekday}
+              currentWeek={currentWeek}
               selectedWeek={selectedWeek}
+              nowMinutes={nowMinutes}
             />
           </CardContent>
         </Card>

@@ -13,8 +13,9 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CalendarOff } from "lucide-react";
 import { useTranslation } from "@/lib/i18n/use-translation";
-import type { Course, ClassPeriod } from "@/lib/types";
-import { computeMergedBlocks, type ScheduleBlock } from "./schedule-utils";
+import { cn } from "@/lib/utils";
+import type { Course, ClassPeriod, CurrentWeek } from "@/lib/types";
+import { computeMergedBlocks, buildSectionTimeMap, isCourseCurrent, type ScheduleBlock } from "./schedule-utils";
 import { ActivityModal } from "./activity-modal";
 import { SigninModal } from "./signin-modal";
 
@@ -22,10 +23,12 @@ interface Props {
   courses: Course[];
   periods: ClassPeriod[];
   currentWeekday: number;
+  currentWeek: CurrentWeek | null;
   selectedWeek: number;
+  nowMinutes: number;
 }
 
-export function ScheduleDesktop({ courses, periods, currentWeekday, selectedWeek }: Props) {
+export function ScheduleDesktop({ courses, periods, currentWeekday, currentWeek, selectedWeek, nowMinutes }: Props) {
   const { t } = useTranslation();
   const [overlapDialog, setOverlapDialog] = useState<{ day: number; section: number; courses: Course[] } | null>(null);
   const [activityCourse, setActivityCourse] = useState<Course | null>(null);
@@ -33,6 +36,15 @@ export function ScheduleDesktop({ courses, periods, currentWeekday, selectedWeek
   const [signinActivityId, setSigninActivityId] = useState<string | null>(null);
   const [signinType, setSigninType] = useState(1);
   const [signinOpen, setSigninOpen] = useState(false);
+
+  const isCurrentWeek = currentWeek?.week === selectedWeek;
+  const timeMap = useMemo(() => buildSectionTimeMap(periods), [periods]);
+
+  const isBlockCurrent = (block: ScheduleBlock): boolean => {
+    if (!isCurrentWeek || block.day !== currentWeek?.weekday) return false;
+    if (block.courses.length !== 1) return false;
+    return isCourseCurrent(block.courses[0], nowMinutes, timeMap);
+  };
 
   const WEEKDAYS = [
     "",
@@ -116,7 +128,12 @@ export function ScheduleDesktop({ courses, periods, currentWeekday, selectedWeek
             >
               {block.courses.length === 1 ? (
                 <button
-                  className="h-full w-full rounded-md bg-primary/10 p-2 flex flex-col justify-center gap-0.5 overflow-hidden text-left hover:bg-primary/15 transition-colors"
+                  className={cn(
+                    "h-full w-full rounded-md p-2 flex flex-col justify-center gap-0.5 overflow-hidden text-left transition-colors",
+                    isBlockCurrent(block)
+                      ? "bg-primary/20 ring-1 ring-primary hover:bg-primary/25"
+                      : "bg-primary/10 hover:bg-primary/15",
+                  )}
                   onClick={() => {
                     setActivityCourse(block.courses[0]);
                     setActivityOpen(true);

@@ -9,30 +9,17 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuthStore } from "@/lib/auth-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
-import { getStudentInfo, getCurrentWeek, getGPAStats, getExperimentalSchedule, getExams } from "@/lib/api";
+import { getStudentInfo, getCurrentWeek, getGPAStats, getExperimentalSchedule, getExams, getClassPeriods } from "@/lib/api";
 import { cacheGet, cacheSet, cacheKey } from "@/lib/cache";
 import { useRefreshStore } from "@/lib/refresh-store";
 import { cn } from "@/lib/utils";
-import { isCourseActiveInWeek } from "@/app/dashboard/schedule/schedule-utils";
-import type { StudentInfo, CurrentWeek, GPAStats, Course, Exam } from "@/lib/types";
+import { isCourseActiveInWeek, buildSectionTimeMap, isCoursePast } from "@/app/dashboard/schedule/schedule-utils";
+import type { StudentInfo, CurrentWeek, GPAStats, Course, Exam, ClassPeriod } from "@/lib/types";
 import { Calendar, GraduationCap, BarChart3, Clock, BookOpen, Eye, EyeOff } from "lucide-react";
 
 function isCourseActiveToday(course: Course, currentWeek: number, currentWeekday: number): boolean {
   if (course.week_day !== currentWeekday) return false;
   return isCourseActiveInWeek(course, currentWeek);
-}
-
-const SECTION_TIME_MAP: Record<number, [number, number]> = {
-  1: [480, 575], 2: [480, 575],
-  3: [600, 695], 4: [600, 695],
-  5: [840, 935], 6: [840, 935],
-  7: [960, 1055], 8: [960, 1055],
-  9: [1140, 1235], 10: [1140, 1235],
-};
-
-function isCoursePast(course: Course, nowMinutes: number): boolean {
-  const endRange = SECTION_TIME_MAP[course.end_section];
-  return !!endRange && nowMinutes > endRange[1];
 }
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 2, delay = 800): Promise<T> {
@@ -80,6 +67,7 @@ export default function DashboardPage() {
   const [gpa, setGpa] = useState<GPAStats | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
+  const [periods, setPeriods] = useState<ClassPeriod[]>([]);
   const [loading, setLoading] = useState(true);
   const [showGPA, setShowGPA] = useState(false);
 
@@ -91,15 +79,17 @@ export default function DashboardPage() {
     const cachedGpa = cacheGet<GPAStats>(cacheKey(["gpa", credential]));
     const cachedCourses = cacheGet<Course[]>(cacheKey(["schedule", credential]));
     const cachedExams = cacheGet<Exam[]>(cacheKey(["exams", credential]));
+    const cachedPeriods = cacheGet<ClassPeriod[]>(cacheKey(["periods", credential]));
 
     if (cachedStudent) setStudent(cachedStudent);
     if (cachedWeek) setCurrentWeek(cachedWeek);
     if (cachedGpa) setGpa(cachedGpa);
     if (cachedCourses) setCourses(cachedCourses);
     if (cachedExams) setExams(cachedExams);
+    if (cachedPeriods) setPeriods(cachedPeriods);
 
     let refreshing = false;
-    const hasCache = cachedStudent || cachedWeek || cachedGpa || cachedCourses || cachedExams;
+    const hasCache = cachedStudent || cachedWeek || cachedGpa || cachedCourses || cachedExams || cachedPeriods;
     if (hasCache) {
       setLoading(false);
       useRefreshStore.getState().start();
@@ -108,12 +98,13 @@ export default function DashboardPage() {
 
     async function load() {
       try {
-        const [s, w, g, c, e] = await Promise.all([
+        const [s, w, g, c, e, p] = await Promise.all([
           withRetry(() => getStudentInfo(credential!)),
           withRetry(() => getCurrentWeek(credential!)).catch(() => null),
           withRetry(() => getGPAStats(credential!)).catch(() => null),
           withRetry(() => getExperimentalSchedule(credential!, undefined, "all")).catch(() => null),
           withRetry(() => getExams(credential!)).catch(() => null),
+          withRetry(() => getClassPeriods(credential!)).catch(() => null),
         ]);
         setStudent(s);
         if (w !== null) {
@@ -131,6 +122,11 @@ export default function DashboardPage() {
         if (e !== null) {
           setExams(e);
           cacheSet(cacheKey(["exams", credential!]), e);
+        }
+        if (p !== null) {
+          const activePeriods = p.filter((x) => x.is_in_use).sort((a, b) => a.section - b.section);
+          setPeriods(activePeriods);
+          cacheSet(cacheKey(["periods", credential!]), activePeriods);
         }
         cacheSet(cacheKey(["student", credential!]), s);
         useRefreshStore.getState().markFresh();
@@ -190,17 +186,20 @@ export default function DashboardPage() {
     return () => clearInterval(id);
   }, []);
 
+  const timeMap = useMemo(() => buildSectionTimeMap(periods), [periods]);
+
   const currentCourse = useMemo(() => {
+    if (Object.keys(timeMap).length === 0) return null;
     for (const c of todayCourses) {
       for (let s = c.start_section; s <= c.end_section; s++) {
-        const range = SECTION_TIME_MAP[s];
+        const range = timeMap[s];
         if (range && nowMinutes >= range[0] && nowMinutes <= range[1]) {
           return c;
         }
       }
     }
     return null;
-  }, [todayCourses, nowMinutes]);
+  }, [todayCourses, nowMinutes, timeMap]);
 
   if (loading) {
     return (
@@ -348,10 +347,8 @@ export default function DashboardPage() {
           ) : (
             <div className="flex flex-col gap-3">
               {todayCourses.map((c, idx) => {
-                const isCurrent =
-                  currentCourse?.name === c.name &&
-                  currentCourse?.start_section === c.start_section;
-                const isPast = !isCurrent && isCoursePast(c, nowMinutes);
+                const isCurrent = currentCourse === c;
+                const isPast = !isCurrent && isCoursePast(c, nowMinutes, timeMap);
                 return (
                   <div
                     key={idx}
