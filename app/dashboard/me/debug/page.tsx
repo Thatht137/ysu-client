@@ -8,7 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuthStore } from "@/lib/auth-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
-import { isCapacitor, isTauri, isWeb } from "@/lib/platform";
+import { isCapacitor } from "@/lib/platform";
 import { getJar as getCasJar, isAuthenticated as checkCASAuth } from "@/lib/cas";
 import { getJar as getJwxtJar, resetJWXT } from "@/lib/jwxt";
 import { ensureMobileAuthorized } from "@/lib/jwmobile";
@@ -72,7 +72,7 @@ export default function DebugPage() {
   async function runDiagnostics() {
     setLoading(true);
     try {
-      const platformName = isCapacitor() ? "Capacitor" : isTauri() ? "Tauri" : "Web";
+      const platformName = isCapacitor() ? "Capacitor" : "Web (dev)";
       const screenInfo = typeof window !== "undefined"
         ? `${window.screen.width}x${window.screen.height} (${window.innerWidth}x${window.innerHeight})`
         : "N/A";

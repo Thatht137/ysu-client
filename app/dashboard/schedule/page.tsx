@@ -30,7 +30,7 @@ import { cacheGet, cacheSet, cacheKey } from "@/lib/cache";
 import type { Course, ClassPeriod, CurrentWeek } from "@/lib/types";
 import { ChevronDown, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { isCourseActiveInWeek } from "./schedule-utils";
-import { ScheduleDesktop } from "./schedule-desktop";
+import { ScheduleTablet } from "./schedule-tablet";
 import { ScheduleMobile } from "./schedule-mobile";
 
 export default function SchedulePage() {
@@ -259,7 +259,7 @@ export default function SchedulePage() {
       ) : (
         <Card>
           <CardContent className="pt-6">
-            <ScheduleDesktop
+            <ScheduleTablet
               courses={filteredCourses}
               periods={periods}
               currentWeekday={currentWeekday}

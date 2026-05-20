@@ -216,7 +216,7 @@ export default function TrainingPlanPage() {
         </CardHeader>
         <CardContent>
           {completion ? (
-            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-2">
               {completionItems.map((item) => (
                 <div
                   key={item.label}
@@ -293,7 +293,7 @@ export default function TrainingPlanPage() {
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
-          <FieldGroup className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <FieldGroup className="grid gap-3 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="tp-search" className="text-xs font-medium text-muted-foreground">
                 {t("trainingPlan.filters.searchLabel")}

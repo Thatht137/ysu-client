@@ -34,7 +34,7 @@ export default function GPAPage() {
     return (
       <div className="flex flex-col gap-4">
         <Skeleton className="h-12" />
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2">
           {Array.from({ length: 9 }).map((_, i) => (
             <Skeleton key={i} className="h-24" />
           ))}
@@ -68,7 +68,7 @@ export default function GPAPage() {
           <CardDescription>{t("gpa.description")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2">
             {items.map((item) => (
               <div key={item.label} className="flex flex-col gap-1 rounded-lg border p-4">
                 <span className="text-sm text-muted-foreground">{item.label}</span>

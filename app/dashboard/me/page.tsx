@@ -119,10 +119,10 @@ export default function MePage() {
   }
 
   const academicLinks = [
-    { href: "/dashboard/student", label: t("app.studentInfo"), icon: User },
-    { href: "/dashboard/gpa", label: t("app.gpa"), icon: GraduationCap },
-    { href: "/dashboard/exams", label: t("app.exams"), icon: FileText },
-    { href: "/dashboard/training-plan", label: t("app.trainingPlan"), icon: BookOpen },
+    { href: "/dashboard/me/student", label: t("app.studentInfo"), icon: User },
+    { href: "/dashboard/me/gpa", label: t("app.gpa"), icon: GraduationCap },
+    { href: "/dashboard/exams", label: t("app.exams"), icon: FileText, mobileOnly: true },
+    { href: "/dashboard/training-plan", label: t("app.trainingPlan"), icon: BookOpen, mobileOnly: true },
   ];
 
   const displayName = student?.name || username || t("me.profileFallback");
@@ -168,19 +168,36 @@ export default function MePage() {
       <Section title={t("me.sectionAcademic")}>
         <Card>
           <CardContent className="flex flex-col py-1">
-            {academicLinks.map((item, idx) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-3 py-3 transition-colors active:bg-muted/60 ${
-                  idx > 0 ? "border-t border-border" : ""
-                }`}
-              >
-                <item.icon className="size-5 shrink-0 text-muted-foreground" />
-                <span className="flex-1 text-sm">{item.label}</span>
-                <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-              </Link>
-            ))}
+            {academicLinks
+              .filter((item) => !item.mobileOnly)
+              .map((item, idx, arr) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 py-3 transition-colors active:bg-muted/60 ${
+                    idx > 0 ? "border-t border-border" : ""
+                  }`}
+                >
+                  <item.icon className="size-5 shrink-0 text-muted-foreground" />
+                  <span className="flex-1 text-sm">{item.label}</span>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                </Link>
+              ))}
+            {academicLinks
+              .filter((item) => item.mobileOnly)
+              .map((item, idx, arr) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 py-3 transition-colors active:bg-muted/60 md:hidden ${
+                    idx > 0 || academicLinks.filter((i) => !i.mobileOnly).length > 0 ? "border-t border-border" : ""
+                  }`}
+                >
+                  <item.icon className="size-5 shrink-0 text-muted-foreground" />
+                  <span className="flex-1 text-sm">{item.label}</span>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                </Link>
+              ))}
           </CardContent>
         </Card>
       </Section>
@@ -266,7 +283,7 @@ export default function MePage() {
 
       <div className="flex items-center justify-between px-1 pt-2 text-sm">
         <Link
-          href="/dashboard/about"
+          href="/dashboard/me/about"
           className="relative text-primary underline underline-offset-2"
         >
           {t("about.title")}

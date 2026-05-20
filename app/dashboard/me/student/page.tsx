@@ -71,7 +71,7 @@ export default function StudentPage() {
           <CardDescription>{t("student.description")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2">
             {fields.map((f) => (
               <div key={f.label} className="flex flex-col gap-1">
                 <span className="text-sm text-muted-foreground">{f.label}</span>
