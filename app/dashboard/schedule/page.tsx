@@ -33,9 +33,11 @@ import { isCourseActiveInWeek } from "./schedule-utils";
 import { ScheduleTablet } from "./schedule-tablet";
 import { ScheduleMobile } from "./schedule-mobile";
 import { syncScheduleToWidget } from "@/lib/widget-bridge";
+import { useSettingsStore } from "@/lib/settings-store";
 
 export default function SchedulePage() {
   const credential = useAuthStore((s) => s.credential);
+  const widgetSyncReminderHours = useSettingsStore((s) => s.widgetSyncReminderHours);
   const { t } = useTranslation();
   const isMobile = useIsMobile();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -106,7 +108,7 @@ export default function SchedulePage() {
         cacheSet(cacheKey(["periods", credential!]), p.filter((x) => x.is_in_use).sort((a, b) => a.section - b.section));
         cacheSet(cacheKey(["week", credential!]), w);
         const activeCourses = w?.week ? c.filter((course) => isCourseActiveInWeek(course, w.week)) : c;
-        syncScheduleToWidget(activeCourses, w, p.filter((x) => x.is_in_use).sort((a, b) => a.section - b.section)).catch(() => {});
+        syncScheduleToWidget(activeCourses, w, p.filter((x) => x.is_in_use).sort((a, b) => a.section - b.section), widgetSyncReminderHours).catch(() => {});
         useRefreshStore.getState().markFresh();
       } catch (err) {
         if (hasCache) {
@@ -140,7 +142,7 @@ export default function SchedulePage() {
       }
       if (c !== null && w !== null) {
         const activeCourses = w.week ? c.filter((course) => isCourseActiveInWeek(course, w.week)) : c;
-        syncScheduleToWidget(activeCourses, w, periods).catch(() => {});
+        syncScheduleToWidget(activeCourses, w, periods, widgetSyncReminderHours).catch(() => {});
       }
       setFilterDrawerOpen(false);
     } catch (err) {

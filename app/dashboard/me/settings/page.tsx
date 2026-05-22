@@ -20,8 +20,10 @@ import {
 } from "@/components/ui/toggle-group";
 import { useAuthStore } from "@/lib/auth-store";
 import { useSettingsStore, type LandingPage } from "@/lib/settings-store";
+import { Input } from "@/components/ui/input";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { resetSDK } from "@/lib/sdk";
+import { syncWidgetSettingsToWidget } from "@/lib/widget-bridge";
 import { checkRateLimit, recordLoginAttempt } from "@/lib/rate-limit";
 import { useUpdateStore } from "@/lib/update-store";
 import { useTheme } from "next-themes";
@@ -35,6 +37,7 @@ import {
   Image,
   Sun,
   Globe,
+  Clock,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -46,8 +49,21 @@ export default function SettingsPage() {
 
   const defaultLandingPage = useSettingsStore((s) => s.defaultLandingPage);
   const setDefaultLandingPage = useSettingsStore((s) => s.setDefaultLandingPage);
+  const widgetSyncReminderHours = useSettingsStore((s) => s.widgetSyncReminderHours);
+  const setWidgetSyncReminderHours = useSettingsStore((s) => s.setWidgetSyncReminderHours);
 
+  const [localSyncHours, setLocalSyncHours] = useState(String(widgetSyncReminderHours));
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+
+  function commitSyncHours() {
+    const val = parseInt(localSyncHours, 10);
+    const clamped = Math.min(168, Math.max(0, Number.isNaN(val) ? widgetSyncReminderHours : val));
+    setLocalSyncHours(String(clamped));
+    if (clamped !== widgetSyncReminderHours) {
+      setWidgetSyncReminderHours(clamped);
+      syncWidgetSettingsToWidget(clamped).catch(() => {});
+    }
+  }
 
   function handleLogout() {
     setLogoutDialogOpen(false);
@@ -155,6 +171,30 @@ export default function SettingsPage() {
                 <ToggleGroupItem value="zh" className="text-xs">中文</ToggleGroupItem>
                 <ToggleGroupItem value="en" className="text-xs">EN</ToggleGroupItem>
               </ToggleGroup>
+            </div>
+
+            {/* 课表同步提醒阈值 */}
+            <div className="flex items-center gap-3 border-t border-border py-3">
+              <Clock className="size-5 shrink-0 text-muted-foreground" />
+              <span className="flex-1 text-sm">{t("settings.widgetSyncReminder")}</span>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="number"
+                  value={localSyncHours}
+                  onChange={(e) => setLocalSyncHours(e.target.value)}
+                  onBlur={commitSyncHours}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      commitSyncHours();
+                      (e.target as HTMLInputElement).blur();
+                    }
+                  }}
+                  className="h-7 w-16 text-right text-sm"
+                  min={0}
+                  max={168}
+                />
+                <span className="text-sm text-muted-foreground">{t("settings.widgetSyncReminderUnit")}</span>
+              </div>
             </div>
 
             {/* 背景图 */}

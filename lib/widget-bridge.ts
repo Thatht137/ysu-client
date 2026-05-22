@@ -5,9 +5,13 @@ export interface WidgetBridgePlugin {
   syncSchedule(options: {
     coursesJson: string;
     currentWeekJson: string;
+    syncReminderHours: number;
   }): Promise<void>;
   syncExams(options: {
     examsJson: string;
+  }): Promise<void>;
+  syncWidgetSettings(options: {
+    syncReminderHours: number;
   }): Promise<void>;
 }
 
@@ -18,6 +22,9 @@ const WidgetBridge = registerPlugin<WidgetBridgePlugin>("WidgetBridge", {
         // No-op on web
       },
       async syncExams() {
+        // No-op on web
+      },
+      async syncWidgetSettings() {
         // No-op on web
       },
     };
@@ -54,6 +61,7 @@ export async function syncScheduleToWidget(
   courses: Course[],
   currentWeek: CurrentWeek | null,
   periods: ClassPeriod[],
+  syncReminderHours: number = 24,
 ): Promise<void> {
   try {
     const periodMap = new Map(periods.map((p) => [p.section, p]));
@@ -84,7 +92,18 @@ export async function syncScheduleToWidget(
     await WidgetBridge.syncSchedule({
       coursesJson: JSON.stringify(widgetCourses),
       currentWeekJson: weekInfo ? JSON.stringify(weekInfo) : "",
+      syncReminderHours,
     });
+  } catch {
+    // Widget sync is best-effort; fail silently
+  }
+}
+
+export async function syncWidgetSettingsToWidget(
+  syncReminderHours: number,
+): Promise<void> {
+  try {
+    await WidgetBridge.syncWidgetSettings({ syncReminderHours });
   } catch {
     // Widget sync is best-effort; fail silently
   }

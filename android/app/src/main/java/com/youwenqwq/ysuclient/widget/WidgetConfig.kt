@@ -9,6 +9,9 @@ object WidgetConfig {
     const val KEY_COURSES = "courses_json"
     const val KEY_CURRENT_WEEK = "current_week_json"
     const val KEY_EXAMS = "exams_json"
+    const val KEY_HAS_SYNCED_SCHEDULE = "has_synced_schedule"
+    const val KEY_LAST_SYNC_TIME = "last_sync_time"
+    const val KEY_SYNC_REMINDER_HOURS = "sync_reminder_hours"
 
     // Course color bar colors (ARGB) - matching web course-color.ts palette
     val COURSE_COLORS = intArrayOf(

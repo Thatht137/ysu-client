@@ -56,6 +56,9 @@ export const zh = {
     startupOverview: "总览",
     startupSchedule: "课表",
     themeAuto: "跟随系统",
+    widgetSyncReminder: "课表同步提醒",
+    widgetSyncReminderDesc: "超过此时间未同步，小组件显示上次更新时间",
+    widgetSyncReminderUnit: "小时",
   },
   about: {
     title: "关于",
@@ -559,6 +562,9 @@ export const en = {
     startupOverview: "Overview",
     startupSchedule: "Schedule",
     themeAuto: "Follow System",
+    widgetSyncReminder: "Schedule Sync Reminder",
+    widgetSyncReminderDesc: "Widget shows last sync time when exceeded",
+    widgetSyncReminderUnit: "hours",
   },
   about: {
     title: "About",

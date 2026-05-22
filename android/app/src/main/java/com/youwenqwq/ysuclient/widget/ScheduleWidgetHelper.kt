@@ -38,9 +38,11 @@ class ScheduleWidgetHelper(private val context: Context) {
     }
 
     fun updateWidget(appWidgetId: Int, appWidgetManager: AppWidgetManager) {
-        val (courses, weekInfo) = loadData()
+        val (courses, weekInfo, hasSynced) = loadData()
+        val syncInfo = loadSyncInfo()
         val todayCourses = filterTodayCourses(courses)
-        val remainingCount = countRemainingCourses(todayCourses)
+        val remainingCourses = getRemainingCourses(todayCourses)
+        val hasCoursesToday = todayCourses.isNotEmpty()
 
         val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
         val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
@@ -49,9 +51,9 @@ class ScheduleWidgetHelper(private val context: Context) {
         val isSmall = minWidth < 180
 
         val views = if (isSmall) {
-            buildSmallWidget(todayCourses, weekInfo, remainingCount)
+            buildSmallWidget(remainingCourses, weekInfo, hasCoursesToday, hasSynced, syncInfo)
         } else {
-            buildMediumWidget(todayCourses, weekInfo, remainingCount)
+            buildMediumWidget(remainingCourses, weekInfo, hasCoursesToday, hasSynced, syncInfo)
         }
 
         // Set click intent to open app schedule page via Deep Link
@@ -63,50 +65,79 @@ class ScheduleWidgetHelper(private val context: Context) {
         appWidgetManager.updateAppWidget(appWidgetId, views)
     }
 
+    data class SyncInfo(
+        val hasSynced: Boolean,
+        val lastSyncTime: Long,
+        val syncReminderHours: Int
+    )
+
     private fun buildSmallWidget(
-        courses: List<WidgetCourse>,
+        remainingCourses: List<WidgetCourse>,
         weekInfo: WidgetWeekInfo?,
-        remainingCount: Int
+        hasCoursesToday: Boolean,
+        hasSynced: Boolean,
+        syncInfo: SyncInfo
     ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.schedule_widget_small)
 
         val weekdayName = getWeekdayName(Calendar.getInstance().get(Calendar.DAY_OF_WEEK))
         views.setTextViewText(R.id.widget_weekday, weekdayName)
-        views.setTextViewText(
-            R.id.widget_remaining,
-            context.getString(R.string.widget_remaining_courses, remainingCount)
-        )
 
-        if (courses.isEmpty()) {
+        if (remainingCourses.isEmpty()) {
             views.setViewVisibility(R.id.widget_single_course, android.view.View.GONE)
             views.setViewVisibility(R.id.widget_course_list, android.view.View.GONE)
             views.setViewVisibility(R.id.widget_empty_state, android.view.View.VISIBLE)
-            views.setTextViewText(R.id.widget_empty_text, context.getString(R.string.widget_empty_sync))
-        } else if (courses.size == 1) {
-            // Single course: use compact wrap_content layout
-            views.setViewVisibility(R.id.widget_single_course, android.view.View.VISIBLE)
-            views.setViewVisibility(R.id.widget_course_list, android.view.View.GONE)
-            views.setViewVisibility(R.id.widget_empty_state, android.view.View.GONE)
 
-            bindCourseItem(views, courses[0], R.id.widget_single_course, R.id.widget_single_course_color_bar, R.id.widget_single_course_name, R.id.widget_single_course_detail)
+            if (hasSynced && syncInfo.lastSyncTime > 0) {
+                views.setViewVisibility(R.id.widget_remaining, android.view.View.VISIBLE)
+                views.setTextViewText(R.id.widget_remaining, formatSyncAge(syncInfo.lastSyncTime))
+            } else {
+                views.setViewVisibility(R.id.widget_remaining, android.view.View.GONE)
+            }
+
+            val emptyText = when {
+                !hasSynced -> context.getString(R.string.widget_empty_sync)
+                hasCoursesToday -> context.getString(R.string.widget_empty_all_done)
+                else -> context.getString(R.string.widget_empty_no_courses)
+            }
+            views.setTextViewText(R.id.widget_empty_text, emptyText)
         } else {
-            // Two courses: use weight-based list layout
-            views.setViewVisibility(R.id.widget_single_course, android.view.View.GONE)
-            views.setViewVisibility(R.id.widget_course_list, android.view.View.VISIBLE)
             views.setViewVisibility(R.id.widget_empty_state, android.view.View.GONE)
+            views.setViewVisibility(R.id.widget_remaining, android.view.View.VISIBLE)
 
-            val displayCourses = courses.take(2)
-            bindCourseItem(views, displayCourses.getOrNull(0), R.id.widget_course_1_container, R.id.widget_course_1_color_bar, R.id.widget_course_1_name, R.id.widget_course_1_detail)
-            bindCourseItem(views, displayCourses.getOrNull(1), R.id.widget_course_2_container, R.id.widget_course_2_color_bar, R.id.widget_course_2_name, R.id.widget_course_2_detail)
+            val remainingText = if (isSyncStale(syncInfo)) {
+                formatSyncAge(syncInfo.lastSyncTime)
+            } else {
+                context.getString(R.string.widget_remaining_courses, remainingCourses.size)
+            }
+            views.setTextViewText(R.id.widget_remaining, remainingText)
+
+            if (remainingCourses.size == 1) {
+                // Single course: use compact wrap_content layout
+                views.setViewVisibility(R.id.widget_single_course, android.view.View.VISIBLE)
+                views.setViewVisibility(R.id.widget_course_list, android.view.View.GONE)
+
+                bindCourseItem(views, remainingCourses[0], R.id.widget_single_course, R.id.widget_single_course_color_bar, R.id.widget_single_course_name, R.id.widget_single_course_detail)
+            } else {
+                // Two courses: use weight-based list layout
+                views.setViewVisibility(R.id.widget_single_course, android.view.View.GONE)
+                views.setViewVisibility(R.id.widget_course_list, android.view.View.VISIBLE)
+
+                val displayCourses = remainingCourses.take(2)
+                bindCourseItem(views, displayCourses.getOrNull(0), R.id.widget_course_1_container, R.id.widget_course_1_color_bar, R.id.widget_course_1_name, R.id.widget_course_1_detail)
+                bindCourseItem(views, displayCourses.getOrNull(1), R.id.widget_course_2_container, R.id.widget_course_2_color_bar, R.id.widget_course_2_name, R.id.widget_course_2_detail)
+            }
         }
 
         return views
     }
 
     private fun buildMediumWidget(
-        courses: List<WidgetCourse>,
+        remainingCourses: List<WidgetCourse>,
         weekInfo: WidgetWeekInfo?,
-        remainingCount: Int
+        hasCoursesToday: Boolean,
+        hasSynced: Boolean,
+        syncInfo: SyncInfo
     ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.schedule_widget_medium)
 
@@ -122,20 +153,37 @@ class ScheduleWidgetHelper(private val context: Context) {
         }
 
         views.setTextViewText(R.id.widget_header_date, headerText)
-        views.setTextViewText(
-            R.id.widget_header_remaining,
-            context.getString(R.string.widget_remaining_courses, remainingCount)
-        )
 
-        if (courses.isEmpty()) {
+        if (remainingCourses.isEmpty()) {
             views.setViewVisibility(R.id.widget_course_grid, android.view.View.GONE)
             views.setViewVisibility(R.id.widget_empty_state, android.view.View.VISIBLE)
-            views.setTextViewText(R.id.widget_empty_text, context.getString(R.string.widget_empty_sync))
+
+            if (hasSynced && syncInfo.lastSyncTime > 0) {
+                views.setViewVisibility(R.id.widget_header_remaining, android.view.View.VISIBLE)
+                views.setTextViewText(R.id.widget_header_remaining, formatSyncAge(syncInfo.lastSyncTime))
+            } else {
+                views.setViewVisibility(R.id.widget_header_remaining, android.view.View.GONE)
+            }
+
+            val emptyText = when {
+                !hasSynced -> context.getString(R.string.widget_empty_sync)
+                hasCoursesToday -> context.getString(R.string.widget_empty_all_done)
+                else -> context.getString(R.string.widget_empty_no_courses)
+            }
+            views.setTextViewText(R.id.widget_empty_text, emptyText)
         } else {
             views.setViewVisibility(R.id.widget_course_grid, android.view.View.VISIBLE)
             views.setViewVisibility(R.id.widget_empty_state, android.view.View.GONE)
+            views.setViewVisibility(R.id.widget_header_remaining, android.view.View.VISIBLE)
 
-            val displayCourses = courses.take(4)
+            val remainingText = if (isSyncStale(syncInfo)) {
+                formatSyncAge(syncInfo.lastSyncTime)
+            } else {
+                context.getString(R.string.widget_remaining_courses, remainingCourses.size)
+            }
+            views.setTextViewText(R.id.widget_header_remaining, remainingText)
+
+            val displayCourses = remainingCourses.take(4)
             bindCourseItem(views, displayCourses.getOrNull(0), R.id.widget_course_1_container, R.id.widget_course_1_color_bar, R.id.widget_course_1_name, R.id.widget_course_1_detail)
             bindCourseItem(views, displayCourses.getOrNull(1), R.id.widget_course_2_container, R.id.widget_course_2_color_bar, R.id.widget_course_2_name, R.id.widget_course_2_detail)
             bindCourseItem(views, displayCourses.getOrNull(2), R.id.widget_course_3_container, R.id.widget_course_3_color_bar, R.id.widget_course_3_name, R.id.widget_course_3_detail)
@@ -178,14 +226,15 @@ class ScheduleWidgetHelper(private val context: Context) {
         views.setInt(colorBarId, "setBackgroundColor", color)
     }
 
-    private fun loadData(): Pair<List<WidgetCourse>, WidgetWeekInfo?> {
+    private fun loadData(): Triple<List<WidgetCourse>, WidgetWeekInfo?, Boolean> {
         val prefs = context.getSharedPreferences(WidgetConfig.PREFS_NAME, Context.MODE_PRIVATE)
         val coursesJson = prefs.getString(WidgetConfig.KEY_COURSES, "[]") ?: "[]"
         val weekJson = prefs.getString(WidgetConfig.KEY_CURRENT_WEEK, "") ?: ""
+        val hasSynced = prefs.getBoolean(WidgetConfig.KEY_HAS_SYNCED_SCHEDULE, false)
 
         val courses = parseCourses(coursesJson)
         val weekInfo = if (weekJson.isNotEmpty()) parseWeekInfo(weekJson) else null
-        return Pair(courses, weekInfo)
+        return Triple(courses, weekInfo, hasSynced)
     }
 
     private fun parseCourses(json: String): List<WidgetCourse> {
@@ -241,13 +290,13 @@ class ScheduleWidgetHelper(private val context: Context) {
             .sortedBy { it.startSection }
     }
 
-    private fun countRemainingCourses(courses: List<WidgetCourse>): Int {
+    private fun getRemainingCourses(courses: List<WidgetCourse>): List<WidgetCourse> {
         val calendar = Calendar.getInstance()
         val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
         val currentMinute = calendar.get(Calendar.MINUTE)
         val currentTimeMinutes = currentHour * 60 + currentMinute
 
-        return courses.count { course ->
+        return courses.filter { course ->
             // Estimate end time from section number if no explicit time
             val endMinutes = if (!course.endTime.isNullOrEmpty()) {
                 parseTimeToMinutes(course.endTime)
@@ -268,6 +317,36 @@ class ScheduleWidgetHelper(private val context: Context) {
             } else null
         } catch (_: Exception) {
             null
+        }
+    }
+
+    private fun loadSyncInfo(): SyncInfo {
+        val prefs = context.getSharedPreferences(WidgetConfig.PREFS_NAME, Context.MODE_PRIVATE)
+        val hasSynced = prefs.getBoolean(WidgetConfig.KEY_HAS_SYNCED_SCHEDULE, false)
+        val lastSyncTime = prefs.getLong(WidgetConfig.KEY_LAST_SYNC_TIME, 0L)
+        val syncReminderHours = prefs.getInt(WidgetConfig.KEY_SYNC_REMINDER_HOURS, 24)
+        return SyncInfo(hasSynced, lastSyncTime, syncReminderHours)
+    }
+
+    private fun isSyncStale(syncInfo: SyncInfo): Boolean {
+        if (!syncInfo.hasSynced || syncInfo.lastSyncTime <= 0) return false
+        // 0 means always show the sync age (permanent reminder)
+        if (syncInfo.syncReminderHours == 0) return true
+        val elapsedMs = System.currentTimeMillis() - syncInfo.lastSyncTime
+        val thresholdMs = syncInfo.syncReminderHours * 60L * 60L * 1000L
+        return elapsedMs > thresholdMs
+    }
+
+    private fun formatSyncAge(lastSyncTime: Long): String {
+        val elapsedMs = System.currentTimeMillis() - lastSyncTime
+        val elapsedHours = elapsedMs / (60 * 60 * 1000)
+        return when {
+            elapsedHours < 1 -> context.getString(R.string.widget_sync_just_now)
+            elapsedHours < 24 -> context.getString(R.string.widget_sync_hours_ago, elapsedHours.toInt())
+            else -> {
+                val elapsedDays = elapsedHours / 24
+                context.getString(R.string.widget_sync_days_ago, elapsedDays.toInt())
+            }
         }
     }
 
