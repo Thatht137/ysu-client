@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import { zh, en } from "./dict";
 import type { Locale, Dictionary } from "./dict";
 
@@ -19,20 +19,59 @@ const I18nContext = createContext<I18nContextValue>({
 });
 
 const STORAGE_KEY = "ysu-locale";
+const MANUAL_KEY = "ysu-locale-manual";
 
-function loadLocale(): Locale {
-  if (typeof window === "undefined") return "zh";
-  const stored = localStorage.getItem(STORAGE_KEY) as Locale | null;
-  return stored === "en" ? "en" : "zh";
+function resolveLocale(raw: string): Locale {
+  return raw.toLowerCase().startsWith("zh") ? "zh" : "en";
+}
+
+function detectSystemLocale(): Locale {
+  if (typeof navigator !== "undefined" && navigator.language) {
+    return resolveLocale(navigator.language);
+  }
+  return "zh";
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(loadLocale);
+  const [locale, setLocaleState] = useState<Locale>(detectSystemLocale);
+
+  // On mount: detect system language unless user has manually set one
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // User has manually set language — respect it and skip system detection
+    if (localStorage.getItem(MANUAL_KEY)) {
+      const saved = localStorage.getItem(STORAGE_KEY) as Locale | null;
+      if (saved && saved !== locale) {
+        setLocaleState(saved);
+      }
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      let detected: Locale;
+      try {
+        const { Device } = await import("@capacitor/device");
+        const { value } = await Device.getLanguageCode();
+        detected = resolveLocale(value);
+      } catch {
+        detected = detectSystemLocale();
+      }
+      if (!cancelled) {
+        setLocaleState(detected);
+        localStorage.setItem(STORAGE_KEY, detected);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, []);
 
   const setLocale = useCallback((l: Locale) => {
     setLocaleState(l);
     if (typeof window !== "undefined") {
       localStorage.setItem(STORAGE_KEY, l);
+      localStorage.setItem(MANUAL_KEY, "1");
     }
   }, []);
 

@@ -1,7 +1,7 @@
 import { registerPlugin } from "@capacitor/core";
 
 export interface WebViewCompatPlugin {
-  check(): Promise<void>;
+  check(options?: { locale?: string }): Promise<void>;
 }
 
 const WebViewCompat = registerPlugin<WebViewCompatPlugin>("WebViewCompat", {
@@ -14,9 +14,9 @@ const WebViewCompat = registerPlugin<WebViewCompatPlugin>("WebViewCompat", {
   },
 });
 
-export async function checkWebViewCompat(): Promise<void> {
+export async function checkWebViewCompat(locale?: string): Promise<void> {
   try {
-    await WebViewCompat.check();
+    await WebViewCompat.check({ locale });
   } catch {
     // Plugin check is best-effort; fail silently
   }

@@ -12,7 +12,7 @@ import { useTranslation } from "@/lib/i18n/use-translation";
 import { isCapacitor } from "@/lib/platform";
 
 export function SDKProvider({ children }: { children: React.ReactNode }) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
   const settingsHydrated = useSettingsStore((s) => s.hasHydrated);
   const updateMirror = useSettingsStore((s) => s.updateMirror);
@@ -52,6 +52,13 @@ export function SDKProvider({ children }: { children: React.ReactNode }) {
     initSDK()
       .then(() => {
         setSdkReady(true);
+
+        // Check WebView compatibility (Capacitor only)
+        if (isCapacitor()) {
+          import("@/lib/webview-compat").then(({ checkWebViewCompat }) => {
+            checkWebViewCompat(locale);
+          });
+        }
 
         // Background: verify auth + warm up WEU tokens after the UI is
         // already visible so the user sees cached data immediately.
