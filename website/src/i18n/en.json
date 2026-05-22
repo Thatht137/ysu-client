@@ -103,7 +103,20 @@
           "desc": "Supports immersive status bar and gesture navigation bar (小白条)."
         }
       ],
-      "recommendation": "It is recommended to update WebView to the latest version. Newer versions not only add more features and fix bugs, but often also bring performance improvements."
+      "recommendation": "It is recommended to update WebView to the latest version. Newer versions not only add more features and fix bugs, but often also bring performance improvements.",
+      "detection": {
+        "title": "Version Detection",
+        "intro": "The app checks the system WebView version on startup and will show a warning dialog if the version is problematic.",
+        "method": "The detection traverses a fixed list of package names in order and returns the version of the first one found. This method does not reflect which WebView implementation the system is actually using.",
+        "error": "If you believe the detection result is incorrect, or you see \"Unknown WebView Version\", it may be due to one of the following reasons:",
+        "reasons": [
+          "You have installed an alternative WebView implementation (e.g., a newer Beta version), but the app still detects based on the first package found, which is usually the system default WebView package, causing a discrepancy.",
+          "The system is using a manufacturer-modified WebView (e.g., Huawei WebView), but the app searches a fixed package name list and cannot correctly identify such implementations."
+        ],
+        "debug": "You can enter the Debug menu to check the actual Chrome version reported by the User-Agent. To enter: after logging in, tap the app icon on the About page 7 times in a row.",
+        "selfTest": "If even the login page appears to render abnormally, the WebView is likely problematic. Quick self-test: the login box is centered vertically by default; if it appears stuck to the top of the screen, your WebView version is below v111.",
+        "ignore": "If your version meets the requirements, you can safely check \"Don't ask again\" and ignore the warning."
+      }
     },
     "webviewUpdate": {
       "title": "How to Update Android System WebView",

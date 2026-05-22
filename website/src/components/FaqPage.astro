@@ -39,6 +39,23 @@ const homeUrl = getRelativeLocaleUrl(locale, '/');
           ))}
         </ul>
         <p class="text-muted-foreground leading-relaxed">{t.faq.compatibility.recommendation}</p>
+
+        <div class="mt-6 pt-6 border-t border-border">
+          <h3 class="font-medium mb-3">{t.faq.compatibility.detection.title}</h3>
+          <p class="text-muted-foreground leading-relaxed mb-3">{t.faq.compatibility.detection.intro}</p>
+          <p class="text-muted-foreground leading-relaxed mb-3">{t.faq.compatibility.detection.method}</p>
+          <p class="text-muted-foreground leading-relaxed mb-2">{t.faq.compatibility.detection.error}</p>
+          <ul class="list-disc list-inside text-muted-foreground space-y-1 mb-4">
+            {t.faq.compatibility.detection.reasons.map((reason: string) => (
+              <li>{reason}</li>
+            ))}
+          </ul>
+          <p class="text-muted-foreground leading-relaxed mb-3">{t.faq.compatibility.detection.debug}</p>
+          <div class="rounded-lg bg-muted p-4 mb-3">
+            <p class="text-muted-foreground leading-relaxed">{t.faq.compatibility.detection.selfTest}</p>
+          </div>
+          <p class="text-muted-foreground leading-relaxed">{t.faq.compatibility.detection.ignore}</p>
+        </div>
       </section>
 
       <section class="rounded-2xl border border-border bg-card p-6">

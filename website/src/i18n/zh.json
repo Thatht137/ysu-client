@@ -103,7 +103,20 @@
           "desc": "可支持沉浸式状态栏和手势导航条（小白条）。"
         }
       ],
-      "recommendation": "推荐用户更新 WebView 版本至新版。新版 WebView 在新增支持更多特性、修复问题的同时，往往伴随更多的性能优化。"
+      "recommendation": "推荐用户更新 WebView 版本至新版。新版 WebView 在新增支持更多特性、修复问题的同时，往往伴随更多的性能优化。",
+      "detection": {
+        "title": "版本检测说明",
+        "intro": "App 启动时会检测系统 WebView 版本，若版本存在问题，会弹窗告知用户。",
+        "method": "检测方式为按固定列表顺序遍历包名，找到第一个存在的即返回其版本号。此检测完全不管系统实际选用的是哪个 WebView 实现。",
+        "error": "如果认为检测结果存在错误，或者遇到了「未知 WebView 版本」，可能是以下原因：",
+        "reasons": [
+          "用户安装了其他 WebView 实现（例如自行切换到了更新的 Beta 版），但 App 检测仍按第一个存在的包名来，通常是系统默认 WebView 包，从而导致实际结果偏差。",
+          "系统使用了厂商魔改的 WebView（例如 Huawei Webview），但 App 按固定包名列表查找，无法正确识别该类实现。"
+        ],
+        "debug": "可以进入 Debug 菜单查看实际 User-Agent 提示的 Chrome 版本。进入方法：登录后，在「关于」页连续点击 7 次应用图标。",
+        "selfTest": "如果连登录页面看起来都渲染异常，说明 WebView 有问题。简单自测：登录框默认在屏幕上下居中，若发现登录框紧贴顶部，则说明 WebView 版本低于 v111。",
+        "ignore": "如果版本符合要求，可以放心勾选「不再提示」并忽略弹窗。"
+      }
     },
     "webviewUpdate": {
       "title": "如何更新 Android System WebView",
