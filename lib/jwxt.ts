@@ -11,6 +11,7 @@ import {
   cookieEntryFromJSON,
   fetchWithJar,
   headerSingle,
+  clearNativeCookies,
 } from './cookie';
 import { authorize, getCredentialApplied } from './cas';
 
@@ -468,6 +469,9 @@ export function resetJWXT(): void {
   inflightCurrentTerm = null;
   cachedCurrentWeek = null;
   inflightCurrentWeek = null;
+  // Fire-and-forget: purge stale native cookies so a fresh login starts
+  // from a clean CookieManager state.
+  clearNativeCookies(JWXT_BASE_URL).catch(() => {});
 }
 
 /** 将当前 JWXT jar 中的会话持久化到 auth-store（包含 mobile auth token）。 */
@@ -676,6 +680,10 @@ async function reauthorize(): Promise<void> {
       await jwxtJar.removeCookie(c.domain, c.path ?? '/', c.name);
     }
   }
+  // Clear stale cookies from the native CookieManager so old `route`
+  // tokens (and other lingering JWXT cookies) don't leak into the
+  // next authorize flow and cause load-balancer routing mismatches.
+  await clearNativeCookies(JWXT_BASE_URL);
   await authorize(JWXT_PORTAL_URL, jwxtJar);
   ensuredWeuApps.clear();
   weuStore.clear();
