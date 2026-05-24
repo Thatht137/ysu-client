@@ -24,6 +24,10 @@ export interface SchoolConfig {
     readonly appIds: Readonly<Record<string, string>>;
     readonly apiPaths: Readonly<Record<string, string>>;
   };
+  readonly features: {
+    readonly hasMobile: boolean;
+    readonly hasLabSchedule: boolean;
+  };
 }
 
 // ─── Available school configs ──────────────────────────────────────────── //
@@ -86,6 +90,10 @@ export function getSchoolId(): string {
   return currentSchoolId;
 }
 
+export function isFeatureAvailable(feature: keyof SchoolConfig['features']): boolean {
+  return currentSchoolConfig.features[feature];
+}
+
 export function getAvailableSchools(): Array<{ id: string; name: string; nameEn: string }> {
   return Object.values(schoolConfigs).map((c) => ({
     id: c.id,
@@ -102,7 +110,24 @@ export function setSchoolConfig(schoolId: string): boolean {
   // Reset custom URLs when switching school
   serverConfig._customCerBaseUrl = '';
   serverConfig._customJwxtBaseUrl = '';
+  // Notify dependent modules to refresh their caches
+  onSchoolConfigChanged();
   return true;
+}
+
+// Callbacks for modules that cache school config
+type SchoolConfigChangeCallback = () => void;
+const _onSchoolConfigChanged: SchoolConfigChangeCallback[] = [];
+
+export function onSchoolConfigChanged(callback?: SchoolConfigChangeCallback): void {
+  if (callback) {
+    _onSchoolConfigChanged.push(callback);
+  } else {
+    // Notify all registered callbacks
+    for (const cb of _onSchoolConfigChanged) {
+      cb();
+    }
+  }
 }
 
 // ─── Domain extraction ─────────────────────────────────────────────────── //

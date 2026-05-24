@@ -85,6 +85,7 @@ import {
   MobileNotLoggedInError,
   MobileBusinessError,
 } from "./jwmobile";
+import { isFeatureAvailable } from "./server-config";
 import {
   checkRateLimit,
   recordLoginAttempt,
@@ -465,6 +466,10 @@ export async function getExperimentalSchedule(
   course_category = "all",
 ): Promise<Course[]> {
   return withJWXT(async () => {
+    if (!isFeatureAvailable('hasLabSchedule')) {
+      const rows = await _querySchedule({ term });
+      return rows.map(mapCourse);
+    }
     const rows = await _queryScheduleExperimental({
       term,
       courseCategory: course_category,
@@ -478,6 +483,9 @@ export async function getUnscheduledCourses(
   term?: string,
   course_category = "all",
 ): Promise<Course[]> {
+  if (!isFeatureAvailable('hasLabSchedule')) {
+    return [];
+  }
   return withJWXT(async () => {
     const rows = await _queryUnscheduledCourses({
       term,
@@ -771,6 +779,12 @@ export async function submitEvaluation(
 
 // ── Lesson / Activity ────────────────────────────────────
 
+function requireMobile(): void {
+  if (!isFeatureAvailable('hasMobile')) {
+    throw apiError('当前学校不支持移动端签到功能', 'MOBILE_NOT_AVAILABLE');
+  }
+}
+
 export async function getCurrentLesson(
   _credential: string,
   params: {
@@ -783,6 +797,7 @@ export async function getCurrentLesson(
     end_node: number;
   },
 ): Promise<CurrentLesson> {
+  requireMobile();
   try {
     const result = await _queryCurrentLesson({
       teachClassId: params.teach_class_id,
@@ -822,6 +837,7 @@ export async function getSigninDetail(
     title?: string;
   },
 ): Promise<SigninActivityDetail> {
+  requireMobile();
   try {
     const result = await _querySigninDetail({
       activityId: params.activity_id,
@@ -848,6 +864,7 @@ export async function getStudentSigninStatus(
     title?: string;
   },
 ): Promise<StudentSigninStatus> {
+  requireMobile();
   try {
     const result = await _queryStudentSigninStatus({
       activityId: params.activity_id,
@@ -875,6 +892,7 @@ export async function doStudentSign(
     code?: string;
   },
 ): Promise<StudentSignResult> {
+  requireMobile();
   try {
     const result = await _studentSign({
       activityId: params.activity_id,

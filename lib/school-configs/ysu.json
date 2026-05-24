@@ -56,5 +56,9 @@
       "calculate_score": "pjapp/api/wdpj/calculateQuestionnaireAnswerScore.do",
       "commit_answer": "pjapp/api/wdpj/commitQuestionnaireAnswer.do"
     }
+  },
+  "features": {
+    "hasMobile": true,
+    "hasLabSchedule": true
   }
 }

@@ -22,7 +22,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useAuthStore } from "@/lib/auth-store";
 import { useSettingsStore } from "@/lib/settings-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
-import { casUrls } from "@/lib/server-config";
+import { casUrls, getAvailableSchools, setSchoolConfig, getSchoolId } from "@/lib/server-config";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   loadRememberedCredentials,
   saveRememberedCredentials,
@@ -41,8 +48,11 @@ import { useMFAModalStore } from "@/lib/mfa-modal-store";
 export default function LoginPage() {
   const router = useRouter();
   const setCredential = useAuthStore((s) => s.setCredential);
+  const setSchoolId = useSettingsStore((s) => s.setSchoolId);
   const { t } = useTranslation();
 
+  const schools = getAvailableSchools();
+  const [selectedSchool, setSelectedSchool] = useState(getSchoolId());
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
@@ -75,6 +85,12 @@ export default function LoginPage() {
     }, 1000);
     return () => clearInterval(timer);
   }, [countdown]);
+
+  function handleSchoolChange(schoolId: string) {
+    setSelectedSchool(schoolId);
+    setSchoolId(schoolId);
+    setSchoolConfig(schoolId);
+  }
 
   function showCaptcha() {
     setNeedsCaptcha(true);
@@ -209,6 +225,22 @@ export default function LoginPage() {
         <CardHeader>
           <CardTitle>{t("login.title")}</CardTitle>
           <CardDescription>{t("login.usernamePlaceholder")}</CardDescription>
+          {schools.length > 1 && (
+            <div className="pt-2">
+              <Select value={selectedSchool} onValueChange={handleSchoolChange}>
+                <SelectTrigger className="w-full" size="sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {schools.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit}>

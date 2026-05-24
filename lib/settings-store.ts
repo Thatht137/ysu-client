@@ -18,6 +18,7 @@ interface SettingsState {
   avatarImage: string;
   customCerBaseUrl: string;
   customJwxtBaseUrl: string;
+  schoolId: string;
   hasHydrated: boolean;
   setUpdateMirror: (mirror: string) => void;
   setBackgroundImage: (image: string) => void;
@@ -31,6 +32,7 @@ interface SettingsState {
   setAvatarImage: (image: string) => void;
   setCustomCerBaseUrl: (url: string) => void;
   setCustomJwxtBaseUrl: (url: string) => void;
+  setSchoolId: (id: string) => void;
   setHasHydrated: (v: boolean) => void;
 }
 
@@ -49,6 +51,7 @@ export const useSettingsStore = create<SettingsState>()(
       avatarImage: "",
       customCerBaseUrl: "",
       customJwxtBaseUrl: "",
+      schoolId: "ysu",
       hasHydrated: false,
       setUpdateMirror: (updateMirror) => set({ updateMirror }),
       setBackgroundImage: (backgroundImage) => set({ backgroundImage }),
@@ -62,6 +65,7 @@ export const useSettingsStore = create<SettingsState>()(
       setAvatarImage: (avatarImage) => set({ avatarImage }),
       setCustomCerBaseUrl: (customCerBaseUrl) => set({ customCerBaseUrl }),
       setCustomJwxtBaseUrl: (customJwxtBaseUrl) => set({ customJwxtBaseUrl }),
+      setSchoolId: (schoolId) => set({ schoolId }),
       setHasHydrated: (v) => set({ hasHydrated: v }),
     }),
     {

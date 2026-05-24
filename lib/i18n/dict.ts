@@ -130,6 +130,7 @@ export const zh = {
   },
   login: {
     title: "燕大终端",
+    schoolLabel: "学校",
     usernameLabel: "学号",
     usernamePlaceholder: "请输入学号",
     passwordLabel: "密码",
@@ -654,6 +655,7 @@ export const en = {
   },
   login: {
     title: "YSU Terminal",
+    schoolLabel: "School",
     usernameLabel: "Student ID",
     usernamePlaceholder: "Enter student ID",
     passwordLabel: "Password",
