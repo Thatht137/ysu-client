@@ -32,6 +32,8 @@ export interface SchoolConfig {
     readonly hasLabSchedule: boolean;
     readonly hasMfa: boolean;
   };
+  /** false = 不在登录页显示，适配未完成 */
+  readonly visible: boolean;
 }
 
 // ─── Available school configs ──────────────────────────────────────────── //
@@ -100,7 +102,7 @@ export function isFeatureAvailable(feature: keyof SchoolConfig['features']): boo
 }
 
 export function getAvailableSchools(): Array<{ id: string; name: string; nameEn: string }> {
-  return Object.values(schoolConfigs).map((c) => ({
+  return Object.values(schoolConfigs).filter((c) => c.visible).map((c) => ({
     id: c.id,
     name: c.name,
     nameEn: c.nameEn,

@@ -54,5 +54,6 @@
     "hasMobile": false,
     "hasLabSchedule": false,
     "hasMfa": false
-  }
+  },
+  "visible": false
 }

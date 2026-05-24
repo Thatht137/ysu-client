@@ -63,5 +63,6 @@
     "hasMobile": true,
     "hasLabSchedule": true,
     "hasMfa": true
-  }
+  },
+  "visible": true
 }
