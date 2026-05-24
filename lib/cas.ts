@@ -17,27 +17,27 @@ import {
   saveCASTGC as saveCASTGCSecure,
   loadCASTGC,
 } from './secure-storage';
+import {
+  serverConfig,
+  casUrls,
+  getCasCookieDomain,
+  getSchoolConfig,
+} from './server-config';
 
 // ─── Constants ────────────────────────────────────────────────────────── //
 
-const CER_BASE_URL = 'https://cer.ysu.edu.cn';
-const AUTH_LOGIN_URL = `${CER_BASE_URL}/authserver/login`;
-const AUTH_INDEX_URL = `${CER_BASE_URL}/authserver/index.do`;
-const CHECK_CAPTCHA_URL = `${CER_BASE_URL}/authserver/checkNeedCaptcha.htl`;
-const REAUTH_TYPE_URL = `${CER_BASE_URL}/authserver/reAuthCheck/changeReAuthType.do`;
-const REAUTH_SEND_CODE_URL = `${CER_BASE_URL}/authserver/dynamicCode/getDynamicCodeByReauth.do`;
-const REAUTH_SUBMIT_URL = `${CER_BASE_URL}/authserver/reAuthCheck/reAuthSubmit.do`;
-const DEFAULT_LOGIN_SERVICE = `${CER_BASE_URL}/personalInfo/personCenter/index.html`;
-const AES_CHARS = 'ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678';
-const MFA_METHOD_TO_CODE: Readonly<Record<string, string>> = {
-  sms: '3',
-  cpdaily: '5',
-};
-const MFA_METHOD_TO_AUTH_CODE_TYPE: Readonly<Record<string, string>> = {
-  sms: 'reAuthDynamicCodeType',
-  cpdaily: 'reAuthCpdailyDynamicCodeType',
-};
-const CAS_COOKIE_DOMAIN = 'cer.ysu.edu.cn';
+function getAESChars(): string {
+  return getSchoolConfig().cas.aesChars;
+}
+
+function getMFAMethodToCode(): Readonly<Record<string, string>> {
+  return getSchoolConfig().cas.mfaMethodToCode;
+}
+
+function getMFAMethodToAuthCodeType(): Readonly<Record<string, string>> {
+  return getSchoolConfig().cas.mfaMethodToAuthCodeType;
+}
+
 const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
 
 // ─── Types ────────────────────────────────────────────────────────────── //
@@ -127,7 +127,7 @@ function isCasPath(p: string): boolean {
 
 function isCasCookie(e: CookieEntry): boolean {
   const domain = e.domain.startsWith('.') ? e.domain.slice(1) : e.domain;
-  return domain === CAS_COOKIE_DOMAIN && isCasPath(e.path);
+  return domain === getCasCookieDomain() && isCasPath(e.path);
 }
 
 export class CASCredential {
@@ -164,7 +164,7 @@ export class CASCredential {
       }
       const e = cookieEntryFromJSON(item as Record<string, unknown>);
       if (!e.domain) {
-        return { ...e, domain: CAS_COOKIE_DOMAIN };
+        return { ...e, domain: getCasCookieDomain() };
       }
       return e;
     });
@@ -175,18 +175,19 @@ export class CASCredential {
 // ─── Crypto ───────────────────────────────────────────────────────────── //
 
 const VALID_AES_KEY_BYTES: ReadonlySet<number> = new Set([16, 24, 32]);
-const ALPHABET_LEN = AES_CHARS.length;
-const REJECTION_THRESHOLD = Math.floor(256 / ALPHABET_LEN) * ALPHABET_LEN;
 
 export function _randomString(length: number): string {
+  const aesChars = getAESChars();
+  const alphabetLen = aesChars.length;
+  const rejectionThreshold = Math.floor(256 / alphabetLen) * alphabetLen;
   const out: string[] = [];
   const buf = new Uint8Array(length * 2);
   while (out.length < length) {
     crypto.getRandomValues(buf);
     for (let i = 0; i < buf.length && out.length < length; i++) {
       const b = buf[i]!;
-      if (b < REJECTION_THRESHOLD) {
-        out.push(AES_CHARS[b % ALPHABET_LEN]!);
+      if (b < rejectionThreshold) {
+        out.push(aesChars[b % alphabetLen]!);
       }
     }
   }
@@ -376,7 +377,7 @@ export async function restoreCASCookies(): Promise<void> {
   } | undefined;
   if (CapacitorCookies?.setCookie) {
     await CapacitorCookies.setCookie({
-      url: CER_BASE_URL,
+      url: serverConfig.cerBaseUrl,
       key: 'CASTGC',
       value: tgc,
       path: '/authserver',
@@ -413,7 +414,7 @@ async function syncJarCookiesToWebView(): Promise<void> {
   for (const c of cookies) {
     if (!c.value) continue;
     const host = c.domain.replace(/^\./, '');
-    if (!host.includes('cer.ysu.edu.cn')) continue;
+    if (!host.includes(getCasCookieDomain())) continue;
     await CapacitorCookies.setCookie({
       url: `https://${host}${c.path}`,
       key: c.name,
@@ -426,7 +427,7 @@ async function syncJarCookiesToWebView(): Promise<void> {
 export async function isAuthenticated(): Promise<boolean> {
   const resp = await _fetch({
     method: 'GET',
-    url: AUTH_INDEX_URL,
+    url: casUrls.authIndex,
     redirect: 'manual',
     timeoutMs,
   });
@@ -447,7 +448,7 @@ export async function credential(): Promise<CASCredential> {
 
 /** 检查指定用户是否需要验证码。不获取图片——图片由 `<img>` 直接加载。 */
 export async function checkCaptchaNeeded(username: string): Promise<boolean> {
-  const checkUrl = `${CHECK_CAPTCHA_URL}?username=${encodeURIComponent(username)}`;
+  const checkUrl = `${casUrls.checkCaptcha}?username=${encodeURIComponent(username)}`;
   try {
     const resp = await _fetch({
       method: 'GET',
@@ -498,16 +499,16 @@ export async function loginStep1(
     rememberMe: 'true',
   });
 
-  const encodedService = encodeURIComponent(DEFAULT_LOGIN_SERVICE);
-  const loginUrl = `${AUTH_LOGIN_URL}?service=${encodedService}&_=${Date.now()}`;
+  const encodedService = encodeURIComponent(casUrls.defaultLoginService);
+  const loginUrl = `${casUrls.authLogin}?service=${encodedService}&_=${Date.now()}`;
   const resp = await _fetch({
     method: 'POST',
     url: loginUrl,
     body,
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      Origin: CER_BASE_URL,
-      Referer: `${AUTH_LOGIN_URL}?service=${encodedService}`,
+      Origin: serverConfig.cerBaseUrl,
+      Referer: `${casUrls.authLogin}?service=${encodedService}`,
     },
     redirect: 'manual',
     timeoutMs,
@@ -524,22 +525,22 @@ export async function requestMFACode(
   username: string,
   method: MFAMethod = 'cpdaily',
 ): Promise<MFAChallenge> {
-  const typeCode = MFA_METHOD_TO_CODE[method];
-  const authCodeType = MFA_METHOD_TO_AUTH_CODE_TYPE[method];
+  const typeCode = getMFAMethodToCode()[method];
+  const authCodeType = getMFAMethodToAuthCodeType()[method];
   if (!typeCode || !authCodeType) {
     throw new CASProtocolError(`unsupported MFA method: ${method}`);
   }
 
-  const encodedService = encodeURIComponent(DEFAULT_LOGIN_SERVICE);
-  const referer = `${CER_BASE_URL}/authserver/reAuthCheck/reAuthLoginView.do?isMultifactor=true&service=${encodedService}`;
+  const encodedService = encodeURIComponent(casUrls.defaultLoginService);
+  const referer = `${serverConfig.cerBaseUrl}/authserver/reAuthCheck/reAuthLoginView.do?isMultifactor=true&service=${encodedService}`;
 
   await _fetch({
     method: 'POST',
-    url: REAUTH_TYPE_URL,
+    url: casUrls.reauthType,
     body: new URLSearchParams({
       isMultifactor: 'true',
       reAuthType: typeCode,
-      service: DEFAULT_LOGIN_SERVICE,
+      service: casUrls.defaultLoginService,
     }),
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -552,7 +553,7 @@ export async function requestMFACode(
 
   const resp = await _fetch({
     method: 'POST',
-    url: REAUTH_SEND_CODE_URL,
+    url: casUrls.reauthSendCode,
     body: new URLSearchParams({
       userName: username,
       authCodeTypeName: authCodeType,
@@ -600,13 +601,13 @@ export async function submitMFACode(
   challenge: MFAChallenge,
   code: string,
 ): Promise<CASCredential> {
-  const encodedService = encodeURIComponent(DEFAULT_LOGIN_SERVICE);
-  const referer = `${CER_BASE_URL}/authserver/reAuthCheck/reAuthLoginView.do?isMultifactor=true&service=${encodedService}`;
+  const encodedService = encodeURIComponent(casUrls.defaultLoginService);
+  const referer = `${serverConfig.cerBaseUrl}/authserver/reAuthCheck/reAuthLoginView.do?isMultifactor=true&service=${encodedService}`;
   const resp = await _fetch({
     method: 'POST',
-    url: REAUTH_SUBMIT_URL,
+    url: casUrls.reauthSubmit,
     body: new URLSearchParams({
-      service: DEFAULT_LOGIN_SERVICE,
+      service: casUrls.defaultLoginService,
       reAuthType: challenge.methodCode,
       isMultifactor: 'true',
       dynamicCode: code,
@@ -630,7 +631,7 @@ export async function submitMFACode(
     try {
       const follow = await _fetch({
         method: 'GET',
-        url: new URL(location, REAUTH_SUBMIT_URL).toString(),
+        url: new URL(location, casUrls.reauthSubmit).toString(),
         redirect: 'follow',
         timeoutMs,
       });
@@ -685,7 +686,7 @@ export async function authorize(
   await (await CASCredential.fromJar(casJar)).apply(target);
 
   const encoded = encodeURIComponent(serviceUrl);
-  const url = `${AUTH_LOGIN_URL}?service=${encoded}`;
+  const url = `${casUrls.authLogin}?service=${encoded}`;
 
   let resp: HttpResponse;
   try {
@@ -726,7 +727,7 @@ async function getLoginPage(): Promise<{ html: string; finalUrl: string }> {
   loginPageInflight = (async () => {
     try {
       loginPageCache = null;
-      const url = `${AUTH_LOGIN_URL}?service=${encodeURIComponent(DEFAULT_LOGIN_SERVICE)}`;
+      const url = `${casUrls.authLogin}?service=${encodeURIComponent(casUrls.defaultLoginService)}`;
 
   // Follow redirects so we land on the actual destination.
   // If TGC is valid, CAS 302s to the service page (already authenticated).
@@ -781,7 +782,7 @@ async function classifyStep1Response(
 ): Promise<Step1Result> {
   if (REDIRECT_STATUSES.has(resp.status)) {
     const location = headerSingle(resp.headers, 'location') ?? '';
-    const absoluteLocation = new URL(location, AUTH_LOGIN_URL).toString();
+    const absoluteLocation = new URL(location, casUrls.authLogin).toString();
 
     if (location.includes('reAuthCheck') || location.includes('isMultifactor')) {
       await _fetch({
@@ -793,7 +794,7 @@ async function classifyStep1Response(
       return { authenticated: false, needsMfa: true, username };
     }
 
-    if (location.includes(DEFAULT_LOGIN_SERVICE) || location.includes('ticket=')) {
+    if (location.includes(casUrls.defaultLoginService) || location.includes('ticket=')) {
       await _fetch({
         method: 'GET',
         url: absoluteLocation,
@@ -815,7 +816,7 @@ async function classifyStep1Response(
       throw new CASProtocolError(`failed to follow redirect: ${(e as Error).message}`);
     }
 
-    if (follow.url.includes(DEFAULT_LOGIN_SERVICE) || follow.url.includes('ticket=')) {
+    if (follow.url.includes(casUrls.defaultLoginService) || follow.url.includes('ticket=')) {
       return { authenticated: true, needsMfa: false, username };
     }
 

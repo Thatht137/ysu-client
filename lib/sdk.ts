@@ -23,9 +23,12 @@ import {
   getJar as getMobileJar,
 } from "./jwmobile";
 import { useAuthStore } from "./auth-store";
+import { initServerConfig } from "./server-config";
 
 /** 从 auth-store 恢复 CAS 凭据、JWXT 会话和 mobile 会话到各自的 jar。 */
 export async function initSDK(): Promise<void> {
+  // 从 settings-store 初始化自定义服务器地址
+  initServerConfig();
   // Restore CASTGC to CapacitorHttp system cookie store (for native platforms)
   await restoreCASCookies();
 

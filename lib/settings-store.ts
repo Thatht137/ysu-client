@@ -16,6 +16,8 @@ interface SettingsState {
   defaultLandingPage: LandingPage;
   widgetSyncReminderHours: number;
   avatarImage: string;
+  customCerBaseUrl: string;
+  customJwxtBaseUrl: string;
   hasHydrated: boolean;
   setUpdateMirror: (mirror: string) => void;
   setBackgroundImage: (image: string) => void;
@@ -27,6 +29,8 @@ interface SettingsState {
   setDefaultLandingPage: (page: LandingPage) => void;
   setWidgetSyncReminderHours: (hours: number) => void;
   setAvatarImage: (image: string) => void;
+  setCustomCerBaseUrl: (url: string) => void;
+  setCustomJwxtBaseUrl: (url: string) => void;
   setHasHydrated: (v: boolean) => void;
 }
 
@@ -43,6 +47,8 @@ export const useSettingsStore = create<SettingsState>()(
       defaultLandingPage: "overview",
       widgetSyncReminderHours: 24,
       avatarImage: "",
+      customCerBaseUrl: "",
+      customJwxtBaseUrl: "",
       hasHydrated: false,
       setUpdateMirror: (updateMirror) => set({ updateMirror }),
       setBackgroundImage: (backgroundImage) => set({ backgroundImage }),
@@ -54,6 +60,8 @@ export const useSettingsStore = create<SettingsState>()(
       setDefaultLandingPage: (defaultLandingPage) => set({ defaultLandingPage }),
       setWidgetSyncReminderHours: (widgetSyncReminderHours) => set({ widgetSyncReminderHours }),
       setAvatarImage: (avatarImage) => set({ avatarImage }),
+      setCustomCerBaseUrl: (customCerBaseUrl) => set({ customCerBaseUrl }),
+      setCustomJwxtBaseUrl: (customJwxtBaseUrl) => set({ customJwxtBaseUrl }),
       setHasHydrated: (v) => set({ hasHydrated: v }),
     }),
     {

@@ -23,6 +23,7 @@ import { useSettingsStore, type LandingPage } from "@/lib/settings-store";
 import { Input } from "@/components/ui/input";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { resetSDK } from "@/lib/sdk";
+import { applyServerConfig, resetServerConfig, serverConfig } from "@/lib/server-config";
 import { syncWidgetSettingsToWidget } from "@/lib/widget-bridge";
 import { checkRateLimit, recordLoginAttempt } from "@/lib/rate-limit";
 import { useUpdateStore } from "@/lib/update-store";
@@ -39,6 +40,7 @@ import {
   Globe,
   Clock,
   UserCircle,
+  Server,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -52,9 +54,15 @@ export default function SettingsPage() {
   const setDefaultLandingPage = useSettingsStore((s) => s.setDefaultLandingPage);
   const widgetSyncReminderHours = useSettingsStore((s) => s.widgetSyncReminderHours);
   const setWidgetSyncReminderHours = useSettingsStore((s) => s.setWidgetSyncReminderHours);
+  const customCerBaseUrl = useSettingsStore((s) => s.customCerBaseUrl);
+  const customJwxtBaseUrl = useSettingsStore((s) => s.customJwxtBaseUrl);
+  const setCustomCerBaseUrl = useSettingsStore((s) => s.setCustomCerBaseUrl);
+  const setCustomJwxtBaseUrl = useSettingsStore((s) => s.setCustomJwxtBaseUrl);
 
   const [localSyncHours, setLocalSyncHours] = useState(String(widgetSyncReminderHours));
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+  const [localCerUrl, setLocalCerUrl] = useState(customCerBaseUrl);
+  const [localJwxtUrl, setLocalJwxtUrl] = useState(customJwxtBaseUrl);
 
   function commitSyncHours() {
     const val = parseInt(localSyncHours, 10);
@@ -72,6 +80,22 @@ export default function SettingsPage() {
     resetSDK();
     toast.success(t("app.logout"));
     router.replace("/login");
+  }
+
+  function saveServerConfig() {
+    setCustomCerBaseUrl(localCerUrl);
+    setCustomJwxtBaseUrl(localJwxtUrl);
+    applyServerConfig(localCerUrl, localJwxtUrl);
+    toast.success(t("settings.serverConfigUpdated"));
+  }
+
+  function handleResetServerConfig() {
+    setLocalCerUrl("");
+    setLocalJwxtUrl("");
+    setCustomCerBaseUrl("");
+    setCustomJwxtBaseUrl("");
+    resetServerConfig();
+    toast.success(t("settings.serverConfigUpdated"));
   }
 
   async function handleRelogin() {
@@ -259,6 +283,44 @@ export default function SettingsPage() {
               )}
               <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
             </Link>
+          </CardContent>
+        </Card>
+      </Section>
+
+      <Section title={t("settings.serverConfig")}>
+        <Card>
+          <CardContent className="flex flex-col gap-3 py-4">
+            <p className="text-xs text-muted-foreground">{t("settings.serverConfigDesc")}</p>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                <Server className="size-5 shrink-0 text-muted-foreground" />
+                <span className="w-24 shrink-0 text-sm">{t("settings.casBaseUrl")}</span>
+                <Input
+                  value={localCerUrl}
+                  onChange={(e) => setLocalCerUrl(e.target.value)}
+                  placeholder={t("settings.casBaseUrlPlaceholder")}
+                  className="flex-1 text-sm"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <Server className="size-5 shrink-0 text-muted-foreground" />
+                <span className="w-24 shrink-0 text-sm">{t("settings.jwxtBaseUrl")}</span>
+                <Input
+                  value={localJwxtUrl}
+                  onChange={(e) => setLocalJwxtUrl(e.target.value)}
+                  placeholder={t("settings.jwxtBaseUrlPlaceholder")}
+                  className="flex-1 text-sm"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={handleResetServerConfig}>
+                {t("settings.serverConfigReset")}
+              </Button>
+              <Button size="sm" onClick={saveServerConfig}>
+                {t("app.avatarSave")}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </Section>

@@ -14,13 +14,13 @@ import {
 } from './cookie';
 import { authorize } from './cas';
 import { useAuthStore } from './auth-store';
+import {
+  mobileUrls,
+  getJwxtCookieDomain,
+} from './server-config';
 
 // ─── Constants ────────────────────────────────────────────────────────── //
 
-const JWXT_BASE_URL = 'https://jwxt.ysu.edu.cn';
-const MOBILE_API_BASE = `${JWXT_BASE_URL}/jwmobile/biz/v410`;
-const MOBILE_AUTH_URL = `${JWXT_BASE_URL}/jwmobile/auth/index`;
-const MOBILE_COOKIE_DOMAIN = 'jwxt.ysu.edu.cn';
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MOBILE_REDIRECT_STATUSES: ReadonlySet<number> = new Set([
   301, 302, 303, 307, 308,
@@ -114,7 +114,7 @@ export class MobileBusinessError extends MobileError {
 // ─── MobileSession ────────────────────────────────────────────────────── //
 
 function isMobileCookie(e: CookieEntry): boolean {
-  return e.domain.length > 0 && e.domain.includes(MOBILE_COOKIE_DOMAIN);
+  return e.domain.length > 0 && e.domain.includes(getJwxtCookieDomain());
 }
 
 export class MobileSession {
@@ -194,7 +194,7 @@ export function resetMobileAuth(): void {
 // ─── Internal helpers ─────────────────────────────────────────────────── //
 
 async function captureMobileToken(): Promise<string | null> {
-  let url = MOBILE_AUTH_URL;
+  let url = mobileUrls.auth;
   let redirects = 0;
   const maxRedirects = 5;
 
@@ -230,7 +230,7 @@ async function verifyMobileToken(): Promise<boolean> {
   try {
     const resp = await fetchWithJar(mobileJar, {
       method: 'GET',
-      url: `${MOBILE_API_BASE}/`,
+      url: `${mobileUrls.apiBase}/`,
       redirect: 'follow',
       timeoutMs,
     });
@@ -258,7 +258,7 @@ export async function ensureMobileAuthorized(verify = false): Promise<void> {
     (c) =>
       c.name === 'Authorization' &&
       c.value &&
-      c.domain.includes(MOBILE_COOKIE_DOMAIN),
+      c.domain.includes(getJwxtCookieDomain()),
   );
   if (hasAuthCookie) {
     if (verify) {
@@ -268,7 +268,7 @@ export async function ensureMobileAuthorized(verify = false): Promise<void> {
         return;
       }
       // Token 已过期，清除过期的 cookie 继续重新获取
-      await mobileJar.removeCookie(MOBILE_COOKIE_DOMAIN, '/jwmobile', 'Authorization');
+      await mobileJar.removeCookie(getJwxtCookieDomain(), '/jwmobile', 'Authorization');
     } else {
       mobileAuthorized = true;
       return;
@@ -282,7 +282,7 @@ export async function ensureMobileAuthorized(verify = false): Promise<void> {
 
   inflightMobileAuth = (async () => {
     // Step 1: Complete CAS SSO to obtain JSESSIONID.
-    await authorize(MOBILE_AUTH_URL, mobileJar);
+    await authorize(mobileUrls.auth, mobileJar);
 
     // Step 2: Capture JWT token from the redirect chain.
     const token = await captureMobileToken();
@@ -291,9 +291,10 @@ export async function ensureMobileAuthorized(verify = false): Promise<void> {
     }
 
     // Step 3: Store token as Authorization cookie for jwmobile API calls.
+    const cookieDomain = getJwxtCookieDomain();
     await mobileJar.setCookie(
-      `Authorization=${token}; Path=/jwmobile; Domain=jwxt.ysu.edu.cn; Secure`,
-      `${JWXT_BASE_URL}/jwmobile/`,
+      `Authorization=${token}; Path=${mobileUrls.cookiePath}; Domain=${cookieDomain}; Secure`,
+      `https://${cookieDomain}${mobileUrls.cookiePath}/`,
     );
   })();
 
@@ -324,7 +325,7 @@ async function mobileRequest(
 ): Promise<Record<string, unknown>> {
   await ensureMobileAuthorized();
 
-  const url = `${MOBILE_API_BASE}/${path}`;
+  const url = `${mobileUrls.apiBase}/${path}`;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Accept: 'application/json',

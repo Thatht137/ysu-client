@@ -22,6 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useAuthStore } from "@/lib/auth-store";
 import { useSettingsStore } from "@/lib/settings-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
+import { casUrls } from "@/lib/server-config";
 import {
   loadRememberedCredentials,
   saveRememberedCredentials,
@@ -78,7 +79,7 @@ export default function LoginPage() {
   function showCaptcha() {
     setNeedsCaptcha(true);
     setCaptchaUrl(
-      `https://cer.ysu.edu.cn/authserver/getCaptcha.htl?${Date.now()}`,
+      `${casUrls.captcha}?${Date.now()}`,
     );
   }
 
@@ -244,7 +245,7 @@ export default function LoginPage() {
                     className="rounded-md border cursor-pointer transition-opacity hover:opacity-80"
                     onClick={() =>
                       setCaptchaUrl(
-                        `https://cer.ysu.edu.cn/authserver/getCaptcha.htl?${Date.now()}`,
+                        `${casUrls.captcha}?${Date.now()}`,
                       )
                     }
                   />
