@@ -6,6 +6,7 @@
  */
 
 import ysuConfig from './school-configs/ysu.json';
+import nbuConfig from './school-configs/nbu.json';
 
 // ─── Types ────────────────────────────────────────────────────────────── //
 
@@ -27,6 +28,7 @@ export interface SchoolConfig {
   readonly features: {
     readonly hasMobile: boolean;
     readonly hasLabSchedule: boolean;
+    readonly hasMfa: boolean;
   };
 }
 
@@ -34,6 +36,7 @@ export interface SchoolConfig {
 
 const schoolConfigs: Readonly<Record<string, SchoolConfig>> = {
   ysu: ysuConfig as SchoolConfig,
+  nbu: nbuConfig as SchoolConfig,
 };
 
 let currentSchoolId = 'ysu';
