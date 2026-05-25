@@ -24,6 +24,7 @@ const VERSION_JSON_NAME = "version.json";
 const APK_NAME = "app-release.apk";
 const LAST_CHECK_KEY = "ysu-last-update-check";
 const CHECK_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
+export const OTA_CLEANUP_FLAG = "ysu-ota-cleanup";
 
 export const UPDATE_MIRRORS: readonly UpdateMirror[] = [
   { label: "官方源", value: OFFICIAL_BASE },
@@ -169,6 +170,8 @@ export async function downloadAndApply(
       version: info.version,
     });
     await CapacitorUpdater.next({ id: bundle.id });
+    // 标记需要清理旧 OTA 版本，由下次 initSDK 执行
+    localStorage.setItem(OTA_CLEANUP_FLAG, "1");
   } finally {
     await listener.remove();
   }
