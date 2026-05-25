@@ -26,6 +26,8 @@ export interface SchoolConfig {
     readonly appShowPath: string;
     readonly appIds: Readonly<Record<string, string>>;
     readonly apiPaths: Readonly<Record<string, string>>;
+    /** Workaround: some backends return 404 for pjapp; retry with this route. */
+    readonly pjappGoodRoute?: string;
   };
   readonly features: {
     readonly hasMobile: boolean;

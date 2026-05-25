@@ -18,6 +18,7 @@
     "jwxtBaseUrl": "https://jwxt.ysu.edu.cn",
     "portalPath": "/jwapp/sys/emaphome/portal/index.do",
     "appShowPath": "/jwapp/sys/emaphome/appShow.do",
+    "pjappGoodRoute": "66e7c01ca2d9ee791810e9d9742ba791",
     "appIds": {
       "cjcx": "d71f7b57b4f348368f06c3e9a2a0988f",
       "wdkb": "377b6493556d4f0b86d116ca00cd1b6e",

@@ -34,8 +34,6 @@ function refreshSchoolConfigCache(): void {
 // Register callback to refresh cache when school config changes
 onSchoolConfigChanged(refreshSchoolConfigCache);
 
-/** Some JWXT backend instances return 404 for pjapp; fall back to this route. */
-const PJAPP_GOOD_ROUTE = '66e7c01ca2d9ee791810e9d9742ba791';
 
 // ─── Types ────────────────────────────────────────────────────────────── //
 
@@ -574,12 +572,16 @@ async function emapPost(
       resp = await doRequest();
       // Retry pjapp 404 with a known-good route cookie.
       if (resp.status === 404 && appId === _appIds.pjapp) {
-        await jwxtJar.setCookie(
-          `route=${PJAPP_GOOD_ROUTE}; Domain=.jwxt.ysu.edu.cn; Path=/`,
-          serverConfig.jwxtBaseUrl,
-          { ignoreError: true },
-        );
-        resp = await doRequest();
+        const goodRoute = getSchoolConfig().jwxt.pjappGoodRoute;
+        if (goodRoute) {
+          const domain = new URL(serverConfig.jwxtBaseUrl).hostname;
+          await jwxtJar.setCookie(
+            `route=${goodRoute}; Domain=.${domain}; Path=/`,
+            serverConfig.jwxtBaseUrl,
+            { ignoreError: true },
+          );
+          resp = await doRequest();
+        }
       }
     } finally {
       weuMutex.release();
