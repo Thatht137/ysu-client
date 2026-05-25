@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -37,7 +37,6 @@ import { useSettingsStore } from "@/lib/settings-store";
 
 export default function SchedulePage() {
   const credential = useAuthStore((s) => s.credential);
-  const widgetSyncReminderHours = useSettingsStore((s) => s.widgetSyncReminderHours);
   const { t } = useTranslation();
   const isMobile = useIsMobile();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -108,7 +107,7 @@ export default function SchedulePage() {
         cacheSet(cacheKey(["periods", credential!]), p.filter((x) => x.is_in_use).sort((a, b) => a.section - b.section));
         cacheSet(cacheKey(["week", credential!]), w);
         const activeCourses = w?.week ? c.filter((course) => isCourseActiveInWeek(course, w.week)) : c;
-        syncScheduleToWidget(activeCourses, w, p.filter((x) => x.is_in_use).sort((a, b) => a.section - b.section), widgetSyncReminderHours).catch(() => {});
+        syncScheduleToWidget(activeCourses, w, p.filter((x) => x.is_in_use).sort((a, b) => a.section - b.section), useSettingsStore.getState().widgetSyncReminderHours).catch(() => {});
         useRefreshStore.getState().markFresh();
       } catch (err) {
         if (hasCache) {
@@ -142,7 +141,7 @@ export default function SchedulePage() {
       }
       if (c !== null && w !== null) {
         const activeCourses = w.week ? c.filter((course) => isCourseActiveInWeek(course, w.week)) : c;
-        syncScheduleToWidget(activeCourses, w, periods, widgetSyncReminderHours).catch(() => {});
+        syncScheduleToWidget(activeCourses, w, periods, useSettingsStore.getState().widgetSyncReminderHours).catch(() => {});
       }
       setFilterDrawerOpen(false);
     } catch (err) {

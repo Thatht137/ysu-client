@@ -307,7 +307,6 @@ export interface HttpResponse {
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_REDIRECTS = 10;
-const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
 
 export async function fetchWithJar(
   jar: SimpleCookieJar,
@@ -496,65 +495,6 @@ async function capacitorHttpSend(
       return encoder.encode(String(response.data ?? '')).buffer;
     },
   };
-}
-
-/**
- * Sync cookies from the native CookieManager back into the jar.
- *
- * When HttpURLConnection auto-follows redirects, intermediate Set-Cookie
- * headers (e.g. `route`, `GS_SESSIONID` from JWXT) are stored in the native
- * CookieManager but are NOT exposed in the final response headers JS sees.
- * This helper reads them back and writes them into our jar with a root path
- * so they are sent on all subsequent requests under the same domain.
- */
-export async function syncNativeCookiesToJar(
-  jar: SimpleCookieJar,
-  url: string,
-): Promise<void> {
-  if (!isCapacitor()) return;
-  const capCore = await getCapacitorCore();
-  const CapacitorCookies = capCore?.CapacitorCookies;
-  if (!CapacitorCookies?.getCookies) return;
-
-  try {
-    const nativeCookies: Record<string, string> =
-      await CapacitorCookies.getCookies({ url });
-    if (!nativeCookies || typeof nativeCookies !== 'object') return;
-
-    for (const [name, value] of Object.entries(nativeCookies)) {
-      if (!value) continue;
-      const parsedUrl = safeParseUrl(url);
-      const domain = parsedUrl?.hostname ?? '';
-      // Use root path so the cookie matches all requests under this domain.
-      await jar.setCookie(
-        `${name}=${value}; Domain=${domain}; Path=/`,
-        url,
-        { ignoreError: true },
-      );
-    }
-  } catch {
-    // ignore
-  }
-}
-
-/** Clear all cookies for a URL from the native CookieManager. */
-export async function clearNativeCookies(url: string): Promise<void> {
-  if (!isCapacitor()) return;
-  const capCore = await getCapacitorCore();
-  const CapacitorCookies = capCore?.CapacitorCookies;
-  if (!CapacitorCookies?.getCookies || !CapacitorCookies?.deleteCookie) return;
-
-  try {
-    const nativeCookies: Record<string, string> =
-      await CapacitorCookies.getCookies({ url });
-    if (!nativeCookies || typeof nativeCookies !== 'object') return;
-
-    for (const name of Object.keys(nativeCookies)) {
-      await CapacitorCookies.deleteCookie({ url, key: name });
-    }
-  } catch {
-    // ignore
-  }
 }
 
 async function followRedirects(

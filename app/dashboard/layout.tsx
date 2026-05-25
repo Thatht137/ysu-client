@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/lib/auth-store";
@@ -60,9 +60,8 @@ export default function DashboardLayout({
   const rawPathname = usePathname();
   const pathname = rawPathname.replace(/\/$/, "");
   const { isAuthenticated, hasHydrated, username, clearCredential } = useAuthStore();
-  const { t, locale, setLocale } = useTranslation();
+  const { t } = useTranslation();
 
-  const credential = useAuthStore((s) => s.credential);
   const backgroundImage = useSettingsStore((s) => s.backgroundImage);
   const avatarImage = useSettingsStore((s) => s.avatarImage);
   const hasBackground = !!backgroundImage;

@@ -38,7 +38,7 @@ import type {
   StudentSignResult,
 } from "./types";
 import { useAuthStore } from "./auth-store";
-import { resetSDK, persistJWXTSession } from "./sdk";
+import { persistJWXTSession } from "./sdk";
 import {
   checkCaptchaNeeded as _checkCaptchaNeeded,
   loginStep1 as _loginStep1,

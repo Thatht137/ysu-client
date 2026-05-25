@@ -13,6 +13,10 @@ import { isCapacitor } from "@/lib/platform";
 
 export function SDKProvider({ children }: { children: React.ReactNode }) {
   const { t, locale } = useTranslation();
+  const localeRef = useRef(locale);
+  useEffect(() => {
+    localeRef.current = locale;
+  }, [locale]);
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
   const settingsHydrated = useSettingsStore((s) => s.hasHydrated);
   const updateMirror = useSettingsStore((s) => s.updateMirror);
@@ -56,7 +60,7 @@ export function SDKProvider({ children }: { children: React.ReactNode }) {
         // Check WebView compatibility (Capacitor only)
         if (isCapacitor()) {
           import("@/lib/webview-compat").then(({ checkWebViewCompat }) => {
-            checkWebViewCompat(locale);
+            checkWebViewCompat(localeRef.current);
           });
         }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,6 @@ import {
   getStudentInfo,
   getExperimentalSchedule,
   getCurrentWeek,
-  getCurrentLesson,
 } from "@/lib/api";
 import { RefreshCw, Trash2, Bug } from "lucide-react";
 import { toast } from "sonner";
@@ -183,8 +182,13 @@ export default function DebugPage() {
     }
   }
 
+  const runDiagnosticsRef = useRef(runDiagnostics);
   useEffect(() => {
-    runDiagnostics();
+    runDiagnosticsRef.current = runDiagnostics;
+  });
+
+  useEffect(() => {
+    runDiagnosticsRef.current();
   }, []);
 
   function handleClearCache() {

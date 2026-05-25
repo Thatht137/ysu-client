@@ -11,7 +11,6 @@ import {
   cookieEntryFromJSON,
   fetchWithJar,
   headerSingle,
-  clearNativeCookies,
 } from './cookie';
 import { authorize, getCredentialApplied } from './cas';
 
@@ -34,6 +33,9 @@ const APP_IDS = {
   kcbcx: '74506a67ea1c4bf3bb54eefa6e196779',
   pjapp: '5db54fd366204007af34267396897b24',
 } as const satisfies Readonly<Record<string, string>>;
+
+/** Some JWXT backend instances return 404 for pjapp; fall back to this route. */
+const PJAPP_GOOD_ROUTE = '66e7c01ca2d9ee791810e9d9742ba791';
 
 const API_PATHS = {
   cjcx: 'cjcx/modules/cjcx/xscjcx.do',
@@ -469,9 +471,6 @@ export function resetJWXT(): void {
   inflightCurrentTerm = null;
   cachedCurrentWeek = null;
   inflightCurrentWeek = null;
-  // Fire-and-forget: purge stale native cookies so a fresh login starts
-  // from a clean CookieManager state.
-  clearNativeCookies(JWXT_BASE_URL).catch(() => {});
 }
 
 /** 将当前 JWXT jar 中的会话持久化到 auth-store（包含 mobile auth token）。 */
@@ -604,6 +603,15 @@ async function emapPost(
         );
       }
       resp = await doRequest();
+      // Retry pjapp 404 with a known-good route cookie.
+      if (resp.status === 404 && appId === APP_IDS.pjapp) {
+        await jwxtJar.setCookie(
+          `route=${PJAPP_GOOD_ROUTE}; Domain=.jwxt.ysu.edu.cn; Path=/`,
+          JWXT_BASE_URL,
+          { ignoreError: true },
+        );
+        resp = await doRequest();
+      }
     } finally {
       weuMutex.release();
     }
@@ -680,10 +688,6 @@ async function reauthorize(): Promise<void> {
       await jwxtJar.removeCookie(c.domain, c.path ?? '/', c.name);
     }
   }
-  // Clear stale cookies from the native CookieManager so old `route`
-  // tokens (and other lingering JWXT cookies) don't leak into the
-  // next authorize flow and cause load-balancer routing mismatches.
-  await clearNativeCookies(JWXT_BASE_URL);
   await authorize(JWXT_PORTAL_URL, jwxtJar);
   ensuredWeuApps.clear();
   weuStore.clear();
@@ -810,10 +814,6 @@ async function runWithReauth<T>(fn: () => Promise<T>): Promise<T> {
     return await fn();
   } catch (e) {
     if (e instanceof NotLoggedInError) {
-      await reauthorize();
-      return await fn();
-    }
-    if (e instanceof JWXTProtocolError && e.message.includes('HTTP 404')) {
       await reauthorize();
       return await fn();
     }

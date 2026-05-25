@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   BookOpen,
@@ -28,7 +27,6 @@ import { getStudentInfo } from "@/lib/api";
 import { cacheGet, cacheSet, cacheKey } from "@/lib/cache";
 import { resetSDK } from "@/lib/sdk";
 import { checkRateLimit, recordLoginAttempt } from "@/lib/rate-limit";
-import { useUpdateStore } from "@/lib/update-store";
 import { useTheme } from "next-themes";
 import { APP_VERSION, APP_BUILD } from "@/lib/version";
 import type { StudentInfo } from "@/lib/types";
@@ -194,7 +192,7 @@ export default function MePage() {
               ))}
             {academicLinks
               .filter((item) => item.mobileOnly)
-              .map((item, idx, arr) => (
+              .map((item, idx) => (
                 <Link
                   key={item.href}
                   href={item.href}

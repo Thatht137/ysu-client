@@ -34,7 +34,7 @@ import {
   LogIn,
   LogOut,
   Info,
-  Image,
+  Image as ImageIcon,
   Sun,
   Globe,
   Clock,
@@ -213,7 +213,7 @@ export default function SettingsPage() {
               href="/dashboard/me/background"
               className="flex items-center gap-3 border-t border-border py-3 transition-colors active:bg-muted/60"
             >
-              <Image className="size-5 shrink-0 text-muted-foreground" />
+              <ImageIcon className="size-5 shrink-0 text-muted-foreground" />
               <span className="flex-1 text-sm">{t("app.backgroundImage")}</span>
               <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
             </Link>

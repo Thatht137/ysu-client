@@ -11,7 +11,6 @@ import {
   cookieEntryFromJSON,
   fetchWithJar,
   headerSingle,
-  syncNativeCookiesToJar,
   type HttpResponse,
 } from './cookie';
 import {
@@ -703,12 +702,6 @@ export async function authorize(
   if (resp.url.includes('/authserver/login')) {
     throw new NotAuthenticatedError('CAS bounced back to login page; TGC missing or expired');
   }
-
-  // HttpURLConnection auto-follows redirects and stores intermediate
-  // Set-Cookie headers (e.g. JWXT's route/GS_SESSIONID) in the native
-  // CookieManager. These are not exposed in response headers, so sync
-  // them back into our jar using the final landing URL.
-  await syncNativeCookiesToJar(target, resp.url);
 
   await (await CASCredential.fromJar(target)).apply(casJar);
   await saveCASTGC();

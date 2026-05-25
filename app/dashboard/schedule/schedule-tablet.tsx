@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Empty,
   EmptyDescription,
@@ -282,7 +281,6 @@ export function ScheduleTablet({ courses, periods, currentWeekday, currentWeek, 
           </DialogHeader>
           <div className="flex flex-col gap-3">
             {overlapDialog?.courses.map((c, i) => {
-              const colorIdx = courseColorIndex(c);
               return (
                 <Card
                   key={i}

@@ -23,6 +23,11 @@ const eslintConfig = defineConfig([
       // standard SSR-safe pattern in Next.js; the cascading-render risk
       // does not apply to one-shot cache reads on mount.
       "react-hooks/set-state-in-effect": "off",
+      // Underscore-prefixed args are intentionally unused (API compatibility).
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_" },
+      ],
     },
   },
 ]);
