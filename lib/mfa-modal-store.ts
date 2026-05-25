@@ -5,15 +5,16 @@ interface MFAModalState {
   username: string;
   mobileHint: string;
   methodCode: string;
-  mfaMethod: "sms" | "cpdaily";
+  mfaMethod: "sms" | "cpdaily" | "weixin";
   resolve: ((value: string) => void) | null;
   reject: (() => void) | null;
   showMFA: (opts: {
     username: string;
-    methodCode: string;
-    mobileHint: string;
+    method?: "sms" | "cpdaily" | "weixin";
   }) => Promise<string>;
+  setMethodInfo: (method: "sms" | "cpdaily" | "weixin", methodCode: string, mobileHint: string) => void;
   submitMFA: (code: string) => void;
+  completeWechatMFA: () => void;
   cancelMFA: () => void;
 }
 
@@ -22,7 +23,7 @@ export const useMFAModalStore = create<MFAModalState>((set, get) => ({
   username: "",
   mobileHint: "",
   methodCode: "",
-  mfaMethod: "cpdaily",
+  mfaMethod: "weixin",
   resolve: null,
   reject: null,
 
@@ -31,17 +32,27 @@ export const useMFAModalStore = create<MFAModalState>((set, get) => ({
       set({
         open: true,
         username: opts.username,
-        methodCode: opts.methodCode,
-        mobileHint: opts.mobileHint,
-        mfaMethod: "cpdaily",
+        methodCode: "",
+        mobileHint: "",
+        mfaMethod: opts.method ?? "weixin",
         resolve,
         reject,
       });
     }),
 
+  setMethodInfo: (method, methodCode, mobileHint) => {
+    set({ mfaMethod: method, methodCode, mobileHint });
+  },
+
   submitMFA: (code) => {
     const { resolve } = get();
     if (resolve) resolve(code);
+    set({ open: false, resolve: null, reject: null });
+  },
+
+  completeWechatMFA: () => {
+    const { resolve } = get();
+    if (resolve) resolve('');
     set({ open: false, resolve: null, reject: null });
   },
 

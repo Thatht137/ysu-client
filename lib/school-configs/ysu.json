@@ -7,11 +7,13 @@
     "aesChars": "ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678",
     "mfaMethodToCode": {
       "sms": "3",
-      "cpdaily": "5"
+      "cpdaily": "5",
+      "weixin": "8"
     },
     "mfaMethodToAuthCodeType": {
       "sms": "reAuthDynamicCodeType",
-      "cpdaily": "reAuthCpdailyDynamicCodeType"
+      "cpdaily": "reAuthCpdailyDynamicCodeType",
+      "weixin": "8"
     }
   },
   "jwxt": {

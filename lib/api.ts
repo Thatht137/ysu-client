@@ -211,7 +211,7 @@ export async function submitMFACode(
 ): Promise<LoginResponse> {
   try {
     const challenge = {
-      method: payload.method as "sms" | "cpdaily",
+      method: payload.method as "sms" | "cpdaily" | "weixin",
       methodCode: payload.method_code,
       mobileHint: "",
       username: payload.username,

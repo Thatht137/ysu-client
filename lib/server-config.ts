@@ -72,6 +72,8 @@ export const casUrls = {
   get reauthType() { return `${serverConfig.cerBaseUrl}/authserver/reAuthCheck/changeReAuthType.do`; },
   get reauthSendCode() { return `${serverConfig.cerBaseUrl}/authserver/dynamicCode/getDynamicCodeByReauth.do`; },
   get reauthSubmit() { return `${serverConfig.cerBaseUrl}/authserver/reAuthCheck/reAuthSubmit.do`; },
+  get combinedLogin() { return `${serverConfig.cerBaseUrl}/authserver/combinedLogin.do`; },
+  get callback() { return `${serverConfig.cerBaseUrl}/authserver/callback`; },
   get defaultLoginService() { return `${serverConfig.cerBaseUrl}/personalInfo/personCenter/index.html`; },
 };
 

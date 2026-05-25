@@ -1,7 +1,6 @@
 import { toast } from "sonner";
 import {
   loginStep1,
-  requestMFACode,
   submitMFACode,
   CASCredential,
   resetCAS,
@@ -50,17 +49,28 @@ export async function tryAutoLogin(): Promise<boolean> {
       }
 
       if (step1.needsMfa) {
-        const mfaRes = await requestMFACode(remembered.username, "cpdaily");
         const store = useMFAModalStore.getState();
 
         try {
-          const code = await store.showMFA({
-            username: remembered.username,
-            methodCode: mfaRes.methodCode,
-            mobileHint: mfaRes.mobileHint,
-          });
+          const code = await store.showMFA({ username: remembered.username });
 
-          const credential = await submitMFACode(mfaRes, code);
+          // WeChat MFA completed in the modal (credential already saved).
+          if (!code) {
+            await initSDK();
+            return true;
+          }
+
+          const { mfaMethod, methodCode } = useMFAModalStore.getState();
+          const credential = await submitMFACode(
+            {
+              method: mfaMethod as "sms" | "cpdaily",
+              methodCode,
+              mobileHint: "",
+              username: remembered.username,
+              raw: {},
+            },
+            code,
+          );
           const json = credential.toJSON();
           useAuthStore.getState().setCredential(json, remembered.username);
           await initSDK();

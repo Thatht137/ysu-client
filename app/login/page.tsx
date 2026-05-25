@@ -39,7 +39,6 @@ import {
   checkCaptchaNeeded,
   loginStep1,
   prepareLogin,
-  requestMFACode,
   submitMFACode,
 } from "@/lib/api";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -134,21 +133,26 @@ export default function LoginPage() {
 
       if (res.needs_mfa) {
         toast.info(t("login.mfaRequired"));
-        const mfaRes = await requestMFACode(
-          { username, method: "cpdaily" },
-          res.credential ?? undefined,
-        );
         const store = useMFAModalStore.getState();
         try {
-          const code = await store.showMFA({
-            username,
-            methodCode: mfaRes.method_code,
-            mobileHint: mfaRes.mobile_hint,
-          });
+          const code = await store.showMFA({ username });
+          // Empty code means WeChat MFA completed (credential already saved by the modal).
+          if (!code) {
+            if (remember) {
+              saveRememberedCredentials(username, password);
+            } else {
+              clearRememberedCredentials();
+            }
+            toast.success(t("login.loginSuccess"));
+            const landing = useSettingsStore.getState().defaultLandingPage;
+            router.replace(landing === "schedule" ? "/dashboard/schedule/" : "/dashboard");
+            return;
+          }
+          const { mfaMethod, methodCode } = useMFAModalStore.getState();
           await submitMFACode(
             {
-              method: "cpdaily",
-              method_code: mfaRes.method_code,
+              method: mfaMethod as "sms" | "cpdaily",
+              method_code: methodCode,
               username,
               code,
             },

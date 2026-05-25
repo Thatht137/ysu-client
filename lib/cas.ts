@@ -40,9 +40,23 @@ function getMFAMethodToAuthCodeType(): Readonly<Record<string, string>> {
 
 const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
 
+// CAS serves different reAuth pages based on User-Agent.
+// The mobile version lacks WeChat MFA (only SMS/Cpdaily/WeChat Work).
+// Use a desktop UA to get the PC reAuth flow with reAuthType=8 (WeChat).
+const DESKTOP_UA =
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36';
+
 // ─── Types ────────────────────────────────────────────────────────────── //
 
-export type MFAMethod = 'sms' | 'cpdaily';
+export type MFAMethod = 'sms' | 'cpdaily' | 'weixin';
+
+export interface WechatMFAContext {
+  uuid: string;
+  state: string;
+  qrImageUrl: string;
+  /** The full WeChat OAuth authorization URL — open this to trigger the WeChat app. */
+  oauthUrl: string;
+}
 
 export interface MFAChallenge {
   readonly method: MFAMethod;
@@ -678,6 +692,192 @@ export async function submitMFACode(
   throw new MFAFailedError('MFA submission did not produce a valid session');
 }
 
+// ─── WeChat MFA ────────────────────────────────────────────────────── //
+
+const WECHAT_POLL_BASE = 'https://lp.open.weixin.qq.com/connect/l/qrconnect';
+
+export async function initiateWechatMFA(): Promise<WechatMFAContext> {
+  const referer = `${serverConfig.cerBaseUrl}/authserver/reAuthCheck/reAuthLoginView.do?isMultifactor=true`;
+  const success = encodeURIComponent(casUrls.defaultLoginService);
+
+  // The mobile reAuth page does not support WeChat MFA (only SMS/Cpdaily).
+  // Use a desktop Chrome UA so CAS serves the PC flow with reAuthType=8 (WeChat).
+  // The `success` param matches handleGoCombined's logic when service is present.
+  const resp = await _fetch({
+    method: 'GET',
+    url: `${casUrls.combinedLogin}?type=weixin&reAuth=2&success=${success}&skipTmpReAuth=false`,
+    headers: {
+      'User-Agent': DESKTOP_UA,
+      Referer: referer,
+    },
+    redirect: 'manual',
+    timeoutMs,
+  });
+
+  // Determine the WeChat OAuth URL.
+  // - If we got a redirect, use the Location header.
+  // - If CapacitorHttp followed the redirect (status 200 and resp.url points to WeChat), use resp.url.
+  // - Otherwise check the body for a meta-refresh or JS redirect.
+  let wxOAuthUrl: string;
+
+  if (REDIRECT_STATUSES.has(resp.status)) {
+    const location = headerSingle(resp.headers, 'location');
+    if (!location) {
+      throw new CASProtocolError('combinedLogin.do returned redirect without Location header');
+    }
+    wxOAuthUrl = location;
+  } else if (resp.status === 200) {
+    if (resp.url.includes('open.weixin.qq.com')) {
+      // CapacitorHttp auto-followed the redirect.
+      wxOAuthUrl = resp.url;
+    } else {
+      // Server returned the combinedLogin page directly (200).
+      // Try to extract the WeChat OAuth URL from the HTML body.
+      const body = await resp.text();
+      const metaMatch = body.match(/content="0;\s*url=([^"]+)"/i);
+      if (metaMatch) {
+        wxOAuthUrl = metaMatch[1]!;
+      } else {
+        throw new CASProtocolError(
+          `combinedLogin.do returned status 200 without WeChat redirect. ` +
+          `Body snippet: ${body.slice(0, 300)}`,
+        );
+      }
+    }
+  } else {
+    throw new CASProtocolError(
+      `unexpected status ${resp.status} from combinedLogin.do`,
+    );
+  }
+
+  const wxUrl = new URL(wxOAuthUrl);
+  const state = wxUrl.searchParams.get('state');
+  if (!state) {
+    throw new CASProtocolError('WeChat OAuth URL missing state parameter');
+  }
+
+  // Fetch the WeChat QR connect page to extract UUID from the QR image URL.
+  // Only need the HTML — short timeout, no resources.
+  const wxResp = await fetch(wxOAuthUrl, {
+    method: 'GET',
+    headers: {
+      'User-Agent': DESKTOP_UA,
+      Accept: 'text/html',
+    },
+    signal: AbortSignal.timeout(8_000),
+  });
+
+  const html = await wxResp.text();
+  const qrMatch = html.match(/\/connect\/qrcode\/([a-zA-Z0-9]+)/);
+  if (!qrMatch) {
+    throw new CASProtocolError('could not extract WeChat QR UUID from OAuth page');
+  }
+
+  const uuid = qrMatch[1]!;
+  return {
+    uuid,
+    state,
+    qrImageUrl: `https://open.weixin.qq.com/connect/qrcode/${uuid}`,
+    oauthUrl: wxOAuthUrl,
+  };
+}
+
+export async function pollWechatQR(
+  uuid: string,
+  lastErrcode?: number,
+): Promise<{ status: 'waiting' | 'scanned' | 'confirmed'; code?: string }> {
+  const lastParam = lastErrcode !== undefined ? `&last=${lastErrcode}` : '';
+  const pollUrl = `${WECHAT_POLL_BASE}?uuid=${encodeURIComponent(uuid)}${lastParam}`;
+
+  const resp = await fetch(pollUrl, {
+    method: 'GET',
+    headers: {
+      Referer: 'https://open.weixin.qq.com/',
+      'User-Agent':
+        DESKTOP_UA,
+    },
+    signal: AbortSignal.timeout(Math.min(timeoutMs, 30_000)),
+  });
+
+  const text = await resp.text();
+  const errcodeMatch = text.match(/window\.wx_errcode=(\d+)/);
+  const codeMatch = text.match(/window\.wx_code='([^']*)'/);
+
+  const errcode = errcodeMatch ? parseInt(errcodeMatch[1]!, 10) : 0;
+  const code = codeMatch?.[1] || '';
+
+  if (errcode === 405 && code) {
+    return { status: 'confirmed', code };
+  }
+  if (errcode === 404) {
+    return { status: 'scanned' };
+  }
+  return { status: 'waiting' };
+}
+
+export async function completeWechatMFA(
+  code: string,
+  state: string,
+): Promise<CASCredential> {
+  const callbackUrl = `${casUrls.callback}?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+
+  let resp = await _fetch({
+    method: 'GET',
+    url: callbackUrl,
+    headers: { Referer: 'https://open.weixin.qq.com/' },
+    redirect: 'manual',
+    timeoutMs,
+  });
+
+  // Follow the CAS redirect chain after callback.
+  // The callback returns 200 HTML which auto-navigates to /authserver/login;
+  // we short-circuit that and go directly to /authserver/login.
+  if (resp.status === 200) {
+    resp = await _fetch({
+      method: 'GET',
+      url: casUrls.authLogin,
+      headers: { Referer: callbackUrl },
+      redirect: 'manual',
+      timeoutMs,
+    });
+  }
+
+  // Follow redirects through the ticket-granting chain.
+  for (let i = 0; i < 10; i++) {
+    if (!REDIRECT_STATUSES.has(resp.status)) break;
+
+    const location = headerSingle(resp.headers, 'location');
+    if (!location) break;
+
+    const nextUrl = new URL(location, resp.url).toString();
+
+    // If we reach the service page with a ticket, we're done.
+    if (nextUrl.includes('ticket=') && !nextUrl.includes('/authserver/login')) {
+      resp = await _fetch({
+        method: 'GET',
+        url: nextUrl,
+        redirect: 'follow',
+        timeoutMs,
+      });
+      break;
+    }
+
+    resp = await _fetch({
+      method: 'GET',
+      url: nextUrl,
+      redirect: 'manual',
+      timeoutMs,
+    });
+  }
+
+  if (await isAuthenticated()) {
+    await saveCASTGC();
+    return credential();
+  }
+
+  throw new CASProtocolError('WeChat MFA completed but session not established');
+}
+
 export async function authorize(
   serviceUrl: string,
   targetJar?: SimpleCookieJar,
@@ -788,6 +988,10 @@ async function classifyStep1Response(
       await _fetch({
         method: 'GET',
         url: absoluteLocation,
+        headers: {
+          'User-Agent':
+            DESKTOP_UA,
+        },
         redirect: 'manual',
         timeoutMs,
       });

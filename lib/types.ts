@@ -19,18 +19,18 @@ export interface Step1Response {
 
 export interface MFARequestCodeRequest {
   username: string;
-  method: "sms" | "cpdaily";
+  method: "sms" | "cpdaily" | "weixin";
 }
 
 export interface MFAChallengeResponse {
-  method: "sms" | "cpdaily";
+  method: "sms" | "cpdaily" | "weixin";
   method_code: string;
   mobile_hint: string;
   username: string;
 }
 
 export interface MFASubmitRequest {
-  method: "sms" | "cpdaily";
+  method: "sms" | "cpdaily" | "weixin";
   method_code: string;
   username: string;
   code: string;
@@ -41,7 +41,7 @@ export interface LoginRequest {
   password: string;
   captcha?: string;
   mfa_code?: string;
-  mfa_method?: "sms" | "cpdaily";
+  mfa_method?: "sms" | "cpdaily" | "weixin";
 }
 
 export interface LoginResponse {
