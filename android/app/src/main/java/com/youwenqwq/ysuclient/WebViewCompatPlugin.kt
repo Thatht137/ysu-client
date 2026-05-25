@@ -9,7 +9,10 @@ import android.os.Build
 import android.util.TypedValue
 import android.widget.CheckBox
 import android.widget.LinearLayout
+import android.view.View
 import android.widget.TextView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
@@ -62,6 +65,41 @@ class WebViewCompatPlugin : Plugin() {
 
         val message = buildMessage(version, strings)
         showDialog(ctx, version, prefs, strings, message)
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun initSafeArea(call: PluginCall) {
+        val decorView = activity?.window?.decorView
+        val insets = decorView?.let { ViewCompat.getRootWindowInsets(it) }
+
+        if (insets != null) {
+            val systemBars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            val keyboardVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+            val density = context.resources.displayMetrics.density
+
+            val top = (systemBars.top / density).toInt()
+            val right = (systemBars.right / density).toInt()
+            val bottom = if (keyboardVisible) 0 else (systemBars.bottom / density).toInt()
+            val left = (systemBars.left / density).toInt()
+
+            activity?.runOnUiThread {
+                bridge.webView.evaluateJavascript(
+                    """
+                    try {
+                      var s = document.documentElement.style;
+                      s.setProperty("--safe-area-inset-top", "${top}px");
+                      s.setProperty("--safe-area-inset-right", "${right}px");
+                      s.setProperty("--safe-area-inset-bottom", "${bottom}px");
+                      s.setProperty("--safe-area-inset-left", "${left}px");
+                    } catch(e) {}
+                    """.trimIndent(), null
+                )
+            }
+        }
+
         call.resolve()
     }
 

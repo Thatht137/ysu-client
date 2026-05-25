@@ -10,6 +10,7 @@ import { useSettingsStore } from "@/lib/settings-store";
 import { useUpdateStore } from "@/lib/update-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { isCapacitor } from "@/lib/platform";
+import { initSafeArea } from "@/lib/webview-compat";
 
 export function SDKProvider({ children }: { children: React.ReactNode }) {
   const { t, locale } = useTranslation();
@@ -23,6 +24,23 @@ export function SDKProvider({ children }: { children: React.ReactNode }) {
   const setUpdateStatus = useUpdateStore((s) => s.setUpdateStatus);
   const didInit = useRef(false);
   const [sdkReady, setSdkReady] = useState(false);
+
+  // Inject safe area CSS variables on native.
+  // The Capacitor SystemBars plugin may report zero values for WebView < 140
+  // due to a Chromium bug (crbug.com/40699457). Our native plugin reads the
+  // real root-window insets and corrects them.
+  useEffect(() => {
+    if (!isCapacitor()) return;
+
+    const inject = () => {
+      initSafeArea().catch(() => {});
+    };
+
+    // Inject immediately and on every resize (rotation, keyboard, etc.)
+    inject();
+    window.addEventListener("resize", inject);
+    return () => window.removeEventListener("resize", inject);
+  }, []);
 
   useEffect(() => {
     if (!hasHydrated || !settingsHydrated || didInit.current) return;
