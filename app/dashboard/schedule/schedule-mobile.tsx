@@ -31,6 +31,7 @@ interface Props {
   currentWeek: CurrentWeek | null;
   selectedWeek: number;
   nowMinutes: number;
+  compact?: boolean;
   onPrevWeek?: () => void;
   onNextWeek?: () => void;
 }
@@ -65,6 +66,7 @@ export function ScheduleMobile({
   currentWeek,
   selectedWeek,
   nowMinutes,
+  compact = false,
   onPrevWeek,
   onNextWeek,
 }: Props) {
@@ -141,13 +143,13 @@ export function ScheduleMobile({
     const sizes: string[] = ["auto"];
     for (let r = 2; r <= totalRows; r++) {
       if (r === lunchRow || r === dinnerRow) {
-        sizes.push("18px");
+        sizes.push(compact ? "0px" : "18px");
       } else {
-        sizes.push("minmax(52px, 1fr)");
+        sizes.push(compact ? "minmax(36px, 1fr)" : "minmax(52px, 1fr)");
       }
     }
     return sizes.join(" ");
-  }, [totalRows, lunchRow, dinnerRow]);
+  }, [totalRows, lunchRow, dinnerRow, compact]);
 
   const blocks = useMemo(() => computeMergedBlocks(courses, periods), [courses, periods]);
 
@@ -189,7 +191,9 @@ export function ScheduleMobile({
         onTouchEnd={handleTouchEnd}
         className="grid flex-1 w-full select-none animate-in fade-in duration-200"
         style={{
-          gridTemplateColumns: "minmax(36px, 0.6fr) repeat(7, minmax(0, 1fr))",
+          gridTemplateColumns: compact
+              ? "minmax(28px, 0.4fr) repeat(7, minmax(0, 1fr))"
+              : "minmax(36px, 0.6fr) repeat(7, minmax(0, 1fr))",
           gridTemplateRows,
         }}
       >
@@ -199,7 +203,8 @@ export function ScheduleMobile({
           <div
             key={d}
             className={cn(
-              "flex flex-col items-center justify-center gap-0.5 border-b border-border py-1.5 text-[10px] font-medium",
+              "flex flex-col items-center justify-center border-b border-border text-[10px] font-medium",
+              compact ? "gap-0 py-0.5" : "gap-0.5 py-1.5",
               idx < 6 && "border-r",
               isCurrentWeek && d === currentWeekday
                 ? "bg-primary/5 text-primary"
@@ -223,13 +228,13 @@ export function ScheduleMobile({
               style={{ gridRow: row, gridColumn: 1 }}
             >
               <span className="text-xs font-semibold text-foreground">{p.section}</span>
-              {p.start_time && <span>{p.start_time}</span>}
-              {p.end_time && <span>{p.end_time}</span>}
+              {!compact && p.start_time && <span>{p.start_time}</span>}
+              {!compact && p.end_time && <span>{p.end_time}</span>}
             </div>
           );
         })}
 
-        {lunchRow !== null && (
+        {lunchRow !== null && !compact && (
           <div
             className="flex items-center justify-center border-b border-border bg-muted/40 text-[9px] font-medium text-muted-foreground"
             style={{ gridRow: lunchRow, gridColumn: "1 / -1" }}
@@ -238,7 +243,7 @@ export function ScheduleMobile({
           </div>
         )}
 
-        {dinnerRow !== null && (
+        {dinnerRow !== null && !compact && (
           <div
             className="flex items-center justify-center border-b border-border bg-muted/40 text-[9px] font-medium text-muted-foreground"
             style={{ gridRow: dinnerRow, gridColumn: "1 / -1" }}
@@ -289,11 +294,14 @@ export function ScheduleMobile({
                   {c.name}
                 </span>
                 {c.classroom && (
-                  <span className="line-clamp-2 text-[9px] leading-tight text-foreground/70">
+                  <span className={cn(
+                    "text-[9px] leading-tight text-foreground/70",
+                    compact ? "line-clamp-3" : "line-clamp-2",
+                  )}>
                     {c.classroom}
                   </span>
                 )}
-                {c.teacher && (
+                {!compact && c.teacher && (
                   <span className="line-clamp-1 text-[9px] leading-tight text-foreground/60">
                     {c.teacher}
                   </span>

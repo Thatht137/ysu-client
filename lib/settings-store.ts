@@ -19,6 +19,7 @@ interface SettingsState {
   customCerBaseUrl: string;
   customJwxtBaseUrl: string;
   schoolId: string;
+  scheduleCompactMode: boolean;
   hasHydrated: boolean;
   setUpdateMirror: (mirror: string) => void;
   setBackgroundImage: (image: string) => void;
@@ -33,6 +34,7 @@ interface SettingsState {
   setCustomCerBaseUrl: (url: string) => void;
   setCustomJwxtBaseUrl: (url: string) => void;
   setSchoolId: (id: string) => void;
+  setScheduleCompactMode: (v: boolean) => void;
   setHasHydrated: (v: boolean) => void;
 }
 
@@ -52,6 +54,7 @@ export const useSettingsStore = create<SettingsState>()(
       customCerBaseUrl: "",
       customJwxtBaseUrl: "",
       schoolId: "ysu",
+      scheduleCompactMode: false,
       hasHydrated: false,
       setUpdateMirror: (updateMirror) => set({ updateMirror }),
       setBackgroundImage: (backgroundImage) => set({ backgroundImage }),
@@ -66,6 +69,7 @@ export const useSettingsStore = create<SettingsState>()(
       setCustomCerBaseUrl: (customCerBaseUrl) => set({ customCerBaseUrl }),
       setCustomJwxtBaseUrl: (customJwxtBaseUrl) => set({ customJwxtBaseUrl }),
       setSchoolId: (schoolId) => set({ schoolId }),
+      setScheduleCompactMode: (scheduleCompactMode) => set({ scheduleCompactMode }),
       setHasHydrated: (v) => set({ hasHydrated: v }),
     }),
     {

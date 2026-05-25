@@ -368,6 +368,7 @@ export const zh = {
     classroom: "教室",
     credit: "学分",
     courseType: "类型",
+    compactHint: "紧凑模式",
   },
   activity: {
     title: "课程活动",
@@ -912,6 +913,7 @@ export const en = {
     classroom: "Classroom",
     credit: "Credit",
     courseType: "Type",
+    compactHint: "Compact mode",
   },
   activity: {
     title: "Course Activities",

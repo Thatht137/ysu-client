@@ -29,7 +29,8 @@ import { getExperimentalSchedule, getClassPeriods, getCurrentWeek } from "@/lib/
 import { cacheGetStale, cacheSet, cacheKey, dedupedFetch } from "@/lib/cache";
 import { useCachedData } from "@/lib/use-cached-data";
 import type { Course, ClassPeriod, CurrentWeek } from "@/lib/types";
-import { ChevronDown, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Search, Grid3x2, Grid3x3 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { isCourseActiveInWeek } from "./schedule-utils";
 import { ScheduleTablet } from "./schedule-tablet";
 import { ScheduleMobile } from "./schedule-mobile";
@@ -40,12 +41,33 @@ export default function SchedulePage() {
   const credential = useAuthStore((s) => s.credential);
   const { t } = useTranslation();
   const isMobile = useIsMobile();
+  const compactMode = useSettingsStore((s) => s.scheduleCompactMode);
+  const setCompactMode = useSettingsStore((s) => s.setScheduleCompactMode);
   const [courses, setCourses] = useState<Course[]>([]);
   const [currentWeek, setCurrentWeek] = useState<CurrentWeek | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<number>(0);
   const [term, setTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+
+  // In compact mode, adjust <main> padding-bottom to match the actual nav bar height,
+  // so the content area ends exactly at the nav top edge.
+  useEffect(() => {
+    if (!compactMode) return;
+    const main = document.querySelector("main");
+    const nav = document.querySelector('nav[aria-label="Primary"]');
+    if (!main || !nav) return;
+    const adjust = () => {
+      main.style.paddingBottom = `${nav.getBoundingClientRect().height}px`;
+    };
+    adjust();
+    const observer = new ResizeObserver(adjust);
+    observer.observe(nav);
+    return () => {
+      observer.disconnect();
+      main.style.paddingBottom = "";
+    };
+  }, [compactMode]);
 
   const periodsHook = useCachedData(["periods", credential], {
     fetch: () => getClassPeriods(),
@@ -161,16 +183,27 @@ export default function SchedulePage() {
   }
 
   useMobileHeaderRight(
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={() => setFilterDrawerOpen(true)}
-      className="h-8 px-2 text-sm"
-    >
-      {selectedWeek ? t("schedule.weekShort", { week: selectedWeek }) : t("schedule.weekLabel")}
-      <ChevronDown className="ml-0.5 size-3.5" />
-    </Button>,
-    [selectedWeek, t],
+    <div className="flex items-center gap-0.5">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        onClick={() => setCompactMode(!compactMode)}
+        className="h-8 w-8"
+        aria-label={t("schedule.compactHint")}
+      >
+        {compactMode ? <Grid3x3 className="size-4" /> : <Grid3x2 className="size-4" />}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setFilterDrawerOpen(true)}
+        className="h-8 px-2 text-sm"
+      >
+        {selectedWeek ? t("schedule.weekShort", { week: selectedWeek }) : t("schedule.weekLabel")}
+        <ChevronDown className="ml-0.5 size-3.5" />
+      </Button>
+    </div>,
+    [selectedWeek, t, compactMode, setCompactMode],
   );
 
   const filteredCourses = useMemo(() => {
@@ -248,7 +281,7 @@ export default function SchedulePage() {
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className={compactMode && isMobile ? "flex flex-1 flex-col min-h-0" : "flex flex-col gap-6"}>
       <Card className="hidden md:block">
         <CardHeader>
           <CardTitle>{t("schedule.title")}</CardTitle>
@@ -259,8 +292,11 @@ export default function SchedulePage() {
 
       {isMobile ? (
         <div
-          className="flex flex-col -mx-4 -mt-4 -mb-4 md:m-0"
-          style={{ minHeight: "calc(100dvh - 102px)" }}
+          className={cn(
+            "flex flex-col -mx-4 -mt-4 -mb-4 md:m-0",
+            compactMode && "flex-1 min-h-0 overflow-hidden",
+          )}
+          style={compactMode ? undefined : { minHeight: "calc(100dvh - 102px)" }}
         >
           <ScheduleMobile
             courses={filteredCourses}
@@ -269,6 +305,7 @@ export default function SchedulePage() {
             currentWeek={currentWeek}
             selectedWeek={selectedWeek}
             nowMinutes={nowMinutes}
+            compact={compactMode}
             onPrevWeek={() => shiftWeek(-1)}
             onNextWeek={() => shiftWeek(1)}
           />
