@@ -128,3 +128,47 @@ export function clearAllCache(): void {
     // ignore
   }
 }
+
+/**
+ * 清理因 credential 轮换产生的孤立缓存条目。
+ * 每个 prefix family（如 "student"、"schedule"）只保留最新的那条，
+ * 旧的 credential 对应的缓存会被删除。
+ */
+export function cleanStaleCacheVersions(): void {
+  try {
+    const groups = new Map<string, { key: string; ts: number }[]>();
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const fullKey = localStorage.key(i);
+      if (!fullKey || !fullKey.startsWith(CACHE_PREFIX)) continue;
+      const unprefixed = fullKey.slice(CACHE_PREFIX.length);
+      const prefix = unprefixed.split("|", 1)[0];
+      if (!prefix) continue;
+
+      let ts = 0;
+      try {
+        const raw = localStorage.getItem(fullKey);
+        if (raw) {
+          const entry = JSON.parse(raw);
+          ts = entry.ts ?? 0;
+        }
+      } catch {
+        // 损坏的条目按 ts=0 处理，优先被淘汰
+      }
+
+      if (!groups.has(prefix)) groups.set(prefix, []);
+      groups.get(prefix)!.push({ key: fullKey, ts });
+    }
+
+    for (const [, entries] of groups) {
+      if (entries.length <= 1) continue;
+      // 按时间戳降序排列，保留第一个（最新的），删除其余
+      entries.sort((a, b) => b.ts - a.ts);
+      for (let i = 1; i < entries.length; i++) {
+        localStorage.removeItem(entries[i].key);
+      }
+    }
+  } catch {
+    // ignore
+  }
+}

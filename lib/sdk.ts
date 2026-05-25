@@ -24,13 +24,15 @@ import {
 } from "./jwmobile";
 import { useAuthStore } from "./auth-store";
 import { initServerConfig } from "./server-config";
-import { clearAllCache } from "./cache";
+import { clearAllCache, cleanStaleCacheVersions } from "./cache";
 import { useRefreshStore } from "./refresh-store";
 
 /** 从 auth-store 恢复 CAS 凭据、JWXT 会话和 mobile 会话到各自的 jar。 */
 export async function initSDK(): Promise<void> {
   // 从 settings-store 初始化自定义服务器地址
   initServerConfig();
+  // 清理因 credential 轮换产生的孤立缓存
+  cleanStaleCacheVersions();
   // Restore CASTGC to CapacitorHttp system cookie store (for native platforms)
   await restoreCASCookies();
 
