@@ -161,8 +161,11 @@ export function UpdateDialog() {
     <Dialog
       open={canShow}
       onOpenChange={(open) => {
-        if (!open) handleClose();
-        else setShowDialog(true);
+        if (!open && state !== "downloading" && state !== "installing") {
+          handleClose();
+        } else if (open) {
+          setShowDialog(true);
+        }
       }}
     >
       <DialogContent className="max-h-[85vh] flex flex-col">
