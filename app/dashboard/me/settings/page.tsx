@@ -6,7 +6,6 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
@@ -31,7 +30,7 @@ import { syncWidgetSettingsToWidget } from "@/lib/widget-bridge";
 import { checkRateLimit, recordLoginAttempt } from "@/lib/rate-limit";
 import { useUpdateStore } from "@/lib/update-store";
 import { useTheme } from "next-themes";
-import { startNotifyIfNeeded, stopNativePolling } from "@/lib/notify";
+import { startNotifyIfNeeded, stopNativePolling, triggerNotifyCheck } from "@/lib/notify";
 import {
   LayoutDashboard,
   Calendar,
@@ -47,6 +46,7 @@ import {
   UserCircle,
   Bell,
   Timer,
+  AlarmClock,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -62,7 +62,6 @@ export default function SettingsPage() {
   const setWidgetSyncReminderHours = useSettingsStore((s) => s.setWidgetSyncReminderHours);
   const widgetShowNextDaySchedule = useSettingsStore((s) => s.widgetShowNextDaySchedule);
   const setWidgetShowNextDaySchedule = useSettingsStore((s) => s.setWidgetShowNextDaySchedule);
-  const [localSyncHours, setLocalSyncHours] = useState(String(widgetSyncReminderHours));
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
 
   const notifyEnabled = useSettingsStore((s) => s.notifyEnabled);
@@ -77,16 +76,8 @@ export default function SettingsPage() {
   const setClassReminderEnabled = useSettingsStore((s) => s.setClassReminderEnabled);
   const classReminderMinutes = useSettingsStore((s) => s.classReminderMinutes);
   const setClassReminderMinutes = useSettingsStore((s) => s.setClassReminderMinutes);
-
-  function commitSyncHours() {
-    const val = parseInt(localSyncHours, 10);
-    const clamped = Math.min(168, Math.max(0, Number.isNaN(val) ? widgetSyncReminderHours : val));
-    setLocalSyncHours(String(clamped));
-    if (clamped !== widgetSyncReminderHours) {
-      setWidgetSyncReminderHours(clamped);
-      syncWidgetSettingsToWidget(clamped, widgetShowNextDaySchedule).catch(() => {});
-    }
-  }
+  const classReminderDays = useSettingsStore((s) => s.classReminderDays);
+  const setClassReminderDays = useSettingsStore((s) => s.setClassReminderDays);
 
   function handleLogout() {
     setLogoutDialogOpen(false);
@@ -135,6 +126,11 @@ export default function SettingsPage() {
       <Section title={t("me.sectionPreferences")}>
         <Card>
           <CardContent className="flex flex-col py-1">
+            {/* 通用 */}
+            <h3 className="flex items-center gap-2 px-0.5 pt-1 pb-0.5 text-xs font-medium text-muted-foreground">
+              {t("settings.general")}
+            </h3>
+
             {/* 启动页面 */}
             <div className="flex items-center gap-3 py-3">
               <LayoutDashboard className="size-5 shrink-0 text-muted-foreground" />
@@ -196,56 +192,6 @@ export default function SettingsPage() {
               </ToggleGroup>
             </div>
 
-            {/* 课表同步提醒阈值 */}
-            <div className="flex items-center gap-3 border-t border-border py-3">
-              <Clock className="size-5 shrink-0 text-muted-foreground" />
-              <span className="flex-1 text-sm">{t("settings.widgetSyncReminder")}</span>
-              <div className="flex items-center gap-1.5">
-                <Input
-                  type="number"
-                  value={localSyncHours}
-                  onChange={(e) => setLocalSyncHours(e.target.value)}
-                  onBlur={commitSyncHours}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      commitSyncHours();
-                      (e.target as HTMLInputElement).blur();
-                    }
-                  }}
-                  className="h-7 w-16 text-right text-sm"
-                  min={0}
-                  max={168}
-                />
-                <span className="text-sm text-muted-foreground">{t("settings.widgetSyncReminderUnit")}</span>
-              </div>
-            </div>
-
-            {/* 无课显示下一有课日 */}
-            <div className="flex items-center gap-3 border-t border-border py-3">
-              <CalendarClock className="size-5 shrink-0 text-muted-foreground" />
-              <span className="flex-1 text-sm">{t("settings.widgetShowNextDay")}</span>
-              <ToggleGroup
-                type="single"
-                value={widgetShowNextDaySchedule ? "on" : "off"}
-                onValueChange={(v) => {
-                  if (v) {
-                    const newVal = v === "on";
-                    setWidgetShowNextDaySchedule(newVal);
-                    syncWidgetSettingsToWidget(widgetSyncReminderHours, newVal).catch(() => {});
-                  }
-                }}
-                variant="outline"
-                size="sm"
-              >
-                <ToggleGroupItem value="on" className="text-xs">
-                  {t("settings.toggleOn")}
-                </ToggleGroupItem>
-                <ToggleGroupItem value="off" className="text-xs">
-                  {t("settings.toggleOff")}
-                </ToggleGroupItem>
-              </ToggleGroup>
-            </div>
-
             {/* 头像 */}
             <Link
               href="/dashboard/me/avatar"
@@ -265,6 +211,38 @@ export default function SettingsPage() {
               <span className="flex-1 text-sm">{t("app.backgroundImage")}</span>
               <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
             </Link>
+
+            {/* 小组件 */}
+            <h3 className="flex items-center gap-2 border-t border-border px-0.5 pt-3 pb-0.5 text-xs font-medium text-muted-foreground">
+              {t("settings.widget")}
+            </h3>
+
+            {/* 课表同步提醒阈值 */}
+            <SettingNumberInput
+              icon={Clock}
+              label={t("settings.widgetSyncReminder")}
+              value={widgetSyncReminderHours}
+              onChange={(v) => {
+                setWidgetSyncReminderHours(v);
+                syncWidgetSettingsToWidget(v, widgetShowNextDaySchedule).catch(() => {});
+              }}
+              min={0}
+              max={168}
+              unit={t("settings.widgetSyncReminderUnit")}
+            />
+
+            {/* 无课显示下一有课日 */}
+            <div className="flex items-center gap-3 border-t border-border py-3">
+              <CalendarClock className="size-5 shrink-0 text-muted-foreground" />
+              <span className="flex-1 text-sm">{t("settings.widgetShowNextDay")}</span>
+              <Switch
+                checked={widgetShowNextDaySchedule}
+                onCheckedChange={(v) => {
+                  setWidgetShowNextDaySchedule(v);
+                  syncWidgetSettingsToWidget(widgetSyncReminderHours, v).catch(() => {});
+                }}
+              />
+            </div>
           </CardContent>
         </Card>
       </Section>
@@ -274,6 +252,11 @@ export default function SettingsPage() {
         <Section title={t("settings.notifyTitle")}>
           <Card>
             <CardContent className="flex flex-col py-1">
+              {/* 成绩/考试通知 */}
+              <h3 className="flex items-center gap-2 px-0.5 pt-1 pb-0.5 text-xs font-medium text-muted-foreground">
+                {t("settings.notifyContentTitle")}
+              </h3>
+
               {/* 通知开关 */}
               <div className="flex items-center gap-3 py-3">
                 <Bell className="size-5 shrink-0 text-muted-foreground" />
@@ -281,50 +264,31 @@ export default function SettingsPage() {
                   <span className="text-sm">{t("settings.notifyEnabled")}</span>
                   <span className="text-xs text-muted-foreground">{t("settings.notifyEnabledDesc")}</span>
                 </div>
-                <ToggleGroup
-                  type="single"
-                  value={notifyEnabled ? "on" : "off"}
-                  onValueChange={(v) => {
-                    if (!v) return;
-                    const enabled = v === "on";
+                <Switch
+                  checked={notifyEnabled}
+                  onCheckedChange={(enabled) => {
                     setNotifyEnabled(enabled);
                     if (enabled) {
-                      startNotifyIfNeeded().catch(() => {});
+                      startNotifyIfNeeded().then(() => triggerNotifyCheck()).catch(() => {});
                     } else {
                       stopNativePolling().catch(() => {});
                     }
                   }}
-                  variant="outline"
-                  size="sm"
-                >
-                  <ToggleGroupItem value="on" className="text-xs">
-                    {t("settings.toggleOn")}
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="off" className="text-xs">
-                    {t("settings.toggleOff")}
-                  </ToggleGroupItem>
-                </ToggleGroup>
+                />
               </div>
 
               {/* 检查频率 */}
               {notifyEnabled && (
-                <div className="flex items-center gap-3 border-t border-border py-3">
-                  <Timer className="size-5 shrink-0 text-muted-foreground" />
-                  <span className="flex-1 text-sm">{t("settings.notifyInterval")}</span>
-                  <ToggleGroup
-                    type="single"
-                    value={String(notifyCheckInterval)}
-                    onValueChange={(v) => v && setNotifyCheckInterval(Number(v))}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <ToggleGroupItem value="30" className="text-xs">30</ToggleGroupItem>
-                    <ToggleGroupItem value="60" className="text-xs">60</ToggleGroupItem>
-                    <ToggleGroupItem value="120" className="text-xs">120</ToggleGroupItem>
-                    <ToggleGroupItem value="360" className="text-xs">360</ToggleGroupItem>
-                  </ToggleGroup>
-                  <span className="text-xs text-muted-foreground">{t("settings.notifyIntervalUnit")}</span>
-                </div>
+                <SettingNumberInput
+                  icon={Timer}
+                  label={t("settings.notifyInterval")}
+                  value={notifyCheckInterval}
+                  onChange={setNotifyCheckInterval}
+                  min={15}
+                  max={1440}
+                  unit={t("settings.notifyIntervalUnit")}
+                  bordered
+                />
               )}
 
               {/* 监听内容 */}
@@ -356,39 +320,41 @@ export default function SettingsPage() {
               )}
 
               {/* 上课提醒 */}
-              <div className="space-y-3 border-t border-border py-3">
-                <h3 className="text-sm font-medium text-muted-foreground">
-                  {t("settings.classReminderTitle")}
-                </h3>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="class-reminder">
-                    {t("settings.classReminderEnabled")}
-                  </Label>
-                  <Switch
-                    id="class-reminder"
-                    checked={classReminderEnabled}
-                    onCheckedChange={setClassReminderEnabled}
-                  />
-                </div>
-                {classReminderEnabled && (
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="reminder-minutes">
-                      {t("settings.classReminderMinutes")}
-                    </Label>
-                    <select
-                      id="reminder-minutes"
-                      value={classReminderMinutes}
-                      onChange={(e) => setClassReminderMinutes(parseInt(e.target.value))}
-                      className="rounded-md border bg-background px-3 py-1 text-sm"
-                    >
-                      <option value={5}>5 {t("settings.minutes")}</option>
-                      <option value={10}>10 {t("settings.minutes")}</option>
-                      <option value={15}>15 {t("settings.minutes")}</option>
-                      <option value={30}>30 {t("settings.minutes")}</option>
-                    </select>
-                  </div>
-                )}
+              <h3 className="flex items-center gap-2 border-t border-border px-0.5 pt-3 pb-0.5 text-xs font-medium text-muted-foreground">
+                {t("settings.classReminderTitle")}
+              </h3>
+              <div className="flex items-center gap-3 py-3">
+                <AlarmClock className="size-5 shrink-0 text-muted-foreground" />
+                <span className="flex-1 text-sm">{t("settings.classReminderEnabled")}</span>
+                <Switch
+                  checked={classReminderEnabled}
+                  onCheckedChange={setClassReminderEnabled}
+                />
               </div>
+              {classReminderEnabled && (
+                <>
+                  <SettingNumberInput
+                    icon={Timer}
+                    label={t("settings.classReminderMinutes")}
+                    value={classReminderMinutes}
+                    onChange={setClassReminderMinutes}
+                    min={1}
+                    max={120}
+                    unit={t("settings.minutes")}
+                    bordered
+                  />
+                  <SettingNumberInput
+                    icon={CalendarClock}
+                    label={t("settings.classReminderDays")}
+                    value={classReminderDays}
+                    onChange={setClassReminderDays}
+                    min={1}
+                    max={14}
+                    unit={t("settings.days")}
+                    bordered
+                  />
+                </>
+              )}
             </CardContent>
           </Card>
         </Section>
@@ -464,5 +430,59 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       </h2>
       {children}
     </section>
+  );
+}
+
+function SettingNumberInput({
+  icon: Icon,
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  unit,
+  bordered,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  min: number;
+  max: number;
+  unit: string;
+  bordered?: boolean;
+}) {
+  const [local, setLocal] = useState(String(value));
+
+  function commit() {
+    const val = parseInt(local, 10);
+    const clamped = Math.min(max, Math.max(min, Number.isNaN(val) ? value : val));
+    setLocal(String(clamped));
+    if (clamped !== value) onChange(clamped);
+  }
+
+  return (
+    <div className={`flex items-center gap-3 py-3${bordered ? " border-t border-border" : ""}`}>
+      <Icon className="size-5 shrink-0 text-muted-foreground" />
+      <span className="flex-1 text-sm">{label}</span>
+      <div className="flex items-center gap-1.5">
+        <Input
+          type="number"
+          value={local}
+          onChange={(e) => setLocal(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              commit();
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          className="h-7 w-16 text-right text-sm"
+          min={min}
+          max={max}
+        />
+        <span className="text-sm text-muted-foreground">{unit}</span>
+      </div>
+    </div>
   );
 }

@@ -79,8 +79,7 @@ export async function syncCastgcToNative(): Promise<void> {
 // ─── Native Polling Control ─────────────────────────────────────────────── //
 
 /**
- * 启动通知轮询。在 NotifyProvider 中 isAuthenticated 变为 true 时调用。
- * 同步 server config 和 CASTGC 到原生，启动 WorkManager 周期任务，并立即触发一次检查。
+ * 确保通知轮询在调度中。冷启动时由 NotifyProvider 调用，不主动触发立即检查。
  */
 export async function startNotifyIfNeeded(): Promise<void> {
   if (!isCapacitor()) return;
@@ -90,8 +89,13 @@ export async function startNotifyIfNeeded(): Promise<void> {
 
   await syncServerConfigToNative();
   await startNativePolling();
+}
 
-  // 立即触发一次检查，不等 WorkManager 调度
+/**
+ * 立即触发一次通知检查。用户手动开启通知时调用。
+ */
+export async function triggerNotifyCheck(): Promise<void> {
+  if (!isCapacitor()) return;
   await NotifyPlugin.executeOnce().catch(() => {});
 }
 
@@ -161,13 +165,14 @@ export function computeClassAlarms(
   currentWeek: CurrentWeek | null,
   periods: ClassPeriod[],
   remindMinutes: number = 15,
+  days: number = 7,
 ): ClassAlarmConfig[] {
   const alarms: ClassAlarmConfig[] = [];
   const now = new Date();
   const periodMap = new Map(periods.map((p) => [p.section, p]));
   const todayWeekday = now.getDay() === 0 ? 7 : now.getDay();
 
-  for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+  for (let dayOffset = 0; dayOffset < days; dayOffset++) {
     const targetWeekday = ((todayWeekday - 1 + dayOffset) % 7) + 1;
     const dayCourses = courses.filter((c) => c.week_day === targetWeekday);
 
@@ -200,6 +205,8 @@ export function computeClassAlarms(
   return alarms;
 }
 
+let lastAlarmHash = "";
+
 export async function syncClassAlarmsToNative(
   courses: Course[],
   currentWeek: CurrentWeek | null,
@@ -207,15 +214,23 @@ export async function syncClassAlarmsToNative(
 ): Promise<void> {
   if (!isCapacitor()) return;
 
-  const { classReminderEnabled, classReminderMinutes } = useSettingsStore.getState();
+  const { classReminderEnabled, classReminderMinutes, classReminderDays } = useSettingsStore.getState();
   if (!classReminderEnabled) {
-    await NotifyPlugin.cancelClassAlarms().catch(() => {});
+    if (lastAlarmHash) {
+      await NotifyPlugin.cancelClassAlarms().catch(() => {});
+      lastAlarmHash = "";
+    }
     return;
   }
 
-  const alarms = computeClassAlarms(courses, currentWeek, periods, classReminderMinutes);
+  const alarms = computeClassAlarms(courses, currentWeek, periods, classReminderMinutes, classReminderDays);
+  const hash = JSON.stringify(alarms);
+  if (hash === lastAlarmHash) return;
+
   await NotifyPlugin.cancelClassAlarms().catch(() => {});
+  lastAlarmHash = "";
   if (alarms.length > 0) {
-    await NotifyPlugin.scheduleClassAlarms({ alarmsJson: JSON.stringify(alarms) });
+    await NotifyPlugin.scheduleClassAlarms({ alarmsJson: hash });
+    lastAlarmHash = hash;
   }
 }
