@@ -31,7 +31,7 @@ import { syncWidgetSettingsToWidget } from "@/lib/widget-bridge";
 import { checkRateLimit, recordLoginAttempt } from "@/lib/rate-limit";
 import { useUpdateStore } from "@/lib/update-store";
 import { useTheme } from "next-themes";
-import { startNativePolling, stopNativePolling } from "@/lib/notify";
+import { startNotifyIfNeeded, stopNativePolling } from "@/lib/notify";
 import {
   LayoutDashboard,
   Calendar,
@@ -289,7 +289,7 @@ export default function SettingsPage() {
                     const enabled = v === "on";
                     setNotifyEnabled(enabled);
                     if (enabled) {
-                      startNativePolling().catch(() => {});
+                      startNotifyIfNeeded().catch(() => {});
                     } else {
                       stopNativePolling().catch(() => {});
                     }

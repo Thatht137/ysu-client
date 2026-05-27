@@ -69,7 +69,7 @@ class YsuNotifyPlugin : Plugin() {
 
     @PluginMethod
     fun setServerConfig(call: PluginCall) {
-        val config = call.getString("config")
+        val config = call.getString("configJson")
         if (config.isNullOrEmpty()) {
             call.reject("config is required")
             return
@@ -215,7 +215,8 @@ class YsuNotifyPlugin : Plugin() {
 
     @PluginMethod
     fun scheduleClassAlarms(call: PluginCall) {
-        ClassAlarmManager.scheduleAlarms(context)
+        val alarmsJson = call.getString("alarmsJson") ?: "[]"
+        ClassAlarmManager.scheduleAlarms(context, alarmsJson)
         Log.d(TAG, "Class alarms scheduled")
         call.resolve()
     }

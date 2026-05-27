@@ -60,12 +60,12 @@ object NotifyHelper {
 
     fun getCerBase(context: Context): String {
         val config = getServerConfig(context)
-        return getConfigString(config, "urls.casBase", "https://cer.ysu.edu.cn")
+        return getConfigString(config, "cerBaseUrl", "https://cer.ysu.edu.cn")
     }
 
     fun getJwxtBase(context: Context): String {
         val config = getServerConfig(context)
-        return getConfigString(config, "urls.jwxtBase", "https://jwxt.ysu.edu.cn")
+        return getConfigString(config, "jwxtBaseUrl", "https://jwxt.ysu.edu.cn")
     }
 
     fun getPortalUrl(context: Context): String {
@@ -350,7 +350,7 @@ object NotifyHelper {
 
     fun getCurrentTerm(context: Context): String? {
         val appBase = getAppBase(context)
-        val apiPath = getApiPath(context, "dqxnxq")
+        val apiPath = getApiPath(context, "currentTerm")
         val (code, body) = httpPost("$appBase/$apiPath", "")
         if (code != 200) {
             Log.w(TAG, "getCurrentTerm failed: code=$code")
@@ -363,7 +363,7 @@ object NotifyHelper {
             val dqxnxq = datas.optJSONObject("dqxnxq") ?: return null
             val rows = dqxnxq.optJSONArray("rows") ?: return null
             if (rows.length() == 0) return null
-            rows.getJSONObject(0).optString("DM", null)
+            rows.getJSONObject(0).optString("DM").takeIf { it.isNotEmpty() }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse current term", e)
             null
@@ -371,6 +371,21 @@ object NotifyHelper {
     }
 
     // ─── Format conversion ──────────────────────────────────────────────────
+
+    /**
+     * 从 mappings 中解析 raw key。JS 端可能发送字符串或字符串数组（优先候选列表）。
+     */
+    private fun resolveRawKeys(mappings: JSONObject, standardKey: String): List<String> {
+        val value = mappings.opt(standardKey) ?: return listOf(standardKey)
+        return when (value) {
+            is JSONArray -> (0 until value.length()).mapNotNull {
+                val s = value.optString(it, "")
+                if (s.isNotEmpty()) s else null
+            }
+            is String -> listOf(value)
+            else -> listOf(standardKey)
+        }
+    }
 
     /**
      * 将原始成绩对象转换为标准格式，字段名由 server config 中的 fieldMappings 定义。
@@ -382,10 +397,11 @@ object NotifyHelper {
         val keys = mappings.keys()
         while (keys.hasNext()) {
             val standardKey = keys.next()
-            val rawKey = mappings.optString(standardKey, standardKey)
-            val value = raw.opt(rawKey)
-            if (value != null) {
-                standard.put(standardKey, value)
+            for (rawKey in resolveRawKeys(mappings, standardKey)) {
+                if (raw.has(rawKey)) {
+                    standard.put(standardKey, raw.opt(rawKey))
+                    break
+                }
             }
         }
         // Fallback: ensure essential keys exist using common raw keys
@@ -426,13 +442,18 @@ object NotifyHelper {
         val keys = mappings.keys()
         while (keys.hasNext()) {
             val standardKey = keys.next()
-            val rawKey = mappings.optString(standardKey, standardKey)
-            val value = raw.opt(rawKey)
-            if (value != null) {
-                standard.put(standardKey, value)
+            for (rawKey in resolveRawKeys(mappings, standardKey)) {
+                if (raw.has(rawKey)) {
+                    standard.put(standardKey, raw.opt(rawKey))
+                    break
+                }
             }
         }
         // Fallback: ensure essential keys exist using common raw keys
+        if (!standard.has("name")) {
+            val name = raw.optString("KCM", "")
+            if (name.isNotEmpty()) standard.put("name", name)
+        }
         if (!standard.has("course_name")) {
             val name = raw.optString("KCM", "")
             if (name.isNotEmpty()) standard.put("course_name", name)
@@ -445,13 +466,13 @@ object NotifyHelper {
             val time = raw.optString("KSSJMS", raw.optString("KSSJ", ""))
             if (time.isNotEmpty()) standard.put("exam_time", time)
         }
-        if (!standard.has("location")) {
+        if (!standard.has("exam_location")) {
             val loc = raw.optString("JASMC", "")
-            if (loc.isNotEmpty()) standard.put("location", loc)
+            if (loc.isNotEmpty()) standard.put("exam_location", loc)
         }
-        if (!standard.has("seat")) {
+        if (!standard.has("seat_number")) {
             val seat = raw.optString("ZWH", "")
-            if (seat.isNotEmpty()) standard.put("seat", seat)
+            if (seat.isNotEmpty()) standard.put("seat_number", seat)
         }
         if (!standard.has("term")) {
             val term = raw.optString("XNXQDM", "")
@@ -467,21 +488,17 @@ object NotifyHelper {
 
         try {
             val appBase = getAppBase(context)
-            val appIdDqxnxq = getAppId(context, "dqxnxq")
-            val appIdCjcx = getAppId(context, "cjcx")
-            val apiCjcx = getApiPath(context, "cjcx")
-
-            fetchWeu(context, appIdDqxnxq)
-            val term = getCurrentTerm(context) ?: ""
+            val appIdCjcx = getAppId(context, "grades")
+            val apiCjcx = getApiPath(context, "grades")
 
             fetchWeu(context, appIdCjcx)
 
+            // Match JS side: query all terms (no XNXQDM filter), same fixed filters
             val query = buildString {
                 append("[{")
-                append("\"name\":\"XNXQDM\",\"value\":\"$term\",\"linkOpt\":\"and\",\"builder\":\"m_value_equal\"},{")
-                append("\"name\":\"SFYX\",\"caption\":\"是否有效\",\"linkOpt\":\"AND\",\"builderList\":\"cbl_m_List\",\"builder\":\"m_value_equal\",\"value\":\"1\",\"value_display\":\"是\"},{")
-                append("\"name\":\"SHOWMAXCJ\",\"caption\":\"显示最高成绩\",\"linkOpt\":\"AND\",\"builderList\":\"cbl_String\",\"builder\":\"equal\",\"value\":0,\"value_display\":\"否\"},{")
-                append("\"name\":\"BY1\",\"caption\":\"备用1\",\"linkOpt\":\"AND\",\"builderList\":\"cbl_m_List\",\"builder\":\"equal\",\"value\":\"1\"}]")
+                append("\"name\":\"SFYX\",\"value\":\"1\",\"linkOpt\":\"and\",\"builder\":\"m_value_equal\"},{")
+                append("\"name\":\"SHOWMAXCJ\",\"value\":0,\"linkOpt\":\"and\",\"builder\":\"equal\"},{")
+                append("\"name\":\"BY1\",\"value\":\"1\",\"linkOpt\":\"and\",\"builder\":\"equal\"}]")
             }
 
             val postData = "querySetting=${URLEncoder.encode(query, "UTF-8")}&pageSize=999&pageNumber=1&*order=-XNXQDM,-KCH,-KXH"
@@ -515,8 +532,8 @@ object NotifyHelper {
 
         try {
             val appBase = getAppBase(context)
-            val appIdWdksap = getAppId(context, "wdksap")
-            val apiWdksap = getApiPath(context, "wdksap")
+            val appIdWdksap = getAppId(context, "exams")
+            val apiWdksap = getApiPath(context, "exams")
 
             fetchWeu(context, appIdWdksap)
             val term = getCurrentTerm(context) ?: ""

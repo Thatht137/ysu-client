@@ -18,14 +18,10 @@ import {
   getStudentInfo,
   getExperimentalSchedule,
   getCurrentWeek,
-  getGrades,
-  getExams,
 } from "@/lib/api";
 import { useSettingsStore } from "@/lib/settings-store";
-import { cacheGet, cacheSet, cacheKey } from "@/lib/cache";
-import { diffGrades, diffExams, checkAndNotify, syncCastgcToNative, startNativePolling, stopNativePolling } from "@/lib/notify";
+import { startNativePolling, stopNativePolling } from "@/lib/notify";
 import { NotifyPlugin } from "@/lib/notify-plugin";
-import type { Grade, Exam } from "@/lib/types";
 import { RefreshCw, Trash2, Bug, Bell, Play, Send, Smartphone, Shield, Power } from "lucide-react";
 import { toast } from "sonner";
 import { clearAllCache } from "@/lib/cache";
@@ -85,22 +81,31 @@ export default function DebugPage() {
 
   const [diag, setDiag] = useState<DiagnosticResult | null>(null);
   const [loading, setLoading] = useState(false);
-  const [notifyTestLog, setNotifyTestLog] = useState<string[]>([]);
   const [nativeTestLog, setNativeTestLog] = useState<string[]>([]);
   const [nativePermGranted, setNativePermGranted] = useState<boolean | null>(null);
+  const [cachedGradeCount, setCachedGradeCount] = useState<number | null>(null);
+  const [cachedExamCount, setCachedExamCount] = useState<number | null>(null);
 
   const notifyEnabled = useSettingsStore((s) => s.notifyEnabled);
   const notifyCheckInterval = useSettingsStore((s) => s.notifyCheckInterval);
   const notifyGrades = useSettingsStore((s) => s.notifyGrades);
   const notifyExams = useSettingsStore((s) => s.notifyExams);
 
-  function logNotify(msg: string) {
-    setNotifyTestLog((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
-  }
-
   function logNative(msg: string) {
     setNativeTestLog((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
   }
+
+  useEffect(() => {
+    if (!isCapacitor()) return;
+    NotifyPlugin.getCachedGrades().then(({ gradesJson }) => {
+      const parsed = gradesJson ? JSON.parse(gradesJson) : [];
+      setCachedGradeCount(parsed.length);
+    }).catch(() => {});
+    NotifyPlugin.getCachedExams().then(({ examsJson }) => {
+      const parsed = examsJson ? JSON.parse(examsJson) : [];
+      setCachedExamCount(parsed.length);
+    }).catch(() => {});
+  }, []);
 
   async function runDiagnostics() {
     setLoading(true);
@@ -246,91 +251,6 @@ export default function DebugPage() {
     resetJWXT();
     toast.success(t("debug.jwxtJarCleared"));
     runDiagnostics();
-  }
-
-  // ─── Notification Debug ────────────────────────────────────────────── //
-
-  async function handleTestDiff() {
-    setNotifyTestLog([]);
-    logNotify("=== Diff 逻辑测试 ===");
-    // 模拟 diffGrades
-    const oldGrades: Grade[] = [
-      { course_name: "高等数学A1", course_code: "MATH101", term: "2025-2026-1", is_major: true, is_pass: true, is_valid: true, is_degree_course: true },
-    ];
-    const newGrades: Grade[] = [
-      { course_name: "高等数学A1", course_code: "MATH101", term: "2025-2026-1", is_major: true, is_pass: true, is_valid: true, is_degree_course: true },
-      { course_name: "大学英语1", course_code: "ENG101", term: "2025-2026-1", is_major: true, is_pass: true, is_valid: true, is_degree_course: true },
-    ];
-    const gradeDiff = diffGrades(oldGrades, newGrades);
-    logNotify(`diffGrades: old=1, new=2, diff=${gradeDiff.length} → ${gradeDiff.map(g => g.course_name).join(", ") || "无新增"}`);
-
-    // 模拟 diffExams
-    const oldExams: Exam[] = [
-      { name: "高等数学A1", exam_date: "2026-01-10", exam_time: "09:00-11:00", exam_location: "主楼301" },
-    ];
-    const newExams: Exam[] = [
-      { name: "高等数学A1", exam_date: "2026-01-10", exam_time: "09:00-11:00", exam_location: "主楼301" },
-      { name: "大学英语1", exam_date: "2026-01-12", exam_time: "14:00-16:00", exam_location: "外语楼201" },
-    ];
-    const examDiff = diffExams(oldExams, newExams);
-    logNotify(`diffExams: old=1, new=2, diff=${examDiff.length} → ${examDiff.map(e => e.name).join(", ") || "无变更"}`);
-
-    // 模拟考试地点变更
-    const changedExams: Exam[] = [
-      { name: "高等数学A1", exam_date: "2026-01-10", exam_time: "09:00-11:00", exam_location: "主楼502" },
-    ];
-    const changeDiff = diffExams(oldExams, changedExams);
-    logNotify(`diffExams(地点变更): diff=${changeDiff.length} → ${changeDiff.map(e => `${e.name}@${e.exam_location}`).join(", ") || "无变更"}`);
-
-    logNotify("=== Diff 测试完成 ===");
-  }
-
-  async function handleTestCheckAndNotify() {
-    setNotifyTestLog([]);
-    logNotify("=== checkAndNotify 测试 ===");
-    if (!credential) {
-      logNotify("未登录，跳过");
-      return;
-    }
-    logNotify(`notifyEnabled=${notifyEnabled}, notifyGrades=${notifyGrades}, notifyExams=${notifyExams}`);
-
-    // 手动拉取并缓存一次数据（模拟首次运行）
-    try {
-      logNotify("拉取当前成绩...");
-      const grades = await getGrades(credential);
-      logNotify(`获取到 ${grades.length} 条成绩记录`);
-      const ck = cacheKey(["notify", "grades"]);
-      const cached = cacheGet<Grade[]>(ck, 365 * 24 * 60 * 60 * 1000);
-      logNotify(`缓存中: ${cached?.length ?? 0} 条`);
-      if (!cached) {
-        cacheSet(ck, grades);
-        logNotify("已写入缓存（首次运行，不会触发通知）");
-      } else {
-        const diff = diffGrades(cached, grades);
-        logNotify(`差异: ${diff.length} 条新增`);
-      }
-    } catch (e) {
-      logNotify(`成绩拉取失败: ${(e as Error).message}`);
-    }
-
-    try {
-      logNotify("拉取当前考试...");
-      const exams = await getExams(credential);
-      logNotify(`获取到 ${exams.length} 条考试记录`);
-      const ck = cacheKey(["notify", "exams"]);
-      const cached = cacheGet<Exam[]>(ck, 365 * 24 * 60 * 60 * 1000);
-      logNotify(`缓存中: ${cached?.length ?? 0} 条`);
-      if (!cached) {
-        cacheSet(ck, exams);
-        logNotify("已写入缓存（首次运行，不会触发通知）");
-      } else {
-        const diff = diffExams(cached, exams);
-        logNotify(`差异: ${diff.length} 条变更`);
-      }
-    } catch (e) {
-      logNotify(`考试拉取失败: ${(e as Error).message}`);
-    }
-    logNotify("=== checkAndNotify 测试完成 ===");
   }
 
   // ─── Native Plugin Debug ─────────────────────────────────────────────── //
@@ -698,53 +618,15 @@ export default function DebugPage() {
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">缓存成绩</span>
                 <span className="font-mono text-xs">
-                  {(() => {
-                    const cached = cacheGet<Grade[]>(cacheKey(["notify", "grades"]), 365 * 24 * 60 * 60 * 1000);
-                    return cached ? `${cached.length} 条` : "无";
-                  })()}
+                  {cachedGradeCount !== null ? `${cachedGradeCount} 条` : "无"}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">缓存考试</span>
                 <span className="font-mono text-xs">
-                  {(() => {
-                    const cached = cacheGet<Exam[]>(cacheKey(["notify", "exams"]), 365 * 24 * 60 * 60 * 1000);
-                    return cached ? `${cached.length} 条` : "无";
-                  })()}
+                  {cachedExamCount !== null ? `${cachedExamCount} 条` : "无"}
                 </span>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Play className="size-4" />
-                通知模块测试
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2">
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" size="sm" onClick={handleTestDiff}>
-                  Diff 逻辑
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => toast("测试 Toast", { description: "Toast 通知工作正常" })}>
-                  <Bell className="size-3.5 mr-1" />
-                  Toast
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleTestCheckAndNotify}>
-                  <Play className="size-3.5 mr-1" />
-                  checkAndNotify
-                </Button>
-              </div>
-
-              {notifyTestLog.length > 0 && (
-                <ScrollArea className="h-48 rounded-md border bg-muted/30 p-2">
-                  <pre className="text-[10px] font-mono whitespace-pre-wrap">
-                    {notifyTestLog.join("\n")}
-                  </pre>
-                </ScrollArea>
-              )}
             </CardContent>
           </Card>
 

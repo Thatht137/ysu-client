@@ -1,217 +1,20 @@
 /**
  * 成绩/考试发布通知模块
  *
- * 前台轮询：App 活跃时定时检查 + 回到前台时立即检查。
- * 后台轮询由原生 Android 插件实现（ysu-notify-plugin），含通知权限管理。
+ * 通知由原生 Android WorkManager 后台轮询驱动（NotifyWorker），
+ * 使用 CASTGC 建立 JWXT 会话，拉取成绩/考试后 diff 并发送系统通知。
  *
- * In-app 通知使用 Toast，后台通知由原生插件用 NotificationManager 发送。
+ * 上课提醒由 AlarmManager 在指定时间触发 ClassAlarmReceiver。
  */
-import { App } from "@capacitor/app";
-import type { PluginListenerHandle } from "@capacitor/core";
-import { toast } from "sonner";
-import { getGrades, getExams } from "./api";
-import { useAuthStore } from "./auth-store";
 import { useSettingsStore } from "./settings-store";
 import { isCapacitor } from "./platform";
-import { getText } from "./i18n/get-text";
 import { NotifyPlugin } from "./notify-plugin";
 import { getJar as getCasJar } from "./cas";
 import { loadCASTGC } from "./secure-storage";
-import type { Grade, Exam } from "./types";
 import { buildNativeServerConfig } from "./notify-config";
 import type { Course, CurrentWeek, ClassPeriod } from "./types";
 
-let pollTimer: ReturnType<typeof setInterval> | null = null;
-let appStateHandle: PluginListenerHandle | null = null;
-let settingsUnsub: (() => void) | null = null;
-let checking = false;
-
-const recentNotifications = new Set<string>();
-const RECENT_WINDOW_MS = 60 * 60 * 1000;
-
-function shouldNotify(type: "grade" | "exam", key: string): boolean {
-  const fullKey = `${type}:${key}:${Math.floor(Date.now() / RECENT_WINDOW_MS)}`;
-  if (recentNotifications.has(fullKey)) return false;
-  recentNotifications.add(fullKey);
-  if (recentNotifications.size > 100) {
-    const cutoff = Math.floor(Date.now() / RECENT_WINDOW_MS) - 2;
-    for (const k of recentNotifications) {
-      const parts = k.split(":");
-      if (parts.length >= 3 && parseInt(parts[2]!, 10) < cutoff) {
-        recentNotifications.delete(k);
-      }
-    }
-  }
-  return true;
-}
-
-// ─── Diff Logic ─────────────────────────────────────────────────────────── //
-
-function gradeKey(g: Grade): string {
-  return `${g.course_code || g.course_name}|${g.term || ""}`;
-}
-
-function examKey(e: Exam): string {
-  return `${e.name}|${e.exam_date ?? ""}`;
-}
-
-export function diffGrades(oldList: Grade[], newList: Grade[]): Grade[] {
-  const oldKeys = new Set(oldList.map(gradeKey));
-  return newList.filter((g) => !oldKeys.has(gradeKey(g)));
-}
-
-export function diffExams(oldList: Exam[], newList: Exam[]): Exam[] {
-  const oldMap = new Map(oldList.map((e) => [examKey(e), e]));
-  const added: Exam[] = [];
-  for (const e of newList) {
-    const key = examKey(e);
-    const old = oldMap.get(key);
-    if (!old) {
-      added.push(e);
-    } else if (
-      old.exam_time !== e.exam_time ||
-      old.exam_location !== e.exam_location ||
-      old.seat_number !== e.seat_number
-    ) {
-      added.push(e);
-    }
-  }
-  return added;
-}
-
-// ─── Core Check ─────────────────────────────────────────────────────────── //
-
-export async function checkAndNotify(): Promise<void> {
-  if (checking) return;
-  checking = true;
-  try {
-    await _checkAndNotify();
-  } finally {
-    checking = false;
-  }
-}
-
-async function _checkAndNotify(): Promise<void> {
-  const { isAuthenticated } = useAuthStore.getState();
-  if (!isAuthenticated) return;
-
-  const { notifyGrades, notifyExams } = useSettingsStore.getState();
-  if (!notifyGrades && !notifyExams) return;
-
-  const credential = useAuthStore.getState().credential;
-  if (!credential) return;
-
-  // Fetch and diff grades
-  if (notifyGrades) {
-    try {
-      const newGrades = await getGrades(credential);
-      const cachedResult = await NotifyPlugin.getCachedGrades();
-      const cachedJson = (cachedResult as { gradesJson?: string }).gradesJson;
-      const cached: Grade[] = cachedJson ? JSON.parse(cachedJson) : [];
-      if (cached.length > 0) {
-        const added = diffGrades(cached, newGrades);
-        if (added.length > 0) {
-          for (const g of added) {
-            if (shouldNotify("grade", gradeKey(g))) {
-              toast(getText("settings.notifyNewGrade"), {
-                description: getText("settings.notifyNewGradeBody").replace(
-                  "{course}",
-                  g.course_name,
-                ),
-              });
-            }
-          }
-        }
-      }
-      await NotifyPlugin.setCachedGrades({ gradesJson: JSON.stringify(newGrades) });
-    } catch {
-      // silently ignore fetch errors during background check
-    }
-  }
-
-  // Fetch and diff exams
-  if (notifyExams) {
-    try {
-      const newExams = await getExams(credential);
-      const cachedResult = await NotifyPlugin.getCachedExams();
-      const cachedJson = (cachedResult as { examsJson?: string }).examsJson;
-      const cached: Exam[] = cachedJson ? JSON.parse(cachedJson) : [];
-      if (cached.length > 0) {
-        const changed = diffExams(cached, newExams);
-        if (changed.length > 0) {
-          for (const e of changed) {
-            if (shouldNotify("exam", examKey(e))) {
-              toast(getText("settings.notifyNewExam"), {
-                description: getText("settings.notifyNewExamBody").replace(
-                  "{exam}",
-                  e.name,
-                ),
-              });
-            }
-          }
-        }
-      }
-      await NotifyPlugin.setCachedExams({ examsJson: JSON.stringify(newExams) });
-    } catch {
-      // silently ignore
-    }
-  }
-}
-
-// ─── Foreground Polling ─────────────────────────────────────────────────── //
-
-function getIntervalMs(): number {
-  const { notifyCheckInterval } = useSettingsStore.getState();
-  return Math.max(5, notifyCheckInterval) * 60 * 1000;
-}
-
-function startInterval(): void {
-  stopInterval();
-  const ms = getIntervalMs();
-  pollTimer = setInterval(() => {
-    checkAndNotify();
-  }, ms);
-}
-
-function stopInterval(): void {
-  if (pollTimer !== null) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
-}
-
-async function handleAppStateChange(): Promise<void> {
-  removeAppStateListener();
-  const handle = await App.addListener("appStateChange", ({ isActive }) => {
-    if (isActive) {
-      startInterval();
-      checkAndNotify();
-      if (isCapacitor()) {
-        NotifyPlugin.pausePolling().catch(() => {});
-      }
-    } else {
-      stopInterval();
-      if (isCapacitor()) {
-        NotifyPlugin.resumePolling().catch(() => {});
-      }
-    }
-  });
-  appStateHandle = handle;
-}
-
-function removeAppStateListener(): void {
-  if (appStateHandle) {
-    appStateHandle.remove();
-    appStateHandle = null;
-  }
-}
-
-function unsubscribeSettings(): void {
-  if (settingsUnsub) {
-    settingsUnsub();
-    settingsUnsub = null;
-  }
-}
+// ─── Config Sync ────────────────────────────────────────────────────────── //
 
 export async function syncServerConfigToNative(): Promise<void> {
   if (!isCapacitor()) return;
@@ -224,78 +27,7 @@ export async function syncServerConfigToNative(): Promise<void> {
 }
 
 /**
- * 启动通知轮询。在 SDK 初始化完成后调用。
- * 如果 notifyEnabled 为 false，不会启动任何轮询。
- */
-export async function startNotifyIfNeeded(): Promise<void> {
-  if (!isCapacitor()) return;
-
-  const { notifyEnabled } = useSettingsStore.getState();
-  if (!notifyEnabled) return;
-
-  await syncServerConfigToNative();
-
-  // Listen for foreground transitions
-  await handleAppStateChange();
-
-  // Start periodic polling (foreground)
-  startInterval();
-
-  // Start native background polling
-  startNativePolling().catch(() => {});
-
-  // Subscribe to settings changes
-  settingsUnsub = useSettingsStore.subscribe((state, prevState) => {
-    if (state.notifyEnabled !== prevState.notifyEnabled) {
-      if (state.notifyEnabled) {
-        startInterval();
-        handleAppStateChange();
-        startNativePolling().catch(() => {});
-      } else {
-        stopInterval();
-        removeAppStateListener();
-        stopNativePolling().catch(() => {});
-      }
-    }
-    if (state.notifyCheckInterval !== prevState.notifyCheckInterval) {
-      if (state.notifyEnabled) {
-        startInterval();
-        // 原生轮询间隔变更：重启原生轮询
-        startNativePolling().catch(() => {});
-      }
-    }
-    if (state.notifyGrades !== prevState.notifyGrades || state.notifyExams !== prevState.notifyExams) {
-      if (state.notifyEnabled) {
-        startNativePolling().catch(() => {});
-      }
-    }
-  });
-
-  // Initial check after a short delay (don't block startup)
-  setTimeout(() => {
-    checkAndNotify();
-  }, 5000);
-}
-
-/**
- * 停止通知轮询。登出时调用。
- */
-export function stopNotify(): void {
-  stopInterval();
-  removeAppStateListener();
-  unsubscribeSettings();
-  // 同时停止原生后台轮询
-  if (isCapacitor()) {
-    NotifyPlugin.stopPolling().catch(() => {});
-    NotifyPlugin.clearCastgc().catch(() => {});
-    NotifyPlugin.cancelClassAlarms().catch(() => {});
-  }
-}
-
-// ─── Native Plugin Integration ────────────────────────────────────────────
-
-/**
- * 将 CASTGC 同步到原生插件。在 SDK 初始化完成后调用。
+ * 将 CASTGC 同步到原生插件。
  *
  * 优先从 secure storage 读取（saveCASTGC 时检查了非空），
  * fallback 到 CapacitorHttp cookie store 和 JS cookie jar。
@@ -344,6 +76,25 @@ export async function syncCastgcToNative(): Promise<void> {
   }
 }
 
+// ─── Native Polling Control ─────────────────────────────────────────────── //
+
+/**
+ * 启动通知轮询。在 NotifyProvider 中 isAuthenticated 变为 true 时调用。
+ * 同步 server config 和 CASTGC 到原生，启动 WorkManager 周期任务，并立即触发一次检查。
+ */
+export async function startNotifyIfNeeded(): Promise<void> {
+  if (!isCapacitor()) return;
+
+  const { notifyEnabled } = useSettingsStore.getState();
+  if (!notifyEnabled) return;
+
+  await syncServerConfigToNative();
+  await startNativePolling();
+
+  // 立即触发一次检查，不等 WorkManager 调度
+  await NotifyPlugin.executeOnce().catch(() => {});
+}
+
 /**
  * 启动原生后台轮询。在通知设置启用时调用。
  */
@@ -375,6 +126,17 @@ export async function startNativePolling(): Promise<void> {
 export async function stopNativePolling(): Promise<void> {
   if (!isCapacitor()) return;
   await NotifyPlugin.stopPolling();
+}
+
+/**
+ * 停止所有通知服务。登出时调用。
+ */
+export function stopNotify(): void {
+  if (isCapacitor()) {
+    NotifyPlugin.stopPolling().catch(() => {});
+    NotifyPlugin.clearCastgc().catch(() => {});
+    NotifyPlugin.cancelClassAlarms().catch(() => {});
+  }
 }
 
 // ─── Class Alarm ────────────────────────────────────────────────────────────

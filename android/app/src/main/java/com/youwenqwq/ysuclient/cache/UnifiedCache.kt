@@ -119,7 +119,11 @@ object UnifiedCache {
     }
 
     fun saveCachedExams(context: Context, exams: JSONArray) {
-        putJsonArray(context, KEY_CACHED_EXAMS, exams)
+        val editor = prefs(context).edit()
+        editor.putString(KEY_CACHED_EXAMS, exams.toString())
+        editor.putBoolean(KEY_HAS_SYNCED_EXAMS, true)
+        editor.putLong(KEY_LAST_EXAM_SYNC_TIME, System.currentTimeMillis())
+        editor.apply()
     }
 
     /** Returns empty JSONArray if no exams cached. */
