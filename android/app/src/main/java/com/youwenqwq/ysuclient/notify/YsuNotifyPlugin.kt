@@ -215,14 +215,14 @@ class YsuNotifyPlugin : Plugin() {
 
     @PluginMethod
     fun scheduleClassAlarms(call: PluginCall) {
-        ClassAlarmManager.scheduleAll(context)
+        ClassAlarmManager.scheduleAlarms(context)
         Log.d(TAG, "Class alarms scheduled")
         call.resolve()
     }
 
     @PluginMethod
     fun cancelClassAlarms(call: PluginCall) {
-        ClassAlarmManager.cancelAll(context)
+        ClassAlarmManager.cancelAllAlarms(context)
         Log.d(TAG, "Class alarms cancelled")
         call.resolve()
     }
