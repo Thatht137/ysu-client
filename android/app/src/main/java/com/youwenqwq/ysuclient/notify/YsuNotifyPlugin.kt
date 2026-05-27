@@ -79,6 +79,7 @@ class YsuNotifyPlugin : Plugin() {
         call.resolve()
     }
 
+
     // ─── Cached data bridge ─────────────────────────────────────────────────
 
     @PluginMethod
@@ -140,6 +141,7 @@ class YsuNotifyPlugin : Plugin() {
         val workRequest = PeriodicWorkRequestBuilder<NotifyWorker>(
             workInterval.toLong(), TimeUnit.MINUTES
         )
+            .setInitialDelay(workInterval.toLong(), TimeUnit.MINUTES)
             .setConstraints(constraints)
             .addTag(NotifyWorker.WORK_NAME)
             .build()
@@ -156,7 +158,9 @@ class YsuNotifyPlugin : Plugin() {
 
     @PluginMethod
     fun stopPolling(call: PluginCall) {
-        WorkManager.getInstance(context).cancelUniqueWork(NotifyWorker.WORK_NAME)
+        val wm = WorkManager.getInstance(context)
+        wm.cancelUniqueWork(NotifyWorker.WORK_NAME)
+        wm.cancelAllWorkByTag(NotifyWorker.WORK_NAME)
         Log.d(TAG, "Polling stopped")
         call.resolve()
     }
@@ -180,6 +184,7 @@ class YsuNotifyPlugin : Plugin() {
         val workRequest = PeriodicWorkRequestBuilder<NotifyWorker>(
             workInterval.toLong(), TimeUnit.MINUTES
         )
+            .setInitialDelay(workInterval.toLong(), TimeUnit.MINUTES)
             .setConstraints(constraints)
             .addTag(NotifyWorker.WORK_NAME)
             .build()

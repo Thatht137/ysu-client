@@ -4,6 +4,9 @@ apply plugin: 'org.jetbrains.kotlin.android'
 android {
     namespace = "com.youwenqwq.ysuclient"
     compileSdk = rootProject.ext.compileSdkVersion
+    buildFeatures {
+        buildConfig = true
+    }
     defaultConfig {
         applicationId "com.youwenqwq.ysuclient"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -57,6 +60,7 @@ dependencies {
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
     implementation "androidx.work:work-runtime-ktx:2.9.1"
+    implementation "com.squareup.okhttp3:okhttp:5.3.2"
     debugImplementation("com.reqable.android:user-certificate-trust:1.0.0")
 }
 

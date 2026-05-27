@@ -2,22 +2,97 @@ package com.youwenqwq.ysuclient.notify
 
 import android.content.Context
 import android.util.Log
+import com.youwenqwq.ysuclient.BuildConfig
 import com.youwenqwq.ysuclient.cache.UnifiedCache
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttp
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody
+import okio.BufferedSink
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.CookieHandler
-import java.net.HttpURLConnection
-import java.net.URL
 import java.net.URLEncoder
+import java.util.concurrent.TimeUnit
 
 /**
  * 通知模块核心逻辑：HTTP 请求、Cookie 管理、Diff、缓存。
+ *
+ * 使用 OkHttp 发起 HTTP 请求，Cookie 存储与主程序的 java.net.CookieManager
+ * 和 android.webkit.CookieManager 完全隔离，互不干扰。
  *
  * 每次 Worker 运行时都使用 CASTGC 重新建立 JWXT 会话，不依赖持久化的 session cookies。
  * 学校配置从 UnifiedCache 读取，支持 JS 端动态下发。
  */
 object NotifyHelper {
     private const val TAG = "YsuNotify"
+
+    // ─── OkHttp client with isolated cookie jar ──────────────────────────────
+
+    private val cookieStore = mutableMapOf<String, MutableList<Cookie>>()
+
+    private val cookieJar = object : CookieJar {
+        override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+            for (cookie in cookies) {
+                val key = "${cookie.domain}|${cookie.path}"
+                val list = cookieStore.getOrPut(key) { mutableListOf() }
+                list.removeAll { it.name == cookie.name }
+                if (!cookie.hasExpired()) {
+                    list.add(cookie)
+                    Log.d(TAG, "Cookie saved: ${cookie.name} domain=${cookie.domain} path=${cookie.path}")
+                }
+            }
+        }
+
+        override fun loadForRequest(url: HttpUrl): List<Cookie> {
+            val result = mutableListOf<Cookie>()
+            for ((key, list) in cookieStore) {
+                val parts = key.split("|", limit = 2)
+                val domain = parts.getOrElse(0) { "" }
+                val path = parts.getOrElse(1) { "/" }
+                if (domainMatches(domain, url.host) && pathMatches(path, url.encodedPath)) {
+                    for (c in list) {
+                        if (!c.hasExpired()) {
+                            result.add(c)
+                        }
+                    }
+                }
+            }
+            return result
+        }
+    }
+
+    private fun Cookie.hasExpired(): Boolean = expiresAt < System.currentTimeMillis()
+
+    private fun domainMatches(cookieDomain: String, host: String): Boolean {
+        val cd = cookieDomain.removePrefix(".")
+        return host == cd || host.endsWith(".$cd")
+    }
+
+    private fun pathMatches(cookiePath: String, requestPath: String): Boolean {
+        if (cookiePath == "/") return true
+        if (requestPath == cookiePath) return true
+        val prefix = if (cookiePath.endsWith("/")) cookiePath else "$cookiePath/"
+        return requestPath.startsWith(prefix)
+    }
+
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .followRedirects(false)
+        .cookieJar(cookieJar)
+        .addInterceptor { chain ->
+            val req = chain.request()
+            val newReq = req.newBuilder()
+                .header("User-Agent", "okhttp/${OkHttp.VERSION} ysu-client/${BuildConfig.VERSION_NAME}")
+                .build()
+            chain.proceed(newReq)
+        }
+        .build()
 
     // ─── Config helpers ─────────────────────────────────────────────────────
 
@@ -131,199 +206,151 @@ object NotifyHelper {
         return UnifiedCache.getBoolean(context, "session_expired", false)
     }
 
-    // ─── Manual cookie jar ──────────────────────────────────────────────────
+    // ─── Cookie helpers ─────────────────────────────────────────────────────
 
-    private val cookieJar = mutableMapOf<String, String>()
-
-    private fun clearCookies() {
-        cookieJar.clear()
-    }
-
-    private fun setCookie(name: String, value: String) {
-        cookieJar[name] = value
-    }
-
-    private fun getCookieHeader(): String {
-        return cookieJar.entries.joinToString("; ") { "${it.key}=${it.value}" }
-    }
-
-    private fun parseSetCookie(header: String?) {
-        if (header == null) return
-        val cookiePart = header.substringBefore(";").trim()
-        if (cookiePart.isEmpty()) return
-        val eqIdx = cookiePart.indexOf('=')
-        if (eqIdx > 0) {
-            val name = cookiePart.substring(0, eqIdx).trim()
-            val value = cookiePart.substring(eqIdx + 1).trim()
-            cookieJar[name] = value
-        }
-    }
-
-    private fun parseSetCookies(conn: HttpURLConnection) {
-        val headers = conn.headerFields ?: return
-        for ((key, values) in headers) {
-            if ("Set-Cookie".equals(key, ignoreCase = true)) {
-                for (value in values) {
-                    parseSetCookie(value)
+    private fun getCookiesForHost(host: String): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        for ((key, list) in cookieStore) {
+            val domain = key.split("|", limit = 2).getOrElse(0) { "" }
+            if (domainMatches(domain, host)) {
+                for (cookie in list) {
+                    if (!cookie.hasExpired()) {
+                        result[cookie.name] = cookie.value
+                    }
                 }
             }
         }
-    }
-
-    private fun applyCookies(conn: HttpURLConnection) {
-        val header = getCookieHeader()
-        if (header.isNotEmpty()) {
-            conn.setRequestProperty("Cookie", header)
-        }
-    }
-
-    private inline fun <T> withCookieHandlerDisabled(block: () -> T): T {
-        val oldHandler = CookieHandler.getDefault()
-        CookieHandler.setDefault(null)
-        try {
-            return block()
-        } finally {
-            CookieHandler.setDefault(oldHandler)
-        }
+        return result
     }
 
     // ─── HTTP helpers ───────────────────────────────────────────────────────
 
-    private fun httpGet(url: String, timeout: Int = 15000): Triple<Int, String, String> = withCookieHandlerDisabled {
-        var currentUrl = url
-        var code: Int = 0
-        var body: String = ""
-        var finalUrl = url
+    private fun buildGet(url: String): Request = Request.Builder()
+        .url(url)
+        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+        .header("Accept-Language", "zh-CN,zh;q=0.9")
+        .build()
 
-        for (i in 0 until 10) {
-            val conn = URL(currentUrl).openConnection() as HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.instanceFollowRedirects = false
-            conn.connectTimeout = timeout
-            conn.readTimeout = timeout
-            conn.setRequestProperty(
-                "User-Agent",
-                "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36"
-            )
-            applyCookies(conn)
+    private data class HttpResult(val code: Int, val body: String, val finalUrl: String)
 
-            code = conn.responseCode
-            body = try {
-                conn.inputStream.bufferedReader().use { it.readText() }
-            } catch (_: Exception) {
-                conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
-            }
-            parseSetCookies(conn)
-            finalUrl = conn.url.toString()
-
-            if (code !in setOf(301, 302, 303, 307, 308)) break
-
-            val location = conn.getHeaderField("Location")
-            if (location.isNullOrEmpty()) break
-
-            currentUrl = if (location.startsWith("http://") || location.startsWith("https://")) {
-                location
-            } else {
-                URL(URL(finalUrl), location).toString()
-            }
+    /** 单次 GET，不跟随重定向。 */
+    private fun httpGet(url: String): HttpResult {
+        client.newCall(buildGet(url)).execute().use { resp ->
+            val body = resp.body?.string() ?: ""
+            Log.d(TAG, "httpGet: code=${resp.code}, url=${resp.request.url}")
+            return HttpResult(resp.code, body, resp.request.url.toString())
         }
-
-        Triple(code, body, finalUrl)
     }
 
-    private fun httpPost(url: String, data: String, timeout: Int = 15000): Pair<Int, String> = withCookieHandlerDisabled {
-        val conn = URL(url).openConnection() as HttpURLConnection
-        conn.requestMethod = "POST"
-        conn.doOutput = true
-        conn.instanceFollowRedirects = true
-        conn.connectTimeout = timeout
-        conn.readTimeout = timeout
-        conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-        conn.setRequestProperty("X-Requested-With", "XMLHttpRequest")
-        conn.setRequestProperty("Accept", "application/json, text/javascript, */*; q=0.01")
-        conn.setRequestProperty(
-            "User-Agent",
-            "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36"
-        )
-        applyCookies(conn)
-
-        conn.outputStream.use { it.write(data.toByteArray(Charsets.UTF_8)) }
-
-        val code = conn.responseCode
-        val body = try {
-            conn.inputStream.bufferedReader().use { it.readText() }
-        } catch (_: Exception) {
-            conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+    private fun httpPost(url: String, data: String): Pair<Int, String> {
+        val body = object : RequestBody() {
+            override fun contentType() = "application/x-www-form-urlencoded; charset=UTF-8".toMediaType()
+            override fun writeTo(sink: BufferedSink) {
+                sink.writeUtf8(data)
+            }
         }
-        parseSetCookies(conn)
-        Pair(code, body)
+
+        val request = Request.Builder()
+            .url(url)
+            .post(body)
+            .header("X-Requested-With", "XMLHttpRequest")
+            .header("Accept", "application/json, text/javascript, */*; q=0.01")
+            .build()
+
+        client.newCall(request).execute().use { resp ->
+            val code = resp.code
+            val responseBody = resp.body?.string() ?: ""
+            return Pair(code, responseBody)
+        }
     }
 
     // ─── JWXT session establishment ─────────────────────────────────────────
 
     /**
      * 使用 CASTGC 建立 JWXT 会话。
-     * 流程：访问 CAS login（带 service=portal）→ CAS 验证 CASTGC 后重定向回 portal → portal 验证 ticket 建立 session。
-     * 注意：跳转到 JWXT domain 前清除 CAS cookies，避免同名 cookie（如 JSESSIONID）干扰。
+     *
+     * 流程：
+     * 1. 请求 CAS（带 CASTGC），CAS 返回 302 到 JWXT（带 ticket）
+     * 2. 手动跟随 CAS → JWXT 重定向（OkHttp 跨域会剥离 Cookie）
+     * 3. JWXT 返回 302（带 Set-Cookie: GS_SESSIONID 等），**不再跟随此重定向**
+     * 4. CookieJar 已存入会话 cookie，可直接用于后续请求
+     *
      * @return true 如果成功建立会话，false 如果 CASTGC 过期。
      */
-    fun establishSession(context: Context, castgc: String): Boolean = withCookieHandlerDisabled {
-        clearCookies()
-        setCookie("CASTGC", castgc)
+    fun establishSession(context: Context, castgc: String): Boolean {
+        cookieStore.clear()
+
+        // 种入 CASTGC
+        val cerHost = getCerBase(context).removePrefix("https://").removePrefix("http://")
+        val castgcCookie = Cookie.Builder()
+            .domain(cerHost)
+            .path("/authserver")
+            .name("CASTGC")
+            .value(castgc)
+            .build()
+        cookieStore[".$cerHost|/authserver"] = mutableListOf(castgcCookie)
 
         val portalUrl = getPortalUrl(context)
         val cerBase = getCerBase(context)
         val service = URLEncoder.encode(portalUrl, "UTF-8")
         val casUrl = "$cerBase/authserver/login?service=$service"
 
-        var currentUrl = casUrl
-        for (step in 0 until 10) {
-            val conn = URL(currentUrl).openConnection() as HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.instanceFollowRedirects = false
-            conn.connectTimeout = 15000
-            conn.readTimeout = 15000
-            conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-            conn.setRequestProperty("Accept-Language", "zh-CN,zh;q=0.9")
-            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
-            applyCookies(conn)
+        // Step 1: 请求 CAS，跟随 CAS → JWXT 的重定向
+        var casRespUrl: String
+        try {
+            client.newCall(buildGet(casUrl)).execute().use { resp ->
+                casRespUrl = resp.request.url.toString()
+                Log.d(TAG, "CAS response: code=${resp.code}, url=$casRespUrl")
 
-            val code = conn.responseCode
-            val body = try {
-                conn.inputStream.bufferedReader().use { it.readText() }
-            } catch (_: Exception) {
-                conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
-            }
-            parseSetCookies(conn)
-            val finalUrl = conn.url.toString()
-
-            Log.d(TAG, "CAS step $step: code=$code, url=$finalUrl")
-
-            if (code !in setOf(301, 302, 303, 307, 308)) {
-                if (finalUrl.contains("authserver/login") || body.contains("authserver/login")) {
-                    Log.w(TAG, "CASTGC expired, bounced back to CAS login")
-                    return@withCookieHandlerDisabled false
+                // CAS 直接返回非重定向 → 可能是登录页
+                if (resp.code !in setOf(301, 302, 303, 307, 308)) {
+                    if (casRespUrl.contains("authserver/login")) {
+                        Log.w(TAG, "CASTGC expired, CAS returned login page")
+                        return false
+                    }
+                    // CAS 直接返回 200（已有有效 session），但我们需要 JWXT 的 cookie
+                    // 继续请求 JWXT portal
                 }
-                return@withCookieHandlerDisabled code == 200
-            }
 
-            val location = conn.getHeaderField("Location")
-            if (location.isNullOrEmpty()) {
-                Log.w(TAG, "CAS redirect without Location header")
-                return@withCookieHandlerDisabled false
+                // 跟随 CAS 的 302 到 JWXT
+                val location = resp.header("Location")
+                if (location.isNullOrEmpty()) {
+                    Log.w(TAG, "CAS redirect without Location header")
+                    return false
+                }
+                casRespUrl = if (location.startsWith("http://") || location.startsWith("https://")) {
+                    location
+                } else {
+                    resp.request.url.resolve(location)?.toString() ?: return false
+                }
             }
-
-            val nextUrl = if (location.startsWith("http://") || location.startsWith("https://")) {
-                location
-            } else {
-                URL(URL(finalUrl), location).toString()
-            }
-
-            currentUrl = nextUrl
+        } catch (e: Exception) {
+            Log.e(TAG, "CAS request failed", e)
+            return false
         }
 
-        Log.w(TAG, "Too many CAS redirects")
-        false
+        // Step 2: 请求 JWXT（带 ticket），不跟随重定向
+        // JWXT 返回 302 + Set-Cookie（GS_SESSIONID 等），这就是我们需要的会话 cookie
+        try {
+            client.newCall(buildGet(casRespUrl)).execute().use { resp ->
+                Log.d(TAG, "JWXT response: code=${resp.code}, url=${resp.request.url}")
+
+                if (resp.code in setOf(301, 302, 303, 307, 308)) {
+                    // 302 是预期的（重定向到不带 ticket 的 index.do），cookie 已在 CookieJar 中
+                    return true
+                }
+
+                if (resp.request.url.toString().contains("authserver/login")) {
+                    Log.w(TAG, "JWXT bounced to CAS login, ticket invalid")
+                    return false
+                }
+
+                return resp.code == 200
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "JWXT request failed", e)
+            return false
+        }
     }
 
     // ─── WEU management ─────────────────────────────────────────────────────
@@ -332,15 +359,16 @@ object NotifyHelper {
     fun fetchWeu(context: Context, appId: String): String? {
         val jwxtBase = getJwxtBase(context)
         val url = "$jwxtBase/jwapp/sys/emaphome/appShow.do?id=$appId"
-        val (code, _, finalUrl) = httpGet(url)
-        Log.d(TAG, "appShow: appId=$appId, code=$code, finalUrl=$finalUrl")
+        val result = httpGet(url)
+        Log.d(TAG, "appShow: appId=$appId, code=${result.code}, finalUrl=${result.finalUrl}")
 
-        if (code != 200) {
-            Log.w(TAG, "appShow failed: code=$code")
+        if (result.code != 200) {
+            Log.w(TAG, "appShow failed: code=${result.code}")
             return null
         }
 
-        val weu = cookieJar["_WEU"]
+        val cookies = getCookiesForHost(url.toHttpUrl().host)
+        val weu = cookies["_WEU"]
         Log.d(TAG, "WEU for appId=$appId: ${weu != null}")
         return weu
     }
