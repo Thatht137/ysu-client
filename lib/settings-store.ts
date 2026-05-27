@@ -25,6 +25,8 @@ interface SettingsState {
   notifyCheckInterval: number;
   notifyGrades: boolean;
   notifyExams: boolean;
+  classReminderEnabled: boolean;
+  classReminderMinutes: number;
   hasHydrated: boolean;
   setUpdateMirror: (mirror: string) => void;
   setBackgroundImage: (image: string) => void;
@@ -45,6 +47,8 @@ interface SettingsState {
   setNotifyCheckInterval: (v: number) => void;
   setNotifyGrades: (v: boolean) => void;
   setNotifyExams: (v: boolean) => void;
+  setClassReminderEnabled: (v: boolean) => void;
+  setClassReminderMinutes: (v: number) => void;
   setHasHydrated: (v: boolean) => void;
 }
 
@@ -70,6 +74,8 @@ export const useSettingsStore = create<SettingsState>()(
       notifyCheckInterval: 60,
       notifyGrades: true,
       notifyExams: true,
+      classReminderEnabled: false,
+      classReminderMinutes: 15,
       hasHydrated: false,
       setUpdateMirror: (updateMirror) => set({ updateMirror }),
       setBackgroundImage: (backgroundImage) => set({ backgroundImage }),
@@ -90,6 +96,8 @@ export const useSettingsStore = create<SettingsState>()(
       setNotifyCheckInterval: (notifyCheckInterval) => set({ notifyCheckInterval }),
       setNotifyGrades: (notifyGrades) => set({ notifyGrades }),
       setNotifyExams: (notifyExams) => set({ notifyExams }),
+      setClassReminderEnabled: (classReminderEnabled) => set({ classReminderEnabled }),
+      setClassReminderMinutes: (classReminderMinutes) => set({ classReminderMinutes }),
       setHasHydrated: (v) => set({ hasHydrated: v }),
     }),
     {

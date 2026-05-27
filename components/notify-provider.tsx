@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useSettingsStore } from "@/lib/settings-store";
 import { useAuthStore } from "@/lib/auth-store";
-import { startNotifyIfNeeded, stopNotify, syncCastgcToNative } from "@/lib/notify";
+import { startNotifyIfNeeded, stopNotify, syncCastgcToNative, syncServerConfigToNative } from "@/lib/notify";
 import { isCapacitor } from "@/lib/platform";
 
 /**
@@ -19,6 +19,7 @@ export function NotifyProvider() {
     didStart.current = true;
     // Always sync CASTGC to native plugin on auth, regardless of notify settings
     syncCastgcToNative().catch(() => {});
+    syncServerConfigToNative().catch(() => {});
     startNotifyIfNeeded();
   }, [isAuthenticated]);
 

@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.widget.RemoteViews
 import com.youwenqwq.ysuclient.R
+import com.youwenqwq.ysuclient.cache.UnifiedCache
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar
@@ -186,9 +187,8 @@ class ExamWidgetHelper(private val context: Context) {
     }
 
     private fun loadExams(): List<WidgetExam> {
-        val prefs = context.getSharedPreferences(WidgetConfig.PREFS_NAME, Context.MODE_PRIVATE)
-        val examsJson = prefs.getString(WidgetConfig.KEY_EXAMS, "[]") ?: "[]"
-        return parseExams(examsJson)
+        val examsJson = UnifiedCache.getCachedExams(context)
+        return parseExams(examsJson.toString())
     }
 
     private fun parseExams(json: String): List<WidgetExam> {
@@ -264,10 +264,9 @@ class ExamWidgetHelper(private val context: Context) {
     }
 
     private fun loadExamSyncInfo(): ExamSyncInfo {
-        val prefs = context.getSharedPreferences(WidgetConfig.PREFS_NAME, Context.MODE_PRIVATE)
-        val hasSynced = prefs.getBoolean(WidgetConfig.KEY_HAS_SYNCED_EXAMS, false)
-        val lastSyncTime = prefs.getLong(WidgetConfig.KEY_LAST_EXAM_SYNC_TIME, 0L)
-        val syncReminderHours = prefs.getInt(WidgetConfig.KEY_SYNC_REMINDER_HOURS, 24)
+        val hasSynced = UnifiedCache.getBoolean(context, UnifiedCache.KEY_HAS_SYNCED_EXAMS, false)
+        val lastSyncTime = UnifiedCache.getLong(context, UnifiedCache.KEY_LAST_EXAM_SYNC_TIME, 0L)
+        val syncReminderHours = UnifiedCache.getInt(context, UnifiedCache.KEY_SYNC_REMINDER_HOURS, 24)
         return ExamSyncInfo(hasSynced, lastSyncTime, syncReminderHours)
     }
 

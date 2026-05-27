@@ -5,6 +5,8 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
+import com.youwenqwq.ysuclient.cache.UnifiedCache
+import org.json.JSONArray
 
 @CapacitorPlugin(name = "WidgetBridge")
 class WidgetBridgePlugin : Plugin() {
@@ -16,16 +18,10 @@ class WidgetBridgePlugin : Plugin() {
         val syncReminderHours = call.getInt("syncReminderHours", 24) ?: 24
         val showNextDaySchedule = call.getBoolean("showNextDaySchedule", false) ?: false
 
-        val prefs = context.getSharedPreferences(WidgetConfig.PREFS_NAME, android.content.Context.MODE_PRIVATE)
-        prefs.edit().apply {
-            putString(WidgetConfig.KEY_COURSES, coursesJson)
-            putString(WidgetConfig.KEY_CURRENT_WEEK, currentWeekJson)
-            putBoolean(WidgetConfig.KEY_HAS_SYNCED_SCHEDULE, true)
-            putLong(WidgetConfig.KEY_LAST_SYNC_TIME, System.currentTimeMillis())
-            putInt(WidgetConfig.KEY_SYNC_REMINDER_HOURS, syncReminderHours)
-            putBoolean(WidgetConfig.KEY_SHOW_NEXT_DAY_SCHEDULE, showNextDaySchedule)
-            apply()
-        }
+        UnifiedCache.saveCachedSchedule(context, JSONArray(coursesJson))
+        UnifiedCache.saveCachedCurrentWeek(context, currentWeekJson)
+        UnifiedCache.putInt(context, UnifiedCache.KEY_SYNC_REMINDER_HOURS, syncReminderHours)
+        UnifiedCache.putBoolean(context, UnifiedCache.KEY_SHOW_NEXT_DAY_SCHEDULE, showNextDaySchedule)
 
         // Trigger schedule widget update
         val scheduleHelper = ScheduleWidgetHelper(context)
@@ -39,12 +35,8 @@ class WidgetBridgePlugin : Plugin() {
         val syncReminderHours = call.getInt("syncReminderHours", 24) ?: 24
         val showNextDaySchedule = call.getBoolean("showNextDaySchedule", false) ?: false
 
-        val prefs = context.getSharedPreferences(WidgetConfig.PREFS_NAME, android.content.Context.MODE_PRIVATE)
-        prefs.edit().apply {
-            putInt(WidgetConfig.KEY_SYNC_REMINDER_HOURS, syncReminderHours)
-            putBoolean(WidgetConfig.KEY_SHOW_NEXT_DAY_SCHEDULE, showNextDaySchedule)
-            apply()
-        }
+        UnifiedCache.putInt(context, UnifiedCache.KEY_SYNC_REMINDER_HOURS, syncReminderHours)
+        UnifiedCache.putBoolean(context, UnifiedCache.KEY_SHOW_NEXT_DAY_SCHEDULE, showNextDaySchedule)
 
         // Trigger schedule widget update so reminder text reflects new threshold
         val scheduleHelper = ScheduleWidgetHelper(context)
@@ -58,14 +50,10 @@ class WidgetBridgePlugin : Plugin() {
         val examsJson = call.getString("examsJson", "[]")
         val syncReminderHours = call.getInt("syncReminderHours", 24) ?: 24
 
-        val prefs = context.getSharedPreferences(WidgetConfig.PREFS_NAME, android.content.Context.MODE_PRIVATE)
-        prefs.edit().apply {
-            putString(WidgetConfig.KEY_EXAMS, examsJson)
-            putBoolean(WidgetConfig.KEY_HAS_SYNCED_EXAMS, true)
-            putLong(WidgetConfig.KEY_LAST_EXAM_SYNC_TIME, System.currentTimeMillis())
-            putInt(WidgetConfig.KEY_SYNC_REMINDER_HOURS, syncReminderHours)
-            apply()
-        }
+        UnifiedCache.saveCachedExams(context, JSONArray(examsJson))
+        UnifiedCache.putBoolean(context, UnifiedCache.KEY_HAS_SYNCED_EXAMS, true)
+        UnifiedCache.putLong(context, UnifiedCache.KEY_LAST_EXAM_SYNC_TIME, System.currentTimeMillis())
+        UnifiedCache.putInt(context, UnifiedCache.KEY_SYNC_REMINDER_HOURS, syncReminderHours)
 
         // Trigger exam widget update
         val examHelper = ExamWidgetHelper(context)

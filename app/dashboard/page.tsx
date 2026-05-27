@@ -14,6 +14,7 @@ import { useCachedData, LONG_TTL_MS } from "@/lib/use-cached-data";
 import { cn } from "@/lib/utils";
 import { isCourseActiveInWeek, buildSectionTimeMap, isCoursePast } from "@/app/dashboard/schedule/schedule-utils";
 import { syncScheduleToWidget, syncExamsToWidget } from "@/lib/widget-bridge";
+import { syncClassAlarmsToNative } from "@/lib/notify";
 import type { StudentInfo, CurrentWeek, GPAStats, Course, Exam, ClassPeriod } from "@/lib/types";
 import { Calendar, GraduationCap, BarChart3, Clock, BookOpen, Eye, EyeOff } from "lucide-react";
 
@@ -112,6 +113,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (activeCoursesForWidget) {
       syncScheduleToWidget(activeCoursesForWidget, currentWeek.data, periods, widgetSyncReminderHours, widgetShowNextDaySchedule).catch(() => {});
+      syncClassAlarmsToNative(activeCoursesForWidget, currentWeek.data, periods).catch(() => {});
     }
   }, [activeCoursesForWidget, currentWeek.data, periods, widgetSyncReminderHours, widgetShowNextDaySchedule]);
 

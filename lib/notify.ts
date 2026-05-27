@@ -18,11 +18,32 @@ import { NotifyPlugin } from "./notify-plugin";
 import { getJar as getCasJar } from "./cas";
 import { loadCASTGC } from "./secure-storage";
 import type { Grade, Exam } from "./types";
+import { buildNativeServerConfig } from "./notify-config";
+import type { Course, CurrentWeek, ClassPeriod } from "./types";
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let appStateHandle: PluginListenerHandle | null = null;
 let settingsUnsub: (() => void) | null = null;
 let checking = false;
+
+const recentNotifications = new Set<string>();
+const RECENT_WINDOW_MS = 60 * 60 * 1000;
+
+function shouldNotify(type: "grade" | "exam", key: string): boolean {
+  const fullKey = `${type}:${key}:${Math.floor(Date.now() / RECENT_WINDOW_MS)}`;
+  if (recentNotifications.has(fullKey)) return false;
+  recentNotifications.add(fullKey);
+  if (recentNotifications.size > 100) {
+    const cutoff = Math.floor(Date.now() / RECENT_WINDOW_MS) - 2;
+    for (const k of recentNotifications) {
+      const parts = k.split(":");
+      if (parts.length >= 3 && parseInt(parts[2]!, 10) < cutoff) {
+        recentNotifications.delete(k);
+      }
+    }
+  }
+  return true;
+}
 
 // ─── Diff Logic ─────────────────────────────────────────────────────────── //
 
@@ -85,21 +106,24 @@ async function _checkAndNotify(): Promise<void> {
     try {
       const newGrades = await getGrades(credential);
       const cachedResult = await NotifyPlugin.getCachedGrades();
-      const cached = (cachedResult.grades as Grade[]) ?? [];
+      const cachedJson = (cachedResult as { gradesJson?: string }).gradesJson;
+      const cached: Grade[] = cachedJson ? JSON.parse(cachedJson) : [];
       if (cached.length > 0) {
         const added = diffGrades(cached, newGrades);
         if (added.length > 0) {
           for (const g of added) {
-            toast(getText("settings.notifyNewGrade"), {
-              description: getText("settings.notifyNewGradeBody").replace(
-                "{course}",
-                g.course_name,
-              ),
-            });
+            if (shouldNotify("grade", gradeKey(g))) {
+              toast(getText("settings.notifyNewGrade"), {
+                description: getText("settings.notifyNewGradeBody").replace(
+                  "{course}",
+                  g.course_name,
+                ),
+              });
+            }
           }
         }
       }
-      await NotifyPlugin.setCachedGrades({ grades: newGrades as unknown[] });
+      await NotifyPlugin.setCachedGrades({ gradesJson: JSON.stringify(newGrades) });
     } catch {
       // silently ignore fetch errors during background check
     }
@@ -110,21 +134,24 @@ async function _checkAndNotify(): Promise<void> {
     try {
       const newExams = await getExams(credential);
       const cachedResult = await NotifyPlugin.getCachedExams();
-      const cached = (cachedResult.exams as Exam[]) ?? [];
+      const cachedJson = (cachedResult as { examsJson?: string }).examsJson;
+      const cached: Exam[] = cachedJson ? JSON.parse(cachedJson) : [];
       if (cached.length > 0) {
         const changed = diffExams(cached, newExams);
         if (changed.length > 0) {
           for (const e of changed) {
-            toast(getText("settings.notifyNewExam"), {
-              description: getText("settings.notifyNewExamBody").replace(
-                "{exam}",
-                e.name,
-              ),
-            });
+            if (shouldNotify("exam", examKey(e))) {
+              toast(getText("settings.notifyNewExam"), {
+                description: getText("settings.notifyNewExamBody").replace(
+                  "{exam}",
+                  e.name,
+                ),
+              });
+            }
           }
         }
       }
-      await NotifyPlugin.setCachedExams({ exams: newExams as unknown[] });
+      await NotifyPlugin.setCachedExams({ examsJson: JSON.stringify(newExams) });
     } catch {
       // silently ignore
     }
@@ -157,7 +184,16 @@ async function handleAppStateChange(): Promise<void> {
   removeAppStateListener();
   const handle = await App.addListener("appStateChange", ({ isActive }) => {
     if (isActive) {
+      startInterval();
       checkAndNotify();
+      if (isCapacitor()) {
+        NotifyPlugin.pausePolling().catch(() => {});
+      }
+    } else {
+      stopInterval();
+      if (isCapacitor()) {
+        NotifyPlugin.resumePolling().catch(() => {});
+      }
     }
   });
   appStateHandle = handle;
@@ -177,6 +213,16 @@ function unsubscribeSettings(): void {
   }
 }
 
+export async function syncServerConfigToNative(): Promise<void> {
+  if (!isCapacitor()) return;
+  try {
+    const config = buildNativeServerConfig();
+    await NotifyPlugin.setServerConfig({ configJson: JSON.stringify(config) });
+  } catch (e) {
+    console.warn("Failed to sync server config to native", e);
+  }
+}
+
 /**
  * 启动通知轮询。在 SDK 初始化完成后调用。
  * 如果 notifyEnabled 为 false，不会启动任何轮询。
@@ -186,6 +232,8 @@ export async function startNotifyIfNeeded(): Promise<void> {
 
   const { notifyEnabled } = useSettingsStore.getState();
   if (!notifyEnabled) return;
+
+  await syncServerConfigToNative();
 
   // Listen for foreground transitions
   await handleAppStateChange();
@@ -240,6 +288,7 @@ export function stopNotify(): void {
   if (isCapacitor()) {
     NotifyPlugin.stopPolling().catch(() => {});
     NotifyPlugin.clearCastgc().catch(() => {});
+    NotifyPlugin.cancelClassAlarms().catch(() => {});
   }
 }
 
@@ -326,4 +375,85 @@ export async function startNativePolling(): Promise<void> {
 export async function stopNativePolling(): Promise<void> {
   if (!isCapacitor()) return;
   await NotifyPlugin.stopPolling();
+}
+
+// ─── Class Alarm ────────────────────────────────────────────────────────────
+
+export interface ClassAlarmConfig {
+  alarmId: string;
+  alarmTime: number;
+  courseName: string;
+  classroom: string;
+  startTime: string;
+  remindMinutes: number;
+}
+
+function parseTimeToMinutes(timeStr: string): number {
+  const parts = timeStr.split(":");
+  if (parts.length < 2) return 0;
+  return parseInt(parts[0]!, 10) * 60 + parseInt(parts[1]!, 10);
+}
+
+export function computeClassAlarms(
+  courses: Course[],
+  currentWeek: CurrentWeek | null,
+  periods: ClassPeriod[],
+  remindMinutes: number = 15,
+): ClassAlarmConfig[] {
+  const alarms: ClassAlarmConfig[] = [];
+  const now = new Date();
+  const periodMap = new Map(periods.map((p) => [p.section, p]));
+  const todayWeekday = now.getDay() === 0 ? 7 : now.getDay();
+
+  for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+    const targetWeekday = ((todayWeekday - 1 + dayOffset) % 7) + 1;
+    const dayCourses = courses.filter((c) => c.week_day === targetWeekday);
+
+    for (const course of dayCourses) {
+      const startPeriod = periodMap.get(course.start_section);
+      if (!startPeriod?.start_time) continue;
+
+      const startMinutes = parseTimeToMinutes(startPeriod.start_time);
+      const alarmMinutes = startMinutes - remindMinutes;
+      if (alarmMinutes < 0) continue;
+
+      const targetDate = new Date(now);
+      targetDate.setDate(targetDate.getDate() + dayOffset);
+      targetDate.setHours(Math.floor(alarmMinutes / 60), alarmMinutes % 60, 0, 0);
+
+      if (targetDate.getTime() <= now.getTime()) continue;
+
+      const alarmId = `${course.name}|${targetDate.toISOString().split("T")[0]}|${course.start_section}`;
+      alarms.push({
+        alarmId,
+        alarmTime: targetDate.getTime(),
+        courseName: course.name,
+        classroom: course.classroom || "",
+        startTime: startPeriod.start_time,
+        remindMinutes,
+      });
+    }
+  }
+
+  return alarms;
+}
+
+export async function syncClassAlarmsToNative(
+  courses: Course[],
+  currentWeek: CurrentWeek | null,
+  periods: ClassPeriod[],
+): Promise<void> {
+  if (!isCapacitor()) return;
+
+  const { classReminderEnabled, classReminderMinutes } = useSettingsStore.getState();
+  if (!classReminderEnabled) {
+    await NotifyPlugin.cancelClassAlarms().catch(() => {});
+    return;
+  }
+
+  const alarms = computeClassAlarms(courses, currentWeek, periods, classReminderMinutes);
+  await NotifyPlugin.cancelClassAlarms().catch(() => {});
+  if (alarms.length > 0) {
+    await NotifyPlugin.scheduleClassAlarms({ alarmsJson: JSON.stringify(alarms) });
+  }
 }

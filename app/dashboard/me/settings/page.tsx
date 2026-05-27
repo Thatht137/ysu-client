@@ -6,6 +6,8 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -71,6 +73,10 @@ export default function SettingsPage() {
   const setNotifyGrades = useSettingsStore((s) => s.setNotifyGrades);
   const notifyExams = useSettingsStore((s) => s.notifyExams);
   const setNotifyExams = useSettingsStore((s) => s.setNotifyExams);
+  const classReminderEnabled = useSettingsStore((s) => s.classReminderEnabled);
+  const setClassReminderEnabled = useSettingsStore((s) => s.setClassReminderEnabled);
+  const classReminderMinutes = useSettingsStore((s) => s.classReminderMinutes);
+  const setClassReminderMinutes = useSettingsStore((s) => s.setClassReminderMinutes);
 
   function commitSyncHours() {
     const val = parseInt(localSyncHours, 10);
@@ -348,6 +354,41 @@ export default function SettingsPage() {
                   </ToggleGroup>
                 </div>
               )}
+
+              {/* 上课提醒 */}
+              <div className="space-y-3 border-t border-border py-3">
+                <h3 className="text-sm font-medium text-muted-foreground">
+                  {t("settings.classReminderTitle")}
+                </h3>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="class-reminder">
+                    {t("settings.classReminderEnabled")}
+                  </Label>
+                  <Switch
+                    id="class-reminder"
+                    checked={classReminderEnabled}
+                    onCheckedChange={setClassReminderEnabled}
+                  />
+                </div>
+                {classReminderEnabled && (
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="reminder-minutes">
+                      {t("settings.classReminderMinutes")}
+                    </Label>
+                    <select
+                      id="reminder-minutes"
+                      value={classReminderMinutes}
+                      onChange={(e) => setClassReminderMinutes(parseInt(e.target.value))}
+                      className="rounded-md border bg-background px-3 py-1 text-sm"
+                    >
+                      <option value={5}>5 {t("settings.minutes")}</option>
+                      <option value={10}>10 {t("settings.minutes")}</option>
+                      <option value={15}>15 {t("settings.minutes")}</option>
+                      <option value={30}>30 {t("settings.minutes")}</option>
+                    </select>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </Section>

@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.widget.RemoteViews
 import com.youwenqwq.ysuclient.R
+import com.youwenqwq.ysuclient.cache.UnifiedCache
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar
@@ -247,8 +248,7 @@ class ScheduleWidgetHelper(private val context: Context) {
     }
 
     private fun loadShowNextDaySchedule(): Boolean {
-        val prefs = context.getSharedPreferences(WidgetConfig.PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getBoolean(WidgetConfig.KEY_SHOW_NEXT_DAY_SCHEDULE, false)
+        return UnifiedCache.getBoolean(context, UnifiedCache.KEY_SHOW_NEXT_DAY_SCHEDULE, false)
     }
 
     /**
@@ -273,12 +273,11 @@ class ScheduleWidgetHelper(private val context: Context) {
     }
 
     private fun loadData(): Triple<List<WidgetCourse>, WidgetWeekInfo?, Boolean> {
-        val prefs = context.getSharedPreferences(WidgetConfig.PREFS_NAME, Context.MODE_PRIVATE)
-        val coursesJson = prefs.getString(WidgetConfig.KEY_COURSES, "[]") ?: "[]"
-        val weekJson = prefs.getString(WidgetConfig.KEY_CURRENT_WEEK, "") ?: ""
-        val hasSynced = prefs.getBoolean(WidgetConfig.KEY_HAS_SYNCED_SCHEDULE, false)
+        val coursesJson = UnifiedCache.getCachedSchedule(context)
+        val weekJson = UnifiedCache.getCachedCurrentWeek(context)
+        val hasSynced = UnifiedCache.getBoolean(context, UnifiedCache.KEY_HAS_SYNCED_SCHEDULE, false)
 
-        val courses = parseCourses(coursesJson)
+        val courses = parseCourses(coursesJson.toString())
         val weekInfo = if (weekJson.isNotEmpty()) parseWeekInfo(weekJson) else null
         return Triple(courses, weekInfo, hasSynced)
     }
@@ -371,10 +370,9 @@ class ScheduleWidgetHelper(private val context: Context) {
     }
 
     private fun loadSyncInfo(): SyncInfo {
-        val prefs = context.getSharedPreferences(WidgetConfig.PREFS_NAME, Context.MODE_PRIVATE)
-        val hasSynced = prefs.getBoolean(WidgetConfig.KEY_HAS_SYNCED_SCHEDULE, false)
-        val lastSyncTime = prefs.getLong(WidgetConfig.KEY_LAST_SYNC_TIME, 0L)
-        val syncReminderHours = prefs.getInt(WidgetConfig.KEY_SYNC_REMINDER_HOURS, 24)
+        val hasSynced = UnifiedCache.getBoolean(context, UnifiedCache.KEY_HAS_SYNCED_SCHEDULE, false)
+        val lastSyncTime = UnifiedCache.getLong(context, UnifiedCache.KEY_LAST_SYNC_TIME, 0L)
+        val syncReminderHours = UnifiedCache.getInt(context, UnifiedCache.KEY_SYNC_REMINDER_HOURS, 24)
         return SyncInfo(hasSynced, lastSyncTime, syncReminderHours)
     }
 

@@ -27,6 +27,7 @@ import { initServerConfig } from "./server-config";
 import { clearAllCache, cleanStaleCacheVersions } from "./cache";
 import { useRefreshStore } from "./refresh-store";
 import { isCapacitor } from "./platform";
+import { NotifyPlugin } from "./notify-plugin";
 
 /** 从 auth-store 恢复 CAS 凭据、JWXT 会话和 mobile 会话到各自的 jar。 */
 export async function initSDK(): Promise<void> {
@@ -135,6 +136,10 @@ export function resetSDK(): void {
   resetMobileAuth();
   clearAllCache();
   useRefreshStore.setState({ count: 0, stale: 0 });
+  // Cancel class alarms on logout
+  if (isCapacitor()) {
+    NotifyPlugin.cancelClassAlarms().catch(() => {});
+  }
 }
 
 /** 获取 CAS cookie jar(调试用)。 */
