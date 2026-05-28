@@ -230,9 +230,37 @@ class ExamWidgetHelper(private val context: Context) {
         return exams.filter { exam ->
             val examDate = parseExamDate(exam)
             if (examDate == null) return@filter false
-            examDate.after(now)
+            // If end time is known, filter out exams that have already ended
+            val examEndTime = parseExamEndTime(exam)
+            if (examEndTime != null) {
+                examEndTime.after(now)
+            } else {
+                // Fallback: exam visible until end of exam day
+                examDate.after(now)
+            }
         }.sortedBy { exam ->
             parseExamDate(exam)?.timeInMillis ?: Long.MAX_VALUE
+        }
+    }
+
+    /**
+     * Parse exam date + end time into a Calendar.
+     * exam_time format: "18:10-19:45" or "2026-05-30 18:10-19:45(星期三)"
+     */
+    private fun parseExamEndTime(exam: WidgetExam): Calendar? {
+        val date = parseExamDate(exam) ?: return null
+        val timeRange = exam.examTime ?: return null
+        // Extract "19:45" from "18:10-19:45"
+        val match = Regex("""\d{1,2}:\d{2}[-~](\d{1,2}:\d{2})""").find(timeRange)
+        val endTime = match?.groupValues?.getOrNull(1) ?: return null
+        val timeParts = endTime.split(":")
+        val endHour = timeParts.getOrNull(0)?.toIntOrNull() ?: return null
+        val endMinute = timeParts.getOrNull(1)?.toIntOrNull() ?: return null
+        return (date.clone() as Calendar).apply {
+            set(Calendar.HOUR_OF_DAY, endHour)
+            set(Calendar.MINUTE, endMinute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
         }
     }
 
