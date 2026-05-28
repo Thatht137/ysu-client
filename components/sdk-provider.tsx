@@ -13,6 +13,7 @@ import { isCapacitor } from "@/lib/platform";
 import { initSafeArea } from "@/lib/webview-compat";
 import { syncCastgcToNative } from "@/lib/notify";
 import { trackAppLaunch } from "@/lib/analytics";
+import { syncFeedbackReplies } from "@/lib/feedback-check";
 import { AnalyticsPrompt } from "@/components/analytics-prompt";
 import { APP_VERSION } from "@/lib/version";
 
@@ -93,6 +94,9 @@ export function SDKProvider({ children }: { children: React.ReactNode }) {
         if (isCapacitor()) {
           syncCastgcToNative().catch(() => {});
         }
+
+        // Check feedback replies once on startup
+        syncFeedbackReplies().catch(() => {});
 
         // Check WebView compatibility (Capacitor only)
         if (isCapacitor()) {

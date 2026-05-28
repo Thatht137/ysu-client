@@ -5,6 +5,17 @@ export type CardStyle = "solid" | "translucent" | "glass";
 export type BackgroundStyle = "overlay" | "blur-overlay";
 export type LandingPage = "overview" | "schedule";
 
+export interface FeedbackHistoryItem {
+  id: string;
+  rating: number;
+  text: string;
+  ts: number;
+  replied?: boolean;
+  replyText?: string;
+  repliedAt?: number;
+  notifiedAt?: number;
+}
+
 interface SettingsState {
   updateMirror: string;
   backgroundImage: string;
@@ -32,6 +43,8 @@ interface SettingsState {
   analyticsConsent: boolean;
   lastAnalyticsDate: string;
   analyticsPromptVersion: string;
+  feedbackIds: string[];
+  feedbackHistory: FeedbackHistoryItem[];
   hasHydrated: boolean;
   setUpdateMirror: (mirror: string) => void;
   setBackgroundImage: (image: string) => void;
@@ -59,6 +72,8 @@ interface SettingsState {
   setAnalyticsConsent: (v: boolean) => void;
   setLastAnalyticsDate: (v: string) => void;
   setAnalyticsPromptVersion: (v: string) => void;
+  setFeedbackIds: (ids: string[]) => void;
+  setFeedbackHistory: (items: FeedbackHistoryItem[]) => void;
   setHasHydrated: (v: boolean) => void;
 }
 
@@ -91,6 +106,8 @@ export const useSettingsStore = create<SettingsState>()(
       analyticsConsent: false,
       lastAnalyticsDate: "",
       analyticsPromptVersion: "",
+      feedbackIds: [],
+      feedbackHistory: [],
       hasHydrated: false,
       setUpdateMirror: (updateMirror) => set({ updateMirror }),
       setBackgroundImage: (backgroundImage) => set({ backgroundImage }),
@@ -118,6 +135,8 @@ export const useSettingsStore = create<SettingsState>()(
       setAnalyticsConsent: (analyticsConsent) => set({ analyticsConsent }),
       setLastAnalyticsDate: (lastAnalyticsDate) => set({ lastAnalyticsDate }),
       setAnalyticsPromptVersion: (analyticsPromptVersion) => set({ analyticsPromptVersion }),
+      setFeedbackIds: (feedbackIds) => set({ feedbackIds }),
+      setFeedbackHistory: (feedbackHistory) => set({ feedbackHistory }),
       setHasHydrated: (v) => set({ hasHydrated: v }),
     }),
     {
