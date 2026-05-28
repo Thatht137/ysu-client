@@ -14,15 +14,18 @@ import com.youwenqwq.ysuclient.MainActivity
 import com.youwenqwq.ysuclient.R
 import com.youwenqwq.ysuclient.cache.UnifiedCache
 import org.json.JSONArray
-import org.json.JSONObject
+import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 
 /**
  * WorkManager Worker: 后台轮询成绩/考试变化。
  *
- * 每次执行时：
- * 1. 从 SharedPreferences 读取 CASTGC
- * 2. 使用 CASTGC 重新建立 JWXT 会话
- * 3. 拉取成绩/考试，diff 后发送通知
+ * 错误处理策略：
+ * - CAS 重定向（会话过期）→ 立即标记过期，通知用户
+ * - 网络错误 → 通知用户（如开启），下一周期重试
+ * - 其他错误 → 静默重试，连续 3 次失败后通知用户
+ * - 成功 → 重置失败计数
  */
 class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
@@ -31,6 +34,8 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         const val WORK_NAME = "ysu_notify_work"
         const val CHANNEL_ID = "ysu_notify_channel"
         const val NOTIFICATION_ID_BASE = 1000
+        private const val MAX_CONSECUTIVE_FAILURES = 3
+        private const val KEY_CONSECUTIVE_FAILURES = "notify_consecutive_failures"
 
         @Volatile
         private var nextNotificationId = NOTIFICATION_ID_BASE
@@ -41,14 +46,12 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         Log.d(TAG, "NotifyWorker started")
 
         try {
-            // Check server config exists before proceeding
             if (UnifiedCache.getJsonObject(ctx, UnifiedCache.KEY_SERVER_CONFIG) == null) {
                 Log.d(TAG, "No server config, skipping")
                 return Result.success()
             }
 
             val castgc = UnifiedCache.getString(ctx, UnifiedCache.KEY_CASTGC, "")
-            Log.d(TAG, "castgc=${if (castgc.isEmpty()) "NULL/EMPTY" else "PRESENT(len=${castgc.length})"}")
             if (castgc.isEmpty()) {
                 Log.d(TAG, "No CASTGC, skipping")
                 return Result.success()
@@ -60,7 +63,6 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 return Result.success()
             }
 
-            // 如果之前已经标记会话过期，跳过
             if (NotifyHelper.isSessionExpired(ctx)) {
                 Log.d(TAG, "Session already expired, skipping")
                 return Result.success()
@@ -72,6 +74,7 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 Log.w(TAG, "Failed to establish JWXT session, CASTGC expired")
                 NotifyHelper.setSessionExpired(ctx, true)
                 sendSessionExpiredNotification(ctx)
+                resetFailures(ctx)
                 return Result.success()
             }
 
@@ -98,6 +101,8 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                     val arr = JSONArray()
                     for (g in newGrades) arr.put(g)
                     UnifiedCache.saveCachedGrades(ctx, arr)
+                } catch (e: IOException) {
+                    throw e // Let outer handler deal with network errors
                 } catch (e: Exception) {
                     Log.e(TAG, "Error checking grades", e)
                 }
@@ -126,20 +131,68 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                     val arr = JSONArray()
                     for (e in newExams) arr.put(e)
                     UnifiedCache.saveCachedExams(ctx, arr)
+                } catch (e: IOException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Error checking exams", e)
                 }
             }
 
+            // 成功，重置失败计数
+            resetFailures(ctx)
             Log.d(TAG, "NotifyWorker finished, hasChanges=$hasChanges")
+        } catch (e: UnknownHostException) {
+            Log.w(TAG, "Network error (DNS)", e)
+            handleFailure(ctx, isNetworkError = true)
+        } catch (e: SocketTimeoutException) {
+            Log.w(TAG, "Network error (timeout)", e)
+            handleFailure(ctx, isNetworkError = true)
+        } catch (e: IOException) {
+            Log.w(TAG, "Network error (IO)", e)
+            handleFailure(ctx, isNetworkError = true)
         } catch (e: Exception) {
-            Log.e(TAG, "NotifyWorker fatal error", e)
+            Log.e(TAG, "NotifyWorker error", e)
+            handleFailure(ctx, isNetworkError = false)
         }
 
         return Result.success()
     }
 
-    // ─── Notifications ──────────────────────────────────────────────────────
+    // ─── Failure tracking ─────────────────────────────────────────────────
+
+    private fun handleFailure(ctx: Context, isNetworkError: Boolean) {
+        val failures = getFailures(ctx) + 1
+        setFailures(ctx, failures)
+
+        if (isNetworkError) {
+            val (_, _, _, notifyNetworkError) = NotifyHelper.getSettingsWithNetworkError(ctx)
+            if (notifyNetworkError) {
+                sendNetworkErrorNotification(ctx)
+            }
+            Log.d(TAG, "Network error, will retry next interval (failures=$failures)")
+        } else {
+            if (failures >= MAX_CONSECUTIVE_FAILURES) {
+                sendRetryFailedNotification(ctx)
+                Log.w(TAG, "Consecutive failures reached $MAX_CONSECUTIVE_FAILURES, notifying user")
+            } else {
+                Log.d(TAG, "Error, will retry next interval (failures=$failures)")
+            }
+        }
+    }
+
+    private fun getFailures(ctx: Context): Int {
+        return UnifiedCache.getInt(ctx, KEY_CONSECUTIVE_FAILURES, 0)
+    }
+
+    private fun setFailures(ctx: Context, count: Int) {
+        UnifiedCache.putInt(ctx, KEY_CONSECUTIVE_FAILURES, count)
+    }
+
+    private fun resetFailures(ctx: Context) {
+        UnifiedCache.putInt(ctx, KEY_CONSECUTIVE_FAILURES, 0)
+    }
+
+    // ─── Notifications ─────────────────────────────────────────────────────
 
     private fun createNotificationChannel(ctx: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -229,5 +282,37 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             .build()
 
         nm.notify(NOTIFICATION_ID_BASE + 9999, notification)
+    }
+
+    private fun sendNetworkErrorNotification(ctx: Context) {
+        createNotificationChannel(ctx)
+        val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val notification = NotificationCompat.Builder(ctx, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle(ctx.getString(R.string.notify_network_error_title))
+            .setContentText(ctx.getString(R.string.notify_network_error_text))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setContentIntent(getOpenAppIntent(ctx))
+            .setAutoCancel(true)
+            .build()
+
+        nm.notify(NOTIFICATION_ID_BASE + 9998, notification)
+    }
+
+    private fun sendRetryFailedNotification(ctx: Context) {
+        createNotificationChannel(ctx)
+        val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val notification = NotificationCompat.Builder(ctx, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle(ctx.getString(R.string.notify_retry_failed_title))
+            .setContentText(ctx.getString(R.string.notify_retry_failed_text))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(getOpenAppIntent(ctx))
+            .setAutoCancel(true)
+            .build()
+
+        nm.notify(NOTIFICATION_ID_BASE + 9997, notification)
     }
 }

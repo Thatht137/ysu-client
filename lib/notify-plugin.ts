@@ -24,6 +24,7 @@ export interface YsuNotifyPlugin {
     intervalMinutes: number;
     checkGrades: boolean;
     checkExams: boolean;
+    notifyNetworkError: boolean;
   }): Promise<void>;
   stopPolling(): Promise<void>;
   pausePolling(): Promise<void>;

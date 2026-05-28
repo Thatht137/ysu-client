@@ -128,11 +128,12 @@ class YsuNotifyPlugin : Plugin() {
         val interval = call.getInt("intervalMinutes", 60) ?: 60
         val checkGrades = call.getBoolean("checkGrades", true) ?: true
         val checkExams = call.getBoolean("checkExams", true) ?: true
+        val notifyNetworkError = call.getBoolean("notifyNetworkError", false) ?: false
 
         // WorkManager 最小间隔为 15 分钟
         val workInterval = interval.coerceAtLeast(15)
 
-        NotifyHelper.saveSettings(context, workInterval, checkGrades, checkExams)
+        NotifyHelper.saveSettings(context, workInterval, checkGrades, checkExams, notifyNetworkError)
         NotifyHelper.setSessionExpired(context, false)
 
         val constraints = Constraints.Builder()

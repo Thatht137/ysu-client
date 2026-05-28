@@ -51,6 +51,7 @@ import {
   Battery,
   ShieldCheck,
   BarChart3,
+  WifiOff,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -76,6 +77,8 @@ export default function SettingsPage() {
   const setNotifyGrades = useSettingsStore((s) => s.setNotifyGrades);
   const notifyExams = useSettingsStore((s) => s.notifyExams);
   const setNotifyExams = useSettingsStore((s) => s.setNotifyExams);
+  const notifyNetworkError = useSettingsStore((s) => s.notifyNetworkError);
+  const setNotifyNetworkError = useSettingsStore((s) => s.setNotifyNetworkError);
   const classReminderEnabled = useSettingsStore((s) => s.classReminderEnabled);
   const setClassReminderEnabled = useSettingsStore((s) => s.setClassReminderEnabled);
   const classReminderMinutes = useSettingsStore((s) => s.classReminderMinutes);
@@ -384,6 +387,21 @@ export default function SettingsPage() {
                       {t("settings.notifyExams")}
                     </ToggleGroupItem>
                   </ToggleGroup>
+                </div>
+              )}
+
+              {/* 网络错误提醒 */}
+              {notifyEnabled && (
+                <div className="flex items-center gap-3 border-t border-border py-3">
+                  <WifiOff className="size-5 shrink-0 text-muted-foreground" />
+                  <div className="flex flex-1 flex-col">
+                    <span className="text-sm">{t("settings.notifyNetworkError")}</span>
+                    <span className="text-xs text-muted-foreground">{t("settings.notifyNetworkErrorDesc")}</span>
+                  </div>
+                  <Switch
+                    checked={notifyNetworkError}
+                    onCheckedChange={setNotifyNetworkError}
+                  />
                 </div>
               )}
 

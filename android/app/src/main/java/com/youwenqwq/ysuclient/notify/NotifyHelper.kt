@@ -28,6 +28,8 @@ import java.util.concurrent.TimeUnit
  * 每次 Worker 运行时都使用 CASTGC 重新建立 JWXT 会话，不依赖持久化的 session cookies。
  * 学校配置从 UnifiedCache 读取，支持 JS 端动态下发。
  */
+data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
+
 object NotifyHelper {
     private const val TAG = "YsuNotify"
 
@@ -176,11 +178,12 @@ object NotifyHelper {
         UnifiedCache.remove(context, UnifiedCache.KEY_CASTGC)
     }
 
-    fun saveSettings(context: Context, interval: Int, grades: Boolean, exams: Boolean) {
+    fun saveSettings(context: Context, interval: Int, grades: Boolean, exams: Boolean, notifyNetworkError: Boolean) {
         val obj = JSONObject().apply {
             put("interval", interval)
             put("grades", grades)
             put("exams", exams)
+            put("notifyNetworkError", notifyNetworkError)
         }
         UnifiedCache.putJsonObject(context, UnifiedCache.KEY_NOTIFY_SETTINGS, obj)
     }
@@ -195,6 +198,20 @@ object NotifyHelper {
             )
         } else {
             Triple(60, true, true)
+        }
+    }
+
+    fun getSettingsWithNetworkError(context: Context): Quadruple<Int, Boolean, Boolean, Boolean> {
+        val obj = UnifiedCache.getJsonObject(context, UnifiedCache.KEY_NOTIFY_SETTINGS)
+        return if (obj != null) {
+            Quadruple(
+                obj.optInt("interval", 60),
+                obj.optBoolean("grades", true),
+                obj.optBoolean("exams", true),
+                obj.optBoolean("notifyNetworkError", false)
+            )
+        } else {
+            Quadruple(60, true, true, false)
         }
     }
 

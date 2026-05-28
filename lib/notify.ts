@@ -105,7 +105,7 @@ export async function triggerNotifyCheck(): Promise<void> {
 export async function startNativePolling(): Promise<void> {
   if (!isCapacitor()) return;
 
-  const { notifyCheckInterval, notifyGrades, notifyExams } = useSettingsStore.getState();
+  const { notifyCheckInterval, notifyGrades, notifyExams, notifyNetworkError } = useSettingsStore.getState();
 
   // 检查通知权限
   const perm = await NotifyPlugin.checkPermissions();
@@ -121,6 +121,7 @@ export async function startNativePolling(): Promise<void> {
     intervalMinutes: notifyCheckInterval,
     checkGrades: notifyGrades,
     checkExams: notifyExams,
+    notifyNetworkError,
   });
 }
 
