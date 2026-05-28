@@ -11,7 +11,6 @@ import { useUpdateStore } from "@/lib/update-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { isCapacitor } from "@/lib/platform";
 import { initSafeArea } from "@/lib/webview-compat";
-import { syncCastgcToNative } from "@/lib/notify";
 import { trackAppLaunch } from "@/lib/analytics";
 import { syncFeedbackReplies } from "@/lib/feedback-check";
 import { AnalyticsPrompt } from "@/components/analytics-prompt";
@@ -88,11 +87,6 @@ export function SDKProvider({ children }: { children: React.ReactNode }) {
         } else {
           // Fire-and-forget: anonymous usage stats
           trackAppLaunch().catch(() => {});
-        }
-
-        // Sync CASTGC to native plugin for background notifications
-        if (isCapacitor()) {
-          syncCastgcToNative().catch(() => {});
         }
 
         // Check feedback replies once on startup

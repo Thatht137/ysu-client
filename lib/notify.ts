@@ -253,7 +253,7 @@ export async function syncClassAlarmsToNative(
   await NotifyPlugin.cancelClassAlarms().catch(() => {});
   lastAlarmHash = "";
   if (alarms.length > 0) {
-    await NotifyPlugin.scheduleClassAlarms({ alarmsJson: hash });
+    await NotifyPlugin.scheduleClassAlarms({ alarmsJson: JSON.stringify(alarms) });
     lastAlarmHash = hash;
   }
 }
