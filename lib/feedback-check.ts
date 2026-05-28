@@ -17,11 +17,9 @@ export async function syncFeedbackReplies(): Promise<void> {
     if (result === null) continue;
 
     if ("notFound" in result) {
-      // Only remove entries older than 30 days to avoid deleting on transient 404s
-      const entry = history.find((h) => h.id === id);
-      if (entry && Date.now() - entry.ts > 30 * 24 * 60 * 60 * 1000) {
-        ids = ids.filter((fid) => fid !== id);
-        history = history.filter((h) => h.id !== id);
+      const idx = history.findIndex((h) => h.id === id);
+      if (idx >= 0 && !history[idx].deleted) {
+        history[idx] = { ...history[idx], deleted: true };
         changed = true;
       }
       continue;

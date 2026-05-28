@@ -144,6 +144,8 @@ export const zh = {
     feedbackReplied: "已收到回复",
     feedbackRefresh: "刷新",
     feedbackNewReply: "你有一条开发者回复！前往关于页查看。",
+    feedbackDeleted: "该反馈已不存在于服务端",
+    feedbackRemove: "移除",
   },
   analyticsPrompt: {
     title: "匿名统计",
@@ -754,6 +756,8 @@ export const en = {
     feedbackReplied: "Reply received",
     feedbackRefresh: "Refresh",
     feedbackNewReply: "You have a developer reply! Go to About to view.",
+    feedbackDeleted: "This feedback no longer exists on the server",
+    feedbackRemove: "Remove",
   },
   analyticsPrompt: {
     title: "Anonymous Analytics",

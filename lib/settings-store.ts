@@ -14,6 +14,7 @@ export interface FeedbackHistoryItem {
   replyText?: string;
   repliedAt?: number;
   notifiedAt?: number;
+  deleted?: boolean;
 }
 
 interface SettingsState {

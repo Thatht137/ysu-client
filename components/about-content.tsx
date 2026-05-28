@@ -543,12 +543,12 @@ export function AboutContent() {
               {feedbackHistory.map((item, idx) => (
                 <div
                   key={item.id}
-                  className="rounded-lg border p-3"
+                  className={`rounded-lg border p-3 ${item.deleted ? "opacity-60" : ""}`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-mono text-muted-foreground">
-                        #{idx + 1}
+                        #{feedbackHistory.length - idx}
                       </span>
                       <div className="flex gap-0.5">
                         {[1, 2, 3, 4, 5].map((s) => (
@@ -568,6 +568,9 @@ export function AboutContent() {
                     </span>
                   </div>
                   <p className="mt-2 text-sm">{item.text || "（无文字内容）"}</p>
+                  {item.deleted && (
+                    <p className="mt-2 text-xs text-destructive">{t("about.feedbackDeleted")}</p>
+                  )}
                   {item.replied && item.replyText && (
                     <div className="mt-2 rounded-md bg-muted p-2">
                       <p className="text-xs font-medium text-muted-foreground">{t("about.feedbackDevReply")}</p>
@@ -577,7 +580,22 @@ export function AboutContent() {
                   {item.replied && !item.replyText && (
                     <p className="mt-2 text-xs text-primary">{t("about.feedbackReplied")}</p>
                   )}
-                  <p className="mt-2 text-[10px] font-mono text-muted-foreground/60">ID: {item.id}</p>
+                  <div className="mt-2 flex items-center justify-between">
+                    <p className="text-[10px] font-mono text-muted-foreground/60">ID: {item.id}</p>
+                    {item.deleted && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const state = useSettingsStore.getState();
+                          state.setFeedbackIds(state.feedbackIds.filter((fid) => fid !== item.id));
+                          state.setFeedbackHistory(state.feedbackHistory.filter((h) => h.id !== item.id));
+                        }}
+                        className="text-xs text-destructive hover:underline"
+                      >
+                        {t("about.feedbackRemove")}
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
               {feedbackHistory.length === 0 && (
