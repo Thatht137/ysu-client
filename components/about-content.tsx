@@ -11,6 +11,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Settings,
+  MessageSquare,
+  Star,
 } from "lucide-react";
 import {
   Accordion,
@@ -72,6 +74,12 @@ export function AboutContent() {
   // Dialog-local state
   const [dialogPreset, setDialogPreset] = useState("");
   const [dialogCustomValue, setDialogCustomValue] = useState("");
+
+  // Feedback state
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackRating, setFeedbackRating] = useState(0);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackState, setFeedbackState] = useState<"idle" | "submitting" | "success" | "error">("idle");
 
   // Hidden debug trigger
   const tapTimes = useRef<number[]>([]);
@@ -144,6 +152,24 @@ export function AboutContent() {
       // ignore
     }
   }, []);
+
+  const handleFeedbackSubmit = useCallback(async () => {
+    if (feedbackRating < 1) return;
+    setFeedbackState("submitting");
+    try {
+      const { submitFeedback } = await import("@/lib/feedback");
+      await submitFeedback(feedbackRating, feedbackText);
+      setFeedbackState("success");
+      setTimeout(() => {
+        setShowFeedback(false);
+        setFeedbackRating(0);
+        setFeedbackText("");
+        setFeedbackState("idle");
+      }, 1500);
+    } catch {
+      setFeedbackState("error");
+    }
+  }, [feedbackRating, feedbackText]);
 
   const canCheck = isCapacitor();
 
@@ -225,6 +251,18 @@ export function AboutContent() {
               </span>
             </button>
           )}
+
+          <Separator />
+
+          <button
+            type="button"
+            onClick={() => setShowFeedback(true)}
+            className="flex items-center gap-3 py-3 transition-colors active:bg-muted/60"
+          >
+            <MessageSquare className="size-5 shrink-0 text-muted-foreground" />
+            <span className="flex-1 text-left text-sm">{t("about.feedback")}</span>
+            <span className="text-xs text-muted-foreground">{t("about.feedbackDesc")}</span>
+          </button>
 
           <Separator />
 
@@ -355,6 +393,73 @@ export function AboutContent() {
           <DialogFooter>
             <Button onClick={confirmMirror}>{t("update.confirm")}</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showFeedback} onOpenChange={setShowFeedback}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("about.feedback")}</DialogTitle>
+            <DialogDescription>{t("about.feedbackDesc")}</DialogDescription>
+          </DialogHeader>
+          {feedbackState === "success" ? (
+            <div className="flex flex-col items-center gap-3 py-6">
+              <CheckCircle2 className="size-10 text-green-500" />
+              <p className="text-sm text-muted-foreground">{t("about.feedbackSuccess")}</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <span className="text-sm font-medium">{t("about.feedbackRating")}</span>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setFeedbackRating(star)}
+                      className="p-1 transition-colors"
+                    >
+                      <Star
+                        className={`size-6 ${
+                          star <= feedbackRating
+                            ? "fill-yellow-400 text-yellow-400"
+                            : "text-muted-foreground"
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <span className="text-sm font-medium">{t("about.feedbackText")}</span>
+                <textarea
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                  placeholder={t("about.feedbackTextPlaceholder")}
+                  rows={4}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                />
+              </div>
+              {feedbackState === "error" && (
+                <p className="text-sm text-destructive">{t("about.feedbackError")}</p>
+              )}
+            </div>
+          )}
+          {feedbackState !== "success" && (
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setShowFeedback(false)}>
+                {t("dialog.cancel")}
+              </Button>
+              <Button
+                onClick={handleFeedbackSubmit}
+                disabled={feedbackRating < 1 || feedbackState === "submitting"}
+              >
+                {feedbackState === "submitting"
+                  ? t("about.feedbackSubmitting")
+                  : t("about.feedbackSubmit")}
+              </Button>
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
     </div>

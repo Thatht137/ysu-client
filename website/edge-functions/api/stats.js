@@ -15,7 +15,6 @@ export async function onRequestPost({ request, env }) {
     }
 
     const date = new Date().toISOString().split('T')[0];
-    const ua = request.headers.get('user-agent') || 'unknown';
 
     let extra = {};
     try {
@@ -24,10 +23,13 @@ export async function onRequestPost({ request, env }) {
         version: String(body.version || '').slice(0, 32),
         screen: String(body.screen || '').slice(0, 32),
         platform: String(body.platform || '').slice(0, 16),
+        ua: String(body.ua || '').slice(0, 512),
       };
     } catch {
       // ignore parse errors
     }
+
+    const ua = extra.ua || request.headers.get('user-agent') || 'unknown';
 
     const key = `stats:${date}`;
     const existing = await STATS_KV.get(key);

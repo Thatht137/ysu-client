@@ -45,7 +45,7 @@ export async function onRequestPost({ request, env }) {
     }
 
     const date = new Date().toISOString().split('T')[0];
-    const ua = request.headers.get('user-agent') || 'unknown';
+    const ua = String(body.ua || '').slice(0, 512) || request.headers.get('user-agent') || 'unknown';
     const key = `feedback:${date}`;
     const existing = await STATS_KV.get(key);
     let data = existing ? JSON.parse(existing) : { entries: [] };

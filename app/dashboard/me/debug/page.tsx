@@ -41,6 +41,7 @@ interface DiagnosticResult {
     name: string;
     userAgent: string;
     screen: string;
+    viewport: string;
     capacitorPlatform?: string;
   };
   authStore: {
@@ -112,7 +113,10 @@ export default function DebugPage() {
     try {
       const platformName = isCapacitor() ? "Capacitor" : "Web (dev)";
       const screenInfo = typeof window !== "undefined"
-        ? `${window.screen.width}x${window.screen.height} (${window.innerWidth}x${window.innerHeight})`
+        ? `${Math.round(window.screen.width * window.devicePixelRatio)}x${Math.round(window.screen.height * window.devicePixelRatio)}`
+        : "N/A";
+      const viewportInfo = typeof window !== "undefined"
+        ? `${window.screen.width}x${window.screen.height} (screen) / ${window.innerWidth}x${window.innerHeight} (viewport)`
         : "N/A";
       let capacitorPlatform: string | undefined;
       if (isCapacitor()) {
@@ -148,6 +152,7 @@ export default function DebugPage() {
           name: platformName,
           userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "N/A",
           screen: screenInfo,
+          viewport: viewportInfo,
           capacitorPlatform,
         },
         authStore: {
@@ -429,6 +434,10 @@ export default function DebugPage() {
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">{t("debug.platformScreen")}</span>
                 <span className="font-mono text-xs">{diag.platform.screen}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">{t("debug.platformViewport")}</span>
+                <span className="font-mono text-xs">{diag.platform.viewport}</span>
               </div>
               <div className="flex flex-col gap-0.5">
                 <span className="text-muted-foreground">{t("debug.platformUserAgent")}</span>

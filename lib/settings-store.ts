@@ -25,9 +25,13 @@ interface SettingsState {
   notifyCheckInterval: number;
   notifyGrades: boolean;
   notifyExams: boolean;
+  notifyNetworkError: boolean;
   classReminderEnabled: boolean;
   classReminderMinutes: number;
   classReminderDays: number;
+  analyticsConsent: boolean;
+  lastAnalyticsDate: string;
+  analyticsPromptVersion: string;
   hasHydrated: boolean;
   setUpdateMirror: (mirror: string) => void;
   setBackgroundImage: (image: string) => void;
@@ -48,9 +52,13 @@ interface SettingsState {
   setNotifyCheckInterval: (v: number) => void;
   setNotifyGrades: (v: boolean) => void;
   setNotifyExams: (v: boolean) => void;
+  setNotifyNetworkError: (v: boolean) => void;
   setClassReminderEnabled: (v: boolean) => void;
   setClassReminderMinutes: (v: number) => void;
   setClassReminderDays: (v: number) => void;
+  setAnalyticsConsent: (v: boolean) => void;
+  setLastAnalyticsDate: (v: string) => void;
+  setAnalyticsPromptVersion: (v: string) => void;
   setHasHydrated: (v: boolean) => void;
 }
 
@@ -76,9 +84,13 @@ export const useSettingsStore = create<SettingsState>()(
       notifyCheckInterval: 60,
       notifyGrades: true,
       notifyExams: true,
+      notifyNetworkError: false,
       classReminderEnabled: false,
       classReminderMinutes: 15,
       classReminderDays: 7,
+      analyticsConsent: false,
+      lastAnalyticsDate: "",
+      analyticsPromptVersion: "",
       hasHydrated: false,
       setUpdateMirror: (updateMirror) => set({ updateMirror }),
       setBackgroundImage: (backgroundImage) => set({ backgroundImage }),
@@ -99,9 +111,13 @@ export const useSettingsStore = create<SettingsState>()(
       setNotifyCheckInterval: (notifyCheckInterval) => set({ notifyCheckInterval }),
       setNotifyGrades: (notifyGrades) => set({ notifyGrades }),
       setNotifyExams: (notifyExams) => set({ notifyExams }),
+      setNotifyNetworkError: (notifyNetworkError) => set({ notifyNetworkError }),
       setClassReminderEnabled: (classReminderEnabled) => set({ classReminderEnabled }),
       setClassReminderMinutes: (classReminderMinutes) => set({ classReminderMinutes }),
       setClassReminderDays: (classReminderDays) => set({ classReminderDays }),
+      setAnalyticsConsent: (analyticsConsent) => set({ analyticsConsent }),
+      setLastAnalyticsDate: (lastAnalyticsDate) => set({ lastAnalyticsDate }),
+      setAnalyticsPromptVersion: (analyticsPromptVersion) => set({ analyticsPromptVersion }),
       setHasHydrated: (v) => set({ hasHydrated: v }),
     }),
     {
