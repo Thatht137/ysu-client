@@ -11,6 +11,7 @@ import { MFAModal } from "@/components/mfa-modal"
 import { BackgroundImage } from "@/components/background-image"
 import { BackButtonHandler } from "@/components/back-button-handler"
 import { DeepLinkHandler } from "@/components/deep-link-handler"
+import { NotifyProvider } from "@/components/notify-provider"
 import { cn } from "@/lib/utils";
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' })
@@ -58,6 +59,7 @@ export default function RootLayout({
                 <BackgroundImage />
                 <BackButtonHandler />
                 <DeepLinkHandler />
+                <NotifyProvider />
                 {children}
                 <Toaster />
                 <MFAModal />

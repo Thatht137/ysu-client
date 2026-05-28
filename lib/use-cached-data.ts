@@ -58,9 +58,11 @@ export function useCachedData<T>(
 
   // 用 ref 持有回调，避免它们变化时触发 effect 重新执行
   const fetchRef = useRef(opts.fetch);
-  fetchRef.current = opts.fetch;
   const fallbackRef = useRef(opts.fallback);
-  fallbackRef.current = opts.fallback;
+  useEffect(() => {
+    fetchRef.current = opts.fetch;
+    fallbackRef.current = opts.fallback;
+  });
 
   // 追踪本实例对全局 refresh / stale 计数器的贡献，避免错误清除其他源的标记
   const contributedRefresh = useRef(false);

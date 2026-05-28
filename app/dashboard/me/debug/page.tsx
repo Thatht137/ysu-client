@@ -19,7 +19,10 @@ import {
   getExperimentalSchedule,
   getCurrentWeek,
 } from "@/lib/api";
-import { RefreshCw, Trash2, Bug } from "lucide-react";
+import { useSettingsStore } from "@/lib/settings-store";
+import { startNativePolling, stopNativePolling } from "@/lib/notify";
+import { NotifyPlugin } from "@/lib/notify-plugin";
+import { RefreshCw, Trash2, Bug, Bell, Play, Send, Smartphone, Shield, Power } from "lucide-react";
 import { toast } from "sonner";
 import { clearAllCache } from "@/lib/cache";
 
@@ -38,6 +41,7 @@ interface DiagnosticResult {
     name: string;
     userAgent: string;
     screen: string;
+    viewport: string;
     capacitorPlatform?: string;
   };
   authStore: {
@@ -78,13 +82,41 @@ export default function DebugPage() {
 
   const [diag, setDiag] = useState<DiagnosticResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [nativeTestLog, setNativeTestLog] = useState<string[]>([]);
+  const [nativePermGranted, setNativePermGranted] = useState<boolean | null>(null);
+  const [cachedGradeCount, setCachedGradeCount] = useState<number | null>(null);
+  const [cachedExamCount, setCachedExamCount] = useState<number | null>(null);
+
+  const notifyEnabled = useSettingsStore((s) => s.notifyEnabled);
+  const notifyCheckInterval = useSettingsStore((s) => s.notifyCheckInterval);
+  const notifyGrades = useSettingsStore((s) => s.notifyGrades);
+  const notifyExams = useSettingsStore((s) => s.notifyExams);
+
+  function logNative(msg: string) {
+    setNativeTestLog((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
+  }
+
+  useEffect(() => {
+    if (!isCapacitor()) return;
+    NotifyPlugin.getCachedGrades().then(({ gradesJson }) => {
+      const parsed = gradesJson ? JSON.parse(gradesJson) : [];
+      setCachedGradeCount(parsed.length);
+    }).catch(() => {});
+    NotifyPlugin.getCachedExams().then(({ examsJson }) => {
+      const parsed = examsJson ? JSON.parse(examsJson) : [];
+      setCachedExamCount(parsed.length);
+    }).catch(() => {});
+  }, []);
 
   async function runDiagnostics() {
     setLoading(true);
     try {
       const platformName = isCapacitor() ? "Capacitor" : "Web (dev)";
       const screenInfo = typeof window !== "undefined"
-        ? `${window.screen.width}x${window.screen.height} (${window.innerWidth}x${window.innerHeight})`
+        ? `${Math.round(window.screen.width * window.devicePixelRatio)}x${Math.round(window.screen.height * window.devicePixelRatio)}`
+        : "N/A";
+      const viewportInfo = typeof window !== "undefined"
+        ? `${window.screen.width}x${window.screen.height} (screen) / ${window.innerWidth}x${window.innerHeight} (viewport)`
         : "N/A";
       let capacitorPlatform: string | undefined;
       if (isCapacitor()) {
@@ -120,6 +152,7 @@ export default function DebugPage() {
           name: platformName,
           userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "N/A",
           screen: screenInfo,
+          viewport: viewportInfo,
           capacitorPlatform,
         },
         authStore: {
@@ -225,6 +258,130 @@ export default function DebugPage() {
     runDiagnostics();
   }
 
+  // ─── Native Plugin Debug ─────────────────────────────────────────────── //
+
+  async function handleNativeCheckPermission() {
+    if (!isCapacitor()) {
+      logNative("非 Capacitor 平台，跳过");
+      return;
+    }
+    try {
+      const result = await NotifyPlugin.checkPermissions();
+      setNativePermGranted(result.granted);
+      logNative(`checkPermissions: granted=${result.granted}`);
+    } catch (e) {
+      logNative(`checkPermissions 失败: ${(e as Error).message}`);
+    }
+  }
+
+  async function handleNativeRequestPermission() {
+    if (!isCapacitor()) {
+      logNative("非 Capacitor 平台，跳过");
+      return;
+    }
+    try {
+      const result = await NotifyPlugin.requestPermissions();
+      setNativePermGranted(result.granted);
+      logNative(`requestPermissions: granted=${result.granted}`);
+    } catch (e) {
+      logNative(`requestPermissions 失败: ${(e as Error).message}`);
+    }
+  }
+
+  async function handleNativeSetCastgc() {
+    if (!isCapacitor()) {
+      logNative("非 Capacitor 平台，跳过");
+      return;
+    }
+    try {
+      // 诊断：从 secure storage 直接读取 CASTGC
+      const { loadCASTGC } = await import("@/lib/secure-storage");
+      const storedTgc = await loadCASTGC();
+      logNative(`secureStorage CASTGC: ${storedTgc ? "存在" : "无"}`);
+
+      // 诊断：从 CapacitorCookies 读取
+      const { CapacitorCookies } = await import("@capacitor/core");
+      const cookies = await CapacitorCookies.getCookies({
+        url: "https://cer.ysu.edu.cn/authserver",
+      });
+      logNative(`CapacitorCookies: ${JSON.stringify(cookies)}`);
+
+      // 诊断：从 JS cookie jar 读取
+      const casCookies = await getCasJar().getAllCookies();
+      const jarCastgc = casCookies.find((c) => c.name === "CASTGC");
+      logNative(`JS cookie jar CASTGC: ${jarCastgc ? `存在(len=${jarCastgc.value.length})` : "无"}`);
+
+      // 诊断：直接调用 setCastgc
+      if (jarCastgc?.value) {
+        logNative(`直接调用 setCastgc, castgc len=${jarCastgc.value.length}`);
+        await NotifyPlugin.setCastgc({ castgc: jarCastgc.value });
+        logNative("setCastgc 调用完成");
+      } else {
+        logNative("跳过 setCastgc: castgc 为空");
+      }
+    } catch (e) {
+      logNative(`syncCastgcToNative 失败: ${(e as Error).message}`);
+    }
+  }
+
+  async function handleNativeStartPolling() {
+    if (!isCapacitor()) {
+      logNative("非 Capacitor 平台，跳过");
+      return;
+    }
+    try {
+      await startNativePolling();
+      logNative(`startNativePolling: 已启动 (interval=${notifyCheckInterval}min, grades=${notifyGrades}, exams=${notifyExams})`);
+    } catch (e) {
+      logNative(`startNativePolling 失败: ${(e as Error).message}`);
+    }
+  }
+
+  async function handleNativeStopPolling() {
+    if (!isCapacitor()) {
+      logNative("非 Capacitor 平台，跳过");
+      return;
+    }
+    try {
+      await stopNativePolling();
+      logNative("stopNativePolling: 已停止");
+    } catch (e) {
+      logNative(`stopNativePolling 失败: ${(e as Error).message}`);
+    }
+  }
+
+  async function handleNativeRunWorker() {
+    if (!isCapacitor()) {
+      logNative("非 Capacitor 平台，跳过");
+      return;
+    }
+    try {
+      logNative("正在直接触发 Worker...");
+      await NotifyPlugin.executeOnce();
+      logNative("Worker 已触发，稍后查看通知栏");
+    } catch (e) {
+      logNative(`触发 Worker 失败: ${(e as Error).message}`);
+    }
+  }
+
+  async function handleNativeGetState() {
+    if (!isCapacitor()) {
+      logNative("非 Capacitor 平台，跳过");
+      return;
+    }
+    try {
+      const result = await NotifyPlugin.checkPermissions();
+      logNative(`权限状态: granted=${result.granted}`);
+    } catch (e) {
+      logNative(`获取状态失败: ${(e as Error).message}`);
+    }
+  }
+
+  function handleNativeClearLog() {
+    setNativeTestLog([]);
+  }
+
+
   function statusBadge(value: boolean | null | { ok: boolean | null; error?: string }) {
     if (typeof value === "boolean") {
       if (value === true) return <Badge variant="default" className="text-[10px]">OK</Badge>;
@@ -277,6 +434,10 @@ export default function DebugPage() {
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">{t("debug.platformScreen")}</span>
                 <span className="font-mono text-xs">{diag.platform.screen}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">{t("debug.platformViewport")}</span>
+                <span className="font-mono text-xs">{diag.platform.viewport}</span>
               </div>
               <div className="flex flex-col gap-0.5">
                 <span className="text-muted-foreground">{t("debug.platformUserAgent")}</span>
@@ -431,6 +592,111 @@ export default function DebugPage() {
                   </ul>
                 )}
               </ScrollArea>
+            </CardContent>
+          </Card>
+
+          {/* ── Notification Debug ─────────────────────────────── */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Bell className="size-4" />
+                通知模块状态
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-1.5 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">notifyEnabled</span>
+                {statusBadge(notifyEnabled)}
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">notifyCheckInterval</span>
+                <span className="font-mono text-xs">{notifyCheckInterval} 分钟</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">notifyGrades</span>
+                {statusBadge(notifyGrades)}
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">notifyExams</span>
+                {statusBadge(notifyExams)}
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">isCapacitor</span>
+                {statusBadge(isCapacitor())}
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">缓存成绩</span>
+                <span className="font-mono text-xs">
+                  {cachedGradeCount !== null ? `${cachedGradeCount} 条` : "无"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">缓存考试</span>
+                <span className="font-mono text-xs">
+                  {cachedExamCount !== null ? `${cachedExamCount} 条` : "无"}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ── Native Plugin Debug ─────────────────────────────── */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Smartphone className="size-4" />
+                原生插件测试
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="outline" size="sm" onClick={handleNativeCheckPermission}>
+                  <Shield className="size-3.5 mr-1" />
+                  检查权限
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleNativeRequestPermission}>
+                  <Shield className="size-3.5 mr-1" />
+                  请求权限
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleNativeSetCastgc}>
+                  <Send className="size-3.5 mr-1" />
+                  同步 CASTGC
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleNativeStartPolling}>
+                  <Power className="size-3.5 mr-1" />
+                  启动轮询
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleNativeStopPolling}>
+                  <Power className="size-3.5 mr-1" />
+                  停止轮询
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleNativeRunWorker}>
+                  <Play className="size-3.5 mr-1" />
+                  立即执行
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleNativeClearLog}>
+                  <Trash2 className="size-3.5 mr-1" />
+                  清空日志
+                </Button>
+              </div>
+
+              {nativePermGranted !== null && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-muted-foreground">通知权限:</span>
+                  {nativePermGranted ? (
+                    <span className="text-green-600">已授予</span>
+                  ) : (
+                    <span className="text-destructive">未授予</span>
+                  )}
+                </div>
+              )}
+
+              {nativeTestLog.length > 0 && (
+                <ScrollArea className="h-48 rounded-md border bg-muted/30 p-2">
+                  <pre className="text-[10px] font-mono whitespace-pre-wrap">
+                    {nativeTestLog.join("\n")}
+                  </pre>
+                </ScrollArea>
+              )}
             </CardContent>
           </Card>
 

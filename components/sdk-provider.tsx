@@ -11,6 +11,10 @@ import { useUpdateStore } from "@/lib/update-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { isCapacitor } from "@/lib/platform";
 import { initSafeArea } from "@/lib/webview-compat";
+import { trackAppLaunch } from "@/lib/analytics";
+import { syncFeedbackReplies } from "@/lib/feedback-check";
+import { AnalyticsPrompt } from "@/components/analytics-prompt";
+import { APP_VERSION } from "@/lib/version";
 
 export function SDKProvider({ children }: { children: React.ReactNode }) {
   const { t, locale } = useTranslation();
@@ -24,6 +28,7 @@ export function SDKProvider({ children }: { children: React.ReactNode }) {
   const setUpdateStatus = useUpdateStore((s) => s.setUpdateStatus);
   const didInit = useRef(false);
   const [sdkReady, setSdkReady] = useState(false);
+  const [showAnalyticsPrompt, setShowAnalyticsPrompt] = useState(false);
 
   // Inject safe area CSS variables on native.
   // The Capacitor SystemBars plugin may report zero values for WebView < 140
@@ -74,6 +79,18 @@ export function SDKProvider({ children }: { children: React.ReactNode }) {
     initSDK()
       .then(() => {
         setSdkReady(true);
+
+        // Show analytics consent prompt on first run only (not on every update)
+        const analyticsPromptVersion = useSettingsStore.getState().analyticsPromptVersion;
+        if (!analyticsPromptVersion) {
+          setShowAnalyticsPrompt(true);
+        } else {
+          // Fire-and-forget: anonymous usage stats
+          trackAppLaunch().catch(() => {});
+        }
+
+        // Check feedback replies once on startup
+        syncFeedbackReplies().catch(() => {});
 
         // Check WebView compatibility (Capacitor only)
         if (isCapacitor()) {
@@ -132,5 +149,18 @@ export function SDKProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return children;
+  return (
+    <>
+      {children}
+      <AnalyticsPrompt
+        open={showAnalyticsPrompt}
+        onClose={() => {
+          setShowAnalyticsPrompt(false);
+          useSettingsStore.getState().setAnalyticsPromptVersion(APP_VERSION);
+          // Try to track launch if user agreed
+          trackAppLaunch().catch(() => {});
+        }}
+      />
+    </>
+  );
 }

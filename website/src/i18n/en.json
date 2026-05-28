@@ -80,6 +80,10 @@
     "disclaimer": {
       "title": "Disclaimer",
       "content": "This project is a third-party client, not affiliated with Yanshan University. It is for personal learning and communication purposes only. The code is entirely written by AI, with only basic design debugging and rough auditing done manually. By using this app, you acknowledge and accept the associated risks. Do not use it for infringing on others' rights or violating school regulations."
+    },
+    "analytics": {
+      "title": "Anonymous Analytics",
+      "content": "This app optionally collects anonymous usage statistics to understand daily active users and device distribution. Statistics include only launch count and User-Agent information, with no personally identifiable information, student IDs, grades, or academic data. Data is fully anonymous and stored in EdgeOne Pages KV. Users can disable this feature at any time within the app."
     }
   },
   "faq": {

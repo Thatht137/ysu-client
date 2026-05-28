@@ -14,6 +14,7 @@ import { useCachedData, LONG_TTL_MS } from "@/lib/use-cached-data";
 import { cn } from "@/lib/utils";
 import { isCourseActiveInWeek, buildSectionTimeMap, isCoursePast } from "@/app/dashboard/schedule/schedule-utils";
 import { syncScheduleToWidget, syncExamsToWidget } from "@/lib/widget-bridge";
+import { syncClassAlarmsToNative } from "@/lib/notify";
 import type { StudentInfo, CurrentWeek, GPAStats, Course, Exam, ClassPeriod } from "@/lib/types";
 import { Calendar, GraduationCap, BarChart3, Clock, BookOpen, Eye, EyeOff } from "lucide-react";
 
@@ -65,32 +66,32 @@ export default function DashboardPage() {
   const { t } = useTranslation();
   const [showGPA, setShowGPA] = useState(false);
 
-  const student = useCachedData(["student", credential], {
+  const student = useCachedData<StudentInfo>(["student", credential], {
     fetch: () => withRetry(() => getStudentInfo()),
     ttl: LONG_TTL_MS,
   });
 
-  const currentWeek = useCachedData(["week", credential], {
+  const currentWeek = useCachedData<CurrentWeek>(["week", credential], {
     fetch: () => withRetry(() => getCurrentWeek(credential!)),
     fallback: () => null,
   });
 
-  const gpa = useCachedData(["gpa", credential], {
+  const gpa = useCachedData<GPAStats>(["gpa", credential], {
     fetch: () => withRetry(() => getGPAStats(credential!)),
     fallback: () => null,
   });
 
-  const courses = useCachedData(["schedule", credential], {
+  const courses = useCachedData<Course[]>(["schedule", credential], {
     fetch: () => withRetry(() => getExperimentalSchedule(credential!, undefined, "all")),
     fallback: () => null,
   });
 
-  const exams = useCachedData(["exams", credential], {
+  const exams = useCachedData<Exam[]>(["exams", credential], {
     fetch: () => withRetry(() => getExams(credential!)),
     fallback: () => null,
   });
 
-  const periodsRaw = useCachedData(["periods", credential], {
+  const periodsRaw = useCachedData<ClassPeriod[]>(["periods", credential], {
     fetch: () => withRetry(() => getClassPeriods()),
     fallback: () => null,
   });
@@ -112,6 +113,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (activeCoursesForWidget) {
       syncScheduleToWidget(activeCoursesForWidget, currentWeek.data, periods, widgetSyncReminderHours, widgetShowNextDaySchedule).catch(() => {});
+      syncClassAlarmsToNative(activeCoursesForWidget, currentWeek.data, periods).catch(() => {});
     }
   }, [activeCoursesForWidget, currentWeek.data, periods, widgetSyncReminderHours, widgetShowNextDaySchedule]);
 

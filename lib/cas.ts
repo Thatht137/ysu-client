@@ -3,6 +3,7 @@
  *
  * 纯函数 + 模块级状态(cookie jar)。
  */
+import { APP_VERSION } from "./version";
 import {
   SimpleCookieJar,
   CookieEntry,
@@ -44,7 +45,7 @@ const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]
 // The mobile version lacks WeChat MFA (only SMS/Cpdaily/WeChat Work).
 // Use a desktop UA to get the PC reAuth flow with reAuthType=8 (WeChat).
 const DESKTOP_UA =
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36';
+  `Mozilla/5.0 (X11; Linux x86_64) ysu-client/${APP_VERSION}`;
 
 // ─── Types ────────────────────────────────────────────────────────────── //
 

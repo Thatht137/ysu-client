@@ -6,6 +6,7 @@ import androidx.activity.EdgeToEdge;
 
 import com.getcapacitor.BridgeActivity;
 import com.youwenqwq.ysuclient.widget.WidgetBridgePlugin;
+import com.youwenqwq.ysuclient.notify.YsuNotifyPlugin;
 
 public class MainActivity extends BridgeActivity {
     @Override
@@ -13,6 +14,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(WidgetBridgePlugin.class);
         registerPlugin(WebViewCompatPlugin.class);
         registerPlugin(YsuFilePlugin.class);
+        registerPlugin(YsuNotifyPlugin.class);
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
     }

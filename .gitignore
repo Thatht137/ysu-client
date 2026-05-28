@@ -34,6 +34,7 @@
 # misc
 .DS_Store
 .idea
+.vscode
 
 # debug
 npm-debug.log*
@@ -68,6 +69,7 @@ website/node_modules/
 website/dist/
 website/.astro/
 website/src/data/changelog.json
+website/public/updates
 
 # Tencent Cloud EdgeOne
 .edgeone/*

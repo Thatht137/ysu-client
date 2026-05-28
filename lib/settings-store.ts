@@ -5,6 +5,18 @@ export type CardStyle = "solid" | "translucent" | "glass";
 export type BackgroundStyle = "overlay" | "blur-overlay";
 export type LandingPage = "overview" | "schedule";
 
+export interface FeedbackHistoryItem {
+  id: string;
+  rating: number;
+  text: string;
+  ts: number;
+  replied?: boolean;
+  replyText?: string;
+  repliedAt?: number;
+  notifiedAt?: number;
+  deleted?: boolean;
+}
+
 interface SettingsState {
   updateMirror: string;
   backgroundImage: string;
@@ -21,6 +33,19 @@ interface SettingsState {
   customJwxtBaseUrl: string;
   schoolId: string;
   scheduleCompactMode: boolean;
+  notifyEnabled: boolean;
+  notifyCheckInterval: number;
+  notifyGrades: boolean;
+  notifyExams: boolean;
+  notifyNetworkError: boolean;
+  classReminderEnabled: boolean;
+  classReminderMinutes: number;
+  classReminderDays: number;
+  analyticsConsent: boolean;
+  lastAnalyticsDate: string;
+  analyticsPromptVersion: string;
+  feedbackIds: string[];
+  feedbackHistory: FeedbackHistoryItem[];
   hasHydrated: boolean;
   setUpdateMirror: (mirror: string) => void;
   setBackgroundImage: (image: string) => void;
@@ -37,6 +62,19 @@ interface SettingsState {
   setCustomJwxtBaseUrl: (url: string) => void;
   setSchoolId: (id: string) => void;
   setScheduleCompactMode: (v: boolean) => void;
+  setNotifyEnabled: (v: boolean) => void;
+  setNotifyCheckInterval: (v: number) => void;
+  setNotifyGrades: (v: boolean) => void;
+  setNotifyExams: (v: boolean) => void;
+  setNotifyNetworkError: (v: boolean) => void;
+  setClassReminderEnabled: (v: boolean) => void;
+  setClassReminderMinutes: (v: number) => void;
+  setClassReminderDays: (v: number) => void;
+  setAnalyticsConsent: (v: boolean) => void;
+  setLastAnalyticsDate: (v: string) => void;
+  setAnalyticsPromptVersion: (v: string) => void;
+  setFeedbackIds: (ids: string[]) => void;
+  setFeedbackHistory: (items: FeedbackHistoryItem[]) => void;
   setHasHydrated: (v: boolean) => void;
 }
 
@@ -58,6 +96,19 @@ export const useSettingsStore = create<SettingsState>()(
       customJwxtBaseUrl: "",
       schoolId: "ysu",
       scheduleCompactMode: false,
+      notifyEnabled: false,
+      notifyCheckInterval: 60,
+      notifyGrades: true,
+      notifyExams: true,
+      notifyNetworkError: false,
+      classReminderEnabled: false,
+      classReminderMinutes: 15,
+      classReminderDays: 7,
+      analyticsConsent: false,
+      lastAnalyticsDate: "",
+      analyticsPromptVersion: "",
+      feedbackIds: [],
+      feedbackHistory: [],
       hasHydrated: false,
       setUpdateMirror: (updateMirror) => set({ updateMirror }),
       setBackgroundImage: (backgroundImage) => set({ backgroundImage }),
@@ -74,6 +125,19 @@ export const useSettingsStore = create<SettingsState>()(
       setCustomJwxtBaseUrl: (customJwxtBaseUrl) => set({ customJwxtBaseUrl }),
       setSchoolId: (schoolId) => set({ schoolId }),
       setScheduleCompactMode: (scheduleCompactMode) => set({ scheduleCompactMode }),
+      setNotifyEnabled: (notifyEnabled) => set({ notifyEnabled }),
+      setNotifyCheckInterval: (notifyCheckInterval) => set({ notifyCheckInterval }),
+      setNotifyGrades: (notifyGrades) => set({ notifyGrades }),
+      setNotifyExams: (notifyExams) => set({ notifyExams }),
+      setNotifyNetworkError: (notifyNetworkError) => set({ notifyNetworkError }),
+      setClassReminderEnabled: (classReminderEnabled) => set({ classReminderEnabled }),
+      setClassReminderMinutes: (classReminderMinutes) => set({ classReminderMinutes }),
+      setClassReminderDays: (classReminderDays) => set({ classReminderDays }),
+      setAnalyticsConsent: (analyticsConsent) => set({ analyticsConsent }),
+      setLastAnalyticsDate: (lastAnalyticsDate) => set({ lastAnalyticsDate }),
+      setAnalyticsPromptVersion: (analyticsPromptVersion) => set({ analyticsPromptVersion }),
+      setFeedbackIds: (feedbackIds) => set({ feedbackIds }),
+      setFeedbackHistory: (feedbackHistory) => set({ feedbackHistory }),
       setHasHydrated: (v) => set({ hasHydrated: v }),
     }),
     {
