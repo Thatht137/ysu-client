@@ -297,7 +297,7 @@ export default function SettingsPage() {
                 className="flex items-center gap-3 py-3 text-left transition-colors active:bg-muted/60"
               >
                 <Battery className="size-5 shrink-0 text-muted-foreground" />
-                <div className="flex flex-1 flex-col gap-0.5">
+                <div className="flex flex-1 flex-col">
                   <span className="text-sm">{t("settings.batteryOptimization")}</span>
                   <span className="text-xs text-muted-foreground">{t("settings.batteryOptimizationDesc")}</span>
                 </div>
@@ -316,7 +316,7 @@ export default function SettingsPage() {
                 className="flex items-center gap-3 border-t border-border py-3 text-left transition-colors active:bg-muted/60"
               >
                 <ShieldCheck className="size-5 shrink-0 text-muted-foreground" />
-                <div className="flex flex-1 flex-col gap-0.5">
+                <div className="flex flex-1 flex-col">
                   <span className="text-sm">{t("settings.autoStart")}</span>
                   <span className="text-xs text-muted-foreground">{t("settings.autoStartDesc")}</span>
                 </div>
@@ -353,6 +353,7 @@ export default function SettingsPage() {
                 <SettingNumberInput
                   icon={Timer}
                   label={t("settings.notifyInterval")}
+                  description={t("settings.notifyIntervalHint")}
                   value={notifyCheckInterval}
                   onChange={setNotifyCheckInterval}
                   min={15}
@@ -360,11 +361,6 @@ export default function SettingsPage() {
                   unit={t("settings.notifyIntervalUnit")}
                   bordered
                 />
-              )}
-              {notifyEnabled && (
-                <p className="px-0.5 pb-1 text-xs text-muted-foreground">
-                  {t("settings.notifyIntervalHint")}
-                </p>
               )}
 
               {/* 监听内容 */}
@@ -562,6 +558,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function SettingNumberInput({
   icon: Icon,
   label,
+  description,
   value,
   onChange,
   min,
@@ -571,6 +568,7 @@ function SettingNumberInput({
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
+  description?: string;
   value: number;
   onChange: (v: number) => void;
   min: number;
@@ -590,7 +588,10 @@ function SettingNumberInput({
   return (
     <div className={`flex items-center gap-3 py-3${bordered ? " border-t border-border" : ""}`}>
       <Icon className="size-5 shrink-0 text-muted-foreground" />
-      <span className="flex-1 text-sm">{label}</span>
+      <div className="flex flex-1 flex-col">
+        <span className="text-sm">{label}</span>
+        {description && <span className="text-xs text-muted-foreground">{description}</span>}
+      </div>
       <div className="flex items-center gap-1.5">
         <Input
           type="number"
