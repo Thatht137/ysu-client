@@ -113,17 +113,11 @@ gh api "repos/${REPO}/releases" | jq 'map({
   body: .body
 })' > website/src/data/changelog.json
 
-# Build website
-echo "Building website..."
-cd website
-npm run build
-cd ..
-
 # Copy OTA files to website dist
-mkdir -p website/dist/updates
-cp dist.zip website/dist/updates/
-cp "${APK_PATH}" website/dist/updates/app-release.apk
-cp version.json website/dist/updates/
+mkdir -p website/public/updates
+cp dist.zip website/public/updates/
+cp "${APK_PATH}" website/public/updates/app-release.apk
+cp version.json website/public/updates/
 
 # Deploy to EdgeOne Pages
 echo ""
@@ -132,7 +126,7 @@ echo "Deploying website to EdgeOne Pages..."
 echo "========================================"
 export PAGES_SOURCE=skills
 cd website
-edgeone pages deploy dist
+edgeone pages deploy
 cd ..
 
 echo "Release ${TAG} published!"

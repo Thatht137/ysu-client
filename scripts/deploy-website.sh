@@ -3,11 +3,6 @@ set -euo pipefail
 
 REPO="Youwenqwq/ysu-client"
 
-echo "Building website..."
-cd website
-npm run build
-cd ..
-
 # Fetch latest OTA files from GitHub release so download page keeps working
 echo "Fetching latest OTA files from GitHub release..."
 LATEST_TAG=$(gh release list --repo "$REPO" --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || true)
