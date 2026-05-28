@@ -3,7 +3,7 @@ import { checkFeedbackReply } from "@/lib/feedback";
 import { getText } from "@/lib/i18n/get-text";
 import { toast } from "sonner";
 
-export async function syncFeedbackReplies(): Promise<void> {
+export async function syncFeedbackReplies(force = false): Promise<void> {
   const state = useSettingsStore.getState();
   const { feedbackIds } = state;
   if (!feedbackIds.length) return;
@@ -14,6 +14,8 @@ export async function syncFeedbackReplies(): Promise<void> {
 
   for (const id of feedbackIds) {
     const entry = history.find((h) => h.id === id);
+    // Auto-sync only checks unreplied entries; manual refresh checks all
+    if (!force && entry?.replied) continue;
     const result = await checkFeedbackReply(id, entry?.ts);
     if (result === null) continue;
 

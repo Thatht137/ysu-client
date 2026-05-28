@@ -529,7 +529,7 @@ export function AboutContent() {
                   setRefreshingHistory(true);
                   try {
                     const { syncFeedbackReplies } = await import("@/lib/feedback-check");
-                    await syncFeedbackReplies();
+                    await syncFeedbackReplies(true);
                   } catch {
                     // ignore
                   } finally {
