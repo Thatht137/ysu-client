@@ -2,7 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import Header from './Header.astro';
 import Footer from './Footer.astro';
-import { ArrowLeft, Shield, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Shield, AlertTriangle, BarChart3 } from 'lucide-react';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 
 const locale = Astro.currentLocale ?? 'zh';
@@ -30,6 +30,14 @@ const homeUrl = getRelativeLocaleUrl(locale, '/');
           <h2 class="text-xl font-semibold">{t.privacy.dataSource.title}</h2>
         </div>
         <p class="text-muted-foreground leading-relaxed">{t.privacy.dataSource.content}</p>
+      </section>
+
+      <section class="rounded-2xl border border-border bg-card p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <BarChart3 className="w-6 h-6 text-primary" />
+          <h2 class="text-xl font-semibold">{t.privacy.analytics.title}</h2>
+        </div>
+        <p class="text-muted-foreground leading-relaxed">{t.privacy.analytics.content}</p>
       </section>
 
       <section class="rounded-2xl border border-border bg-card p-6">
