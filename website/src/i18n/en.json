@@ -104,10 +104,6 @@
         {
           "label": "WebView v119+",
           "desc": "All styles in this app can be rendered correctly."
-        },
-        {
-          "label": "WebView v140+",
-          "desc": "Supports immersive status bar and gesture navigation bar (小白条)."
         }
       ],
       "recommendation": "It is recommended to update WebView to the latest version. Newer versions not only add more features and fix bugs, but often also bring performance improvements.",

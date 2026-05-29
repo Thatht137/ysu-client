@@ -104,10 +104,6 @@
         {
           "label": "WebView v119+",
           "desc": "可正常渲染本应用全部样式。"
-        },
-        {
-          "label": "WebView v140+",
-          "desc": "可支持沉浸式状态栏和手势导航条（小白条）。"
         }
       ],
       "recommendation": "推荐用户更新 WebView 版本至新版。新版 WebView 在新增支持更多特性、修复问题的同时，往往伴随更多的性能优化。",

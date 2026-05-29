@@ -107,7 +107,7 @@ export function AnnouncementDialog({ onDismissed }: AnnouncementDialogProps) {
         if (!open) handleClose();
       }}
     >
-      <DialogContent className="max-h-[85vh] flex flex-col">
+      <DialogContent className="max-h-[85vh] flex flex-col" showCloseButton={false}>
         <DialogHeader>
           <div className="flex items-center gap-2">
             <Badge className={levelBadgeClass[announcementInfo.level]}>
