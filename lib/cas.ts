@@ -352,6 +352,8 @@ export function setTimeoutMs(ms: number): void {
 export function resetCAS(): void {
   casJar = new SimpleCookieJar();
   credentialApplied = Promise.resolve();
+  loginPageCache = null;
+  loginPageInflight = null;
 }
 
 export async function restoreCredential(credential: CASCredential): Promise<void> {
@@ -398,6 +400,31 @@ export async function restoreCASCookies(): Promise<void> {
       path: '/authserver',
     });
   }
+}
+
+/**
+ * Logout CAS server session with CASTGC.
+ */
+export async function logoutCAS(): Promise<void> {
+  let tgc = await loadCASTGC();
+  if (!tgc) {
+    const staleTgc = await collectCookies(casJar, (e) => e.name === 'CASTGC');
+    tgc = staleTgc[0]?.value ?? '';
+  }
+  if (!tgc) return;
+
+  const logoutJar = new SimpleCookieJar();
+  await logoutJar.setCookie(
+    `CASTGC=${tgc}; Domain=${getCasCookieDomain()}; Path=/authserver; Secure`,
+    casUrls.authLogout,
+    { ignoreError: true },
+  );
+  await fetchWithJar(logoutJar, {
+    method: 'GET',
+    url: casUrls.authLogout,
+    redirect: 'follow',
+    timeoutMs,
+  });
 }
 
 // ─── Internal fetch wrapper ───────────────────────────────────────────── //

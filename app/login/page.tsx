@@ -43,6 +43,7 @@ import {
 } from "@/lib/api";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { useMFAModalStore } from "@/lib/mfa-modal-store";
+import { resetCAS } from "@/lib/cas";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -98,11 +99,31 @@ export default function LoginPage() {
     );
   }
 
+  async function syncRememberedLoginPreference() {
+    if (remember) {
+      await saveRememberedCredentials(username, password);
+    } else {
+      await clearRememberedCredentials();
+    }
+  }
+
+  async function prepareFreshLoginSession() {
+    resetCAS();
+    await prepareLogin();
+  }
+
   async function handleCheckCaptcha() {
     if (!username) return;
     try {
-      await prepareLogin();
-      if (await checkCaptchaNeeded(username)) showCaptcha();
+      await prepareFreshLoginSession();
+      const captchaNeeded = await checkCaptchaNeeded(username);
+      if (captchaNeeded) {
+        showCaptcha();
+      } else {
+        setNeedsCaptcha(false);
+        setCaptcha("");
+        setCaptchaUrl(null);
+      }
     } catch {
       // ignore
     }
@@ -111,6 +132,10 @@ export default function LoginPage() {
   async function doLogin(skipRateLimitCheck: boolean) {
     setLoading(true);
     try {
+      if (!needsCaptcha) {
+        await prepareFreshLoginSession();
+      }
+
       const res = await loginStep1({
         username,
         password,
@@ -120,11 +145,7 @@ export default function LoginPage() {
 
       if (res.authenticated && res.credential) {
         setCredential(res.credential, username);
-        if (remember) {
-          saveRememberedCredentials(username, password);
-        } else {
-          clearRememberedCredentials();
-        }
+        await syncRememberedLoginPreference();
         toast.success(t("login.loginSuccess"));
         const landing = useSettingsStore.getState().defaultLandingPage;
         router.replace(landing === "schedule" ? "/dashboard/schedule/" : "/dashboard");
@@ -135,34 +156,24 @@ export default function LoginPage() {
         toast.info(t("login.mfaRequired"));
         const store = useMFAModalStore.getState();
         try {
-          const code = await store.showMFA({ username });
-          // Empty code means WeChat MFA completed (credential already saved by the modal).
-          if (!code) {
-            if (remember) {
-              saveRememberedCredentials(username, password);
-            } else {
-              clearRememberedCredentials();
-            }
+          const result = await store.showMFA({ username });
+          if (result.type === "wechat") {
+            await syncRememberedLoginPreference();
             toast.success(t("login.loginSuccess"));
             const landing = useSettingsStore.getState().defaultLandingPage;
             router.replace(landing === "schedule" ? "/dashboard/schedule/" : "/dashboard");
             return;
           }
-          const { mfaMethod, methodCode } = useMFAModalStore.getState();
           await submitMFACode(
             {
-              method: mfaMethod as "sms" | "cpdaily",
-              method_code: methodCode,
+              method: result.method,
+              method_code: result.methodCode,
               username,
-              code,
+              code: result.code,
             },
             res.credential ?? undefined,
           );
-          if (remember) {
-            saveRememberedCredentials(username, password);
-          } else {
-            clearRememberedCredentials();
-          }
+          await syncRememberedLoginPreference();
           toast.success(t("login.loginSuccess"));
           const landing = useSettingsStore.getState().defaultLandingPage;
           router.replace(landing === "schedule" ? "/dashboard/schedule/" : "/dashboard");
