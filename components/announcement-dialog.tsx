@@ -47,7 +47,7 @@ export function AnnouncementDialog({ onDismissed }: AnnouncementDialogProps) {
       dismissAnnouncement(announcementInfo.id);
     }
     handleClose();
-  }, [announcementInfo?.id, handleClose]);
+  }, [announcementInfo, handleClose]);
 
   const markdownComponents = useMemo(
     () => ({
