@@ -78,11 +78,25 @@ export async function onRequestGet({ request, env }) {
     }
 
     if (type === 'stats') {
-      const data = (await STATS_KV.get(`stats:${date}`, 'json')) || {
-        count: 0,
-        entries: [],
-      };
-      return new Response(JSON.stringify(data), {
+      // Fetch target date + previous day to cover timezone boundaries.
+      // A single local day may span two UTC days, so we merge adjacent keys
+      // and let the UI filter by local time.
+      const dates = [date];
+      const prev = new Date(date + 'T00:00:00Z');
+      prev.setUTCDate(prev.getUTCDate() - 1);
+      dates.push(prev.toISOString().split('T')[0]);
+
+      let count = 0;
+      let entries = [];
+      for (const d of dates) {
+        const data = await STATS_KV.get(`stats:${d}`, 'json');
+        if (data) {
+          count += data.count || 0;
+          entries.push(...(data.entries || []));
+        }
+      }
+
+      return new Response(JSON.stringify({ count, entries }), {
         headers: { 'content-type': 'application/json' },
       });
     }

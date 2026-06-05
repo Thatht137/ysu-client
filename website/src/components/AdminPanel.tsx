@@ -32,11 +32,21 @@ interface FeedbackData {
   entries: FeedbackEntry[];
 }
 
+interface AnnouncementInfo {
+  id: string;
+  title: string;
+  content: string;
+  level: 'info' | 'warning' | 'critical';
+  publishedAt: string;
+  submittedAt?: string;
+  expireAt?: string;
+}
+
 export default function AdminPanel() {
   const [password, setPassword] = useState('');
   const [savedPassword, setSavedPassword] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [type, setType] = useState<'stats' | 'feedback'>('stats');
+  const [date, setDate] = useState(new Date().toLocaleDateString('sv-SE'));
+  const [type, setType] = useState<'stats' | 'feedback' | 'announcement'>('stats');
   const [tab, setTab] = useState<'all' | 'unreplied' | 'replied'>('all');
   const [data, setData] = useState<StatsData | FeedbackData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -76,18 +86,21 @@ export default function AdminPanel() {
     setLoading(true);
     setError('');
     try {
-      const url =
-        type === 'feedback'
-          ? `/api/admin?type=all-feedback`
-          : `/api/admin?type=${type}&date=${date}`;
-      const res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${savedPassword}`,
-        },
-      });
+      let url: string;
+      let headers: Record<string, string> = {};
+      if (type === 'announcement') {
+        url = '/api/announcement';
+      } else if (type === 'feedback') {
+        url = `/api/admin?type=all-feedback`;
+        headers = { Authorization: `Bearer ${savedPassword}` };
+      } else {
+        url = `/api/admin?type=${type}&date=${date}`;
+        headers = { Authorization: `Bearer ${savedPassword}` };
+      }
+      const res = await fetch(url, { headers });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || `HTTP ${res.status}`);
+        throw new Error(err.error || err.message || `HTTP ${res.status}`);
       }
       const result = await res.json();
       setData(result);
@@ -150,13 +163,14 @@ export default function AdminPanel() {
         <select
           value={type}
           onChange={(e) => {
-            setType(e.target.value as 'stats' | 'feedback');
+            setType(e.target.value as 'stats' | 'feedback' | 'announcement');
             setData(null);
           }}
           className="px-3 py-2 rounded-lg border border-border bg-background text-foreground outline-none focus:ring-2 focus:ring-ring"
         >
           <option value="stats">统计数据</option>
           <option value="feedback">反馈数据</option>
+          <option value="announcement">公告管理</option>
         </select>
         <button
           onClick={fetchData}
@@ -173,7 +187,7 @@ export default function AdminPanel() {
         </div>
       )}
 
-      {data && type === 'stats' && <StatsView data={data as StatsData} />}
+      {data && type === 'stats' && <StatsView data={data as StatsData} localDate={date} />}
       {data && type === 'feedback' && (
         <>
           <div className="flex gap-1 mb-4">
@@ -199,19 +213,311 @@ export default function AdminPanel() {
           />
         </>
       )}
+      {type === 'announcement' && (
+        <AnnouncementView
+          data={data as AnnouncementInfo | null}
+          password={savedPassword}
+          onRefresh={fetchData}
+          loading={loading}
+        />
+      )}
     </div>
   );
 }
 
-function StatsView({ data }: { data: StatsData }) {
+function AnnouncementView({
+  data,
+  password,
+  onRefresh,
+  loading,
+}: {
+  data: AnnouncementInfo | null;
+  password: string;
+  onRefresh: () => void;
+  loading: boolean;
+}) {
+  const [form, setForm] = useState({
+    id: '',
+    title: '',
+    content: '',
+    level: 'info' as AnnouncementInfo['level'],
+    publishedAt: toLocalDatetimeInput(new Date()),
+    expireAt: '',
+  });
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
+  const [sendSuccess, setSendSuccess] = useState(false);
+  const [history, setHistory] = useState<AnnouncementInfo[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const fetchHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch('/api/announcement?history=true');
+      if (res.ok) {
+        const data = (await res.json()) as { entries?: AnnouncementInfo[] };
+        setHistory(data.entries || []);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHistory();
+  }, []);
+
+  const handleSubmit = async () => {
+    if (!form.id.trim() || !form.title.trim() || !form.content.trim()) return;
+    setSending(true);
+    setSendError('');
+    setSendSuccess(false);
+    try {
+      const body: Record<string, string> = {
+        id: form.id.trim(),
+        title: form.title.trim(),
+        content: form.content.trim(),
+        level: form.level,
+        publishedAt: new Date(form.publishedAt).toISOString(),
+      };
+      if (form.expireAt.trim()) {
+        body.expireAt = new Date(form.expireAt).toISOString();
+      }
+      const res = await fetch('/api/announcement', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${password}`,
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      setSendSuccess(true);
+      setForm({
+        id: '',
+        title: '',
+        content: '',
+        level: 'info',
+        publishedAt: toLocalDatetimeInput(new Date()),
+        expireAt: '',
+      });
+      onRefresh();
+      fetchHistory();
+    } catch (err: any) {
+      setSendError(err.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const levelBadge = (level: string) => {
+    const colors: Record<string, string> = {
+      info: 'bg-blue-500/10 text-blue-600',
+      warning: 'bg-yellow-500/10 text-yellow-600',
+      critical: 'bg-red-500/10 text-red-600',
+    };
+    const labels: Record<string, string> = {
+      info: '信息',
+      warning: '警告',
+      critical: '紧急',
+    };
+    return (
+      <span className={`text-xs px-2 py-0.5 rounded font-medium ${colors[level] || colors.info}`}>
+        {labels[level] || level}
+      </span>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Current announcement */}
+      <div className="p-4 rounded-xl border border-border bg-card">
+        <h3 className="text-lg font-semibold mb-3 text-card-foreground">当前公告</h3>
+        {loading && (
+          <div className="text-muted-foreground text-sm">加载中...</div>
+        )}
+        {!loading && data && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              {levelBadge(data.level)}
+              <span className="font-semibold text-card-foreground">{data.title}</span>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              ID: {data.id}
+              {' · '}
+              计划发布 {new Date(data.publishedAt).toLocaleString('zh-CN')}
+              {data.submittedAt && (
+                <>{' · '}提交于 {new Date(data.submittedAt).toLocaleString('zh-CN')}</>
+              )}
+              {data.expireAt && (
+                <>{' · '}过期于 {new Date(data.expireAt).toLocaleString('zh-CN')}</>
+              )}
+            </div>
+            <div className="text-sm text-card-foreground whitespace-pre-wrap">{data.content}</div>
+          </div>
+        )}
+        {!loading && !data && (
+          <div className="text-muted-foreground text-sm">暂无公告</div>
+        )}
+      </div>
+
+      {/* Publish form */}
+      <div className="p-4 rounded-xl border border-border bg-card">
+        <h3 className="text-lg font-semibold mb-4 text-card-foreground">发布公告</h3>
+
+        {sendSuccess && (
+          <div className="mb-4 p-3 rounded-lg bg-green-500/10 text-green-600 border border-green-500/20 text-sm">
+            公告发布成功
+          </div>
+        )}
+        {sendError && (
+          <div className="mb-4 p-3 rounded-lg bg-red-500/10 text-red-500 border border-red-500/20 text-sm">
+            {sendError}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm text-muted-foreground mb-1">ID（唯一标识）</label>
+            <input
+              type="text"
+              value={form.id}
+              onChange={(e) => setForm({ ...form, id: e.target.value })}
+              placeholder="例如: v0.8.0-release"
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-muted-foreground mb-1">标题</label>
+            <input
+              type="text"
+              value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+              placeholder="公告标题"
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label className="block text-sm text-muted-foreground mb-1">级别</label>
+            <select
+              value={form.level}
+              onChange={(e) => setForm({ ...form, level: e.target.value as AnnouncementInfo['level'] })}
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="info">信息</option>
+              <option value="warning">警告</option>
+              <option value="critical">紧急</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm text-muted-foreground mb-1">发布时间</label>
+            <input
+              type="datetime-local"
+              value={form.publishedAt}
+              onChange={(e) => setForm({ ...form, publishedAt: e.target.value })}
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-muted-foreground mb-1">过期时间（可选）</label>
+            <input
+              type="datetime-local"
+              value={form.expireAt}
+              onChange={(e) => setForm({ ...form, expireAt: e.target.value })}
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-sm text-muted-foreground mb-1">内容（支持 Markdown）</label>
+          <textarea
+            value={form.content}
+            onChange={(e) => setForm({ ...form, content: e.target.value })}
+            placeholder="输入公告内容..."
+            rows={6}
+            className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+
+        <button
+          onClick={handleSubmit}
+          disabled={sending || !form.id.trim() || !form.title.trim() || !form.content.trim()}
+          className="px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium disabled:opacity-50 cursor-pointer"
+        >
+          {sending ? '发布中...' : '发布公告'}
+        </button>
+      </div>
+
+      {/* History */}
+      <div className="p-4 rounded-xl border border-border bg-card">
+        <h3 className="text-lg font-semibold mb-3 text-card-foreground"
+        >历史公告（最近 {history.length} 条）</h3>
+        {historyLoading && (
+          <div className="text-muted-foreground text-sm">加载中...</div>
+        )}
+        {!historyLoading && history.length === 0 && (
+          <div className="text-muted-foreground text-sm">暂无历史公告</div>
+        )}
+        {!historyLoading && history.length > 0 && (
+          <div className="space-y-3">
+            {history.map((item, i) => (
+              <div
+                key={i}
+                className="p-3 rounded-lg border border-border/50 bg-background/50"
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  {levelBadge(item.level)}
+                  <span className="font-medium text-card-foreground text-sm">{item.title}</span>
+                </div>
+                <div className="text-xs text-muted-foreground mb-1">
+                  ID: {item.id} · 发布于{' '}
+                  {new Date(item.publishedAt).toLocaleString('zh-CN')}
+                  {item.expireAt && (
+                    <> · 过期于{' '}
+                    {new Date(item.expireAt).toLocaleString('zh-CN')}</>
+                  )}
+                </div>
+                <div className="text-sm text-card-foreground whitespace-pre-wrap line-clamp-3">
+                  {item.content}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function toLocalDatetimeInput(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function StatsView({ data, localDate }: { data: StatsData; localDate: string }) {
+  const startOfDay = new Date(localDate + 'T00:00:00').getTime();
+  const endOfDay = new Date(localDate + 'T23:59:59.999').getTime();
+  const filtered = data.entries.filter(
+    (e) => e.ts >= startOfDay && e.ts <= endOfDay
+  );
+
   return (
     <div>
       <div className="mb-4 p-4 rounded-xl border border-border bg-card">
-        <div className="text-3xl font-bold text-card-foreground">{data.count}</div>
-        <div className="text-muted-foreground">总访问次数</div>
+        <div className="text-3xl font-bold text-card-foreground">{filtered.length}</div>
+        <div className="text-muted-foreground">记录数</div>
       </div>
 
-      {data.entries && data.entries.length > 0 && (
+      {filtered.length > 0 && (
         <div className="overflow-x-auto rounded-xl border border-border">
           <table className="w-full text-sm">
             <thead>
@@ -225,7 +531,7 @@ function StatsView({ data }: { data: StatsData }) {
               </tr>
             </thead>
             <tbody>
-              {data.entries.map((entry, i) => (
+              {filtered.map((entry, i) => (
                 <tr key={i} className="border-b border-border/50 last:border-b-0">
                   <td className="py-2 px-3 text-card-foreground whitespace-nowrap">
                     {new Date(entry.ts).toLocaleString('zh-CN')}
