@@ -140,7 +140,9 @@ export function useProviderQuery<T>(
   );
 
   const { data, error, isLoading, isValidating, mutate } = swr;
-  const isStale = !!data && servedStale;
+  const hasData = data !== undefined;
+  const isInitialLoading = isLoading && !hasData;
+  const isStale = hasData && servedStale;
   const contributedRefresh = useRef(false);
   const contributedStale = useRef(false);
 
@@ -184,7 +186,7 @@ export function useProviderQuery<T>(
 
   return {
     data,
-    isLoading,
+    isLoading: isInitialLoading,
     isValidating,
     isError: !!error,
     error: error ?? undefined,

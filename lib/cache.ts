@@ -142,6 +142,11 @@ export function cleanStaleCacheVersions(): void {
       const fullKey = localStorage.key(i);
       if (!fullKey || !fullKey.startsWith(CACHE_PREFIX)) continue;
       const unprefixed = fullKey.slice(CACHE_PREFIX.length);
+      // Provider query caches are already scoped by provider + username + feature.
+      // Treating all keys that start with "provider" as one legacy cache family
+      // would delete unrelated entries such as schedule/class-periods/current-week
+      // during app startup, making cold-start cache reads appear ineffective.
+      if (unprefixed.startsWith("provider|")) continue;
       const prefix = unprefixed.split("|", 1)[0];
       if (!prefix) continue;
 
