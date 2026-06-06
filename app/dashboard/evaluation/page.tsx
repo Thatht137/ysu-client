@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,24 +36,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useAuthStore } from "@/lib/auth-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { useMobileHeaderRight } from "@/lib/mobile-header-store";
 import { cn } from "@/lib/utils";
-import {
-  getEvaluationTypes,
-  getPendingEvaluations,
-  getEvaluationDetail,
-  calculateScore,
-  submitEvaluation,
-} from "@/lib/api";
+import { useEvaluationTypes, usePendingEvaluations } from "@/providers/hooks";
+import { useProvider } from "@/providers/use-provider";
 import type {
-  EvaluationType,
   EvaluationTask,
   EvaluationDetail,
   Question,
   EvaluationAnswer,
-} from "@/lib/types";
+} from "@/providers/types";
 import { ChevronDown, ChevronRight, ClipboardCheck, Sparkles } from "lucide-react";
 
 interface BatchTaskResult {
@@ -109,11 +102,11 @@ function formatAnswerPreview(
     let answer = "";
     if (!a) {
       answer = "-";
-    } else if (q.question_type === "01") {
-      const opt = q.options.find((o) => a.option_ids?.includes(o.wid));
+    } else if (q.questionType === "01") {
+      const opt = q.options.find((o) => a.optionIds?.includes(o.wid));
       answer = opt ? `${opt.text} (${opt.score})` : "-";
-    } else if (q.question_type === "07") {
-      const opts = q.options.filter((o) => a.option_ids?.includes(o.wid));
+    } else if (q.questionType === "07") {
+      const opts = q.options.filter((o) => a.optionIds?.includes(o.wid));
       answer = opts.length > 0 ? opts.map((o) => `${o.text} (${o.score})`).join(", ") : "-";
     } else {
       answer = a.text || "-";
@@ -123,33 +116,29 @@ function formatAnswerPreview(
 }
 
 function getTeacherRelationId(task: EvaluationTask, detail: EvaluationDetail): string {
-  return (detail.teachers?.[0] as Record<string, unknown> | undefined)?.PJGXID as string | undefined || task.teacher_id || "";
+  return (detail.teachers?.[0] as Record<string, unknown> | undefined)?.PJGXID as string | undefined || task.teacherId || "";
 }
 
 function getTaskStatus(task: EvaluationTask, t: ReturnType<typeof useTranslation>["t"]): { active: boolean; label: string; variant: "default" | "secondary" | "destructive" | "outline" } {
   const now = new Date();
-  if (task.start_time) {
-    const start = new Date(task.start_time.replace(" ", "T"));
+  if (task.startTime) {
+    const start = new Date(task.startTime.replace(" ", "T"));
     if (now < start) return { active: false, label: t("evaluation.statusNotStarted"), variant: "secondary" };
   }
-  if (task.end_time) {
-    const end = new Date(task.end_time.replace(" ", "T"));
+  if (task.endTime) {
+    const end = new Date(task.endTime.replace(" ", "T"));
     if (now > end) return { active: false, label: t("evaluation.statusEnded"), variant: "destructive" };
   }
   return { active: true, label: t("evaluation.statusActive"), variant: "default" };
 }
 
 export default function EvaluationPage() {
-  const credential = useAuthStore((s) => s.credential);
+  const provider = useProvider();
   const { t } = useTranslation();
-  const [types, setTypes] = useState<EvaluationType[]>([]);
   const [selectedType, setSelectedType] = useState<string | null>(null);
-  const [tasks, setTasks] = useState<EvaluationTask[]>([]);
   const [detail, setDetail] = useState<EvaluationDetail | null>(null);
   const [selectedTask, setSelectedTask] = useState<EvaluationTask | null>(null);
   const [answers, setAnswers] = useState<Record<string, EvaluationAnswer>>({});
-  const [loadingTypes, setLoadingTypes] = useState(true);
-  const [loadingTasks, setLoadingTasks] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -168,50 +157,32 @@ export default function EvaluationPage() {
   const [batchTextAnswer, setBatchTextAnswer] = useState("");
   const abortRef = useRef(false);
 
-
+  const typesQuery = useEvaluationTypes();
+  const tasksQuery = usePendingEvaluations(selectedType ?? undefined);
+  const types = useMemo(() => typesQuery.data ?? [], [typesQuery.data]);
+  const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
+  const loadingTypes = typesQuery.isLoading && types.length === 0;
+  const loadingTasks = (tasksQuery.isLoading || tasksQuery.isValidating) && tasks.length === 0;
 
   useEffect(() => {
-    if (!credential) return;
-    async function load() {
-      try {
-        const fetched = await getEvaluationTypes(credential!);
-        setTypes(fetched);
-      } catch (err) {
-        toast.error((err as Error).message || t("app.updating"));
-      } finally {
-        setLoadingTypes(false);
-      }
-    }
-    load();
-  }, [credential, t]);
+    const errors = [typesQuery.error, tasksQuery.error].filter(Boolean);
+    if (errors.length === 0) return;
+    toast.error(errors[0]?.message || t("app.updating"));
+  }, [typesQuery.error, tasksQuery.error, t]);
 
   useEffect(() => {
     if (selectedType || types.length === 0 || !types[0].code) return;
-    handleSelectType(types[0].code);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setSelectedType(types[0].code);
   }, [types, selectedType]);
 
   async function refreshTypes() {
-    if (!credential) return;
-    try {
-      const updated = await getEvaluationTypes(credential);
-      setTypes(updated);
-    } catch {
-      // silent: refresh is best-effort
-    }
+    await typesQuery.mutate();
   }
 
   async function handleSelectType(code: string) {
-    if (!credential) return;
     setSelectedType(code);
-    setLoadingTasks(true);
-    try {
-      const fetched = await getPendingEvaluations(credential, code);
-      setTasks(fetched);
-    } catch (err) {
-      toast.error((err as Error).message || t("app.updating"));
-    } finally {
-      setLoadingTasks(false);
+    if (code === selectedType) {
+      await tasksQuery.mutate();
     }
   }
 
@@ -221,20 +192,23 @@ export default function EvaluationPage() {
       toast.error(`${t("evaluation.cannotAnswer")} (${status.label})`);
       return;
     }
-    if (!credential) return;
     setSelectedTask(task);
     setLoadingDetail(true);
     setDialogOpen(true);
     setAnswers({});
     try {
-      const d = await getEvaluationDetail(credential, task.group_no || "", task.eval_type || "", task.sequence);
+      const d = await provider.getEvaluationDetail({
+        groupNo: task.groupNo || "",
+        evalType: task.evalType || "",
+        sequence: task.sequence,
+      });
       setDetail(d);
       const initial: Record<string, EvaluationAnswer> = {};
       for (const q of d.questions) {
         initial[q.tmid] = {
           tmid: q.tmid,
-          question_type: q.question_type || "",
-          option_ids: [],
+          questionType: q.questionType || "",
+          optionIds: [],
           text: "",
         };
       }
@@ -268,13 +242,13 @@ export default function EvaluationPage() {
     const skipped: Question[] = [];
     const text = textAnswer?.trim() || "优秀";
     for (const q of d.questions) {
-      if (q.question_type === "01") {
+      if (q.questionType === "01") {
         const allZero = q.options.length > 0 && q.options.every((o) => o.score === 0);
         if (allZero) {
           next[q.tmid] = {
             tmid: q.tmid,
-            question_type: q.question_type || "",
-            option_ids: [],
+            questionType: q.questionType || "",
+            optionIds: [],
             text: "",
           };
           skipped.push(q);
@@ -285,17 +259,17 @@ export default function EvaluationPage() {
           : null;
         next[q.tmid] = {
           tmid: q.tmid,
-          question_type: q.question_type || "",
-          option_ids: best ? [best.wid] : [],
+          questionType: q.questionType || "",
+          optionIds: best ? [best.wid] : [],
           text: "",
         };
-      } else if (q.question_type === "07") {
+      } else if (q.questionType === "07") {
         const allZero = q.options.length > 0 && q.options.every((o) => o.score === 0);
         if (allZero) {
           next[q.tmid] = {
             tmid: q.tmid,
-            question_type: q.question_type || "",
-            option_ids: [],
+            questionType: q.questionType || "",
+            optionIds: [],
             text: "",
           };
           skipped.push(q);
@@ -305,15 +279,15 @@ export default function EvaluationPage() {
         const toSelect = positive.length > 0 ? positive : q.options;
         next[q.tmid] = {
           tmid: q.tmid,
-          question_type: q.question_type || "",
-          option_ids: toSelect.map((o) => o.wid),
+          questionType: q.questionType || "",
+          optionIds: toSelect.map((o) => o.wid),
           text: "",
         };
       } else {
         next[q.tmid] = {
           tmid: q.tmid,
-          question_type: q.question_type || "",
-          option_ids: [],
+          questionType: q.questionType || "",
+          optionIds: [],
           text,
         };
       }
@@ -339,13 +313,13 @@ export default function EvaluationPage() {
     for (const q of d.questions) {
       const a = ans[q.tmid];
       if (!a) return t("evaluation.validation.unanswered", { order: q.order });
-      if (q.question_type === "01" && (!a.option_ids || a.option_ids.length === 0)) {
+      if (q.questionType === "01" && (!a.optionIds || a.optionIds.length === 0)) {
         return t("evaluation.validation.singleChoice", { order: q.order });
       }
-      if (q.question_type === "07" && (!a.option_ids || a.option_ids.length === 0)) {
+      if (q.questionType === "07" && (!a.optionIds || a.optionIds.length === 0)) {
         return t("evaluation.validation.multiChoice", { order: q.order });
       }
-      if (q.question_type !== "01" && q.question_type !== "07" && !a.text?.trim()) {
+      if (q.questionType !== "01" && q.questionType !== "07" && !a.text?.trim()) {
         return t("evaluation.validation.text", { order: q.order });
       }
     }
@@ -358,17 +332,17 @@ export default function EvaluationPage() {
       toast.error(err);
       return;
     }
-    if (!credential || !selectedTask || !detail) return;
+    if (!selectedTask || !detail) return;
     setSubmitting(true);
     try {
-      const res = await calculateScore(credential, {
-        group_no: selectedTask.group_no || "",
+      const res = await provider.calculateEvaluationScore({
+        groupNo: selectedTask.groupNo || "",
         wjid: selectedTask.wjid || detail.wjid || "",
-        eval_type: selectedTask.eval_type || "",
+        evalType: selectedTask.evalType || "",
         answers: buildAnswers(),
-        teacher_relation_id: getTeacherRelationId(selectedTask, detail),
-        course_name: selectedTask.course_name || "",
-        teacher_name: selectedTask.teacher_name || "",
+        teacherRelationId: getTeacherRelationId(selectedTask, detail),
+        courseName: selectedTask.courseName || "",
+        teacherName: selectedTask.teacherName || "",
         sequence: Number(selectedTask.sequence),
       });
       setPreviewResult(res);
@@ -387,17 +361,17 @@ export default function EvaluationPage() {
       toast.error(err);
       return;
     }
-    if (!credential || !selectedTask || !detail) return;
+    if (!selectedTask || !detail) return;
     setSubmitting(true);
     try {
-      await submitEvaluation(credential, {
-        group_no: selectedTask.group_no || "",
+      await provider.submitEvaluation({
+        groupNo: selectedTask.groupNo || "",
         wjid: selectedTask.wjid || detail.wjid || "",
-        eval_type: selectedTask.eval_type || "",
+        evalType: selectedTask.evalType || "",
         answers: buildAnswers(),
-        teacher_relation_id: getTeacherRelationId(selectedTask, detail),
-        course_name: selectedTask.course_name || "",
-        teacher_name: selectedTask.teacher_name || "",
+        teacherRelationId: getTeacherRelationId(selectedTask, detail),
+        courseName: selectedTask.courseName || "",
+        teacherName: selectedTask.teacherName || "",
         sequence: Number(selectedTask.sequence),
       });
       toast.success(t("evaluation.submit"));
@@ -472,7 +446,6 @@ export default function EvaluationPage() {
   }
 
   async function runBatchFill(initialResults: BatchTaskResult[], textAnswer: string) {
-    if (!credential) return;
     const results = [...initialResults];
     for (let i = 0; i < results.length; i++) {
       if (abortRef.current) break;
@@ -481,13 +454,17 @@ export default function EvaluationPage() {
       setBatchTasks([...results]);
       try {
         const task = results[i].task;
-        const d = await getEvaluationDetail(credential, task.group_no || "", task.eval_type || "", task.sequence);
+        const d = await provider.getEvaluationDetail({
+          groupNo: task.groupNo || "",
+          evalType: task.evalType || "",
+          sequence: task.sequence,
+        });
         const initial: Record<string, EvaluationAnswer> = {};
         for (const q of d.questions) {
           initial[q.tmid] = {
             tmid: q.tmid,
-            question_type: q.question_type || "",
-            option_ids: [],
+            questionType: q.questionType || "",
+            optionIds: [],
             text: "",
           };
         }
@@ -510,14 +487,14 @@ export default function EvaluationPage() {
           setBatchTasks([...results]);
           continue;
         }
-        const scoreRes = await calculateScore(credential, {
-          group_no: task.group_no || "",
+        const scoreRes = await provider.calculateEvaluationScore({
+          groupNo: task.groupNo || "",
           wjid: task.wjid || d.wjid || "",
-          eval_type: task.eval_type || "",
+          evalType: task.evalType || "",
           answers: Object.values(filled),
-          teacher_relation_id: getTeacherRelationId(task, d),
-          course_name: task.course_name || "",
-          teacher_name: task.teacher_name || "",
+          teacherRelationId: getTeacherRelationId(task, d),
+          courseName: task.courseName || "",
+          teacherName: task.teacherName || "",
           sequence: Number(task.sequence),
         });
         results[i] = { ...results[i], detail: d, answers: filled, scoreResult: scoreRes, status: "filled" };
@@ -536,7 +513,6 @@ export default function EvaluationPage() {
   }
 
   async function runBatchSubmit() {
-    if (!credential) return;
     const toSubmit = batchTasks.filter((r) => r.status === "filled");
     if (toSubmit.length === 0) {
       toast.error(t("evaluation.batchNoResults"));
@@ -557,14 +533,14 @@ export default function EvaluationPage() {
       try {
         const task = results[i].task;
         const d = results[i].detail;
-        await submitEvaluation(credential, {
-          group_no: task.group_no || "",
+        await provider.submitEvaluation({
+          groupNo: task.groupNo || "",
           wjid: task.wjid || d.wjid || "",
-          eval_type: task.eval_type || "",
+          evalType: task.evalType || "",
           answers: Object.values(results[i].answers),
-          teacher_relation_id: getTeacherRelationId(task, d),
-          course_name: task.course_name || "",
-          teacher_name: task.teacher_name || "",
+          teacherRelationId: getTeacherRelationId(task, d),
+          courseName: task.courseName || "",
+          teacherName: task.teacherName || "",
           sequence: Number(task.sequence),
         });
         results[i] = { ...results[i], status: "submitted" };
@@ -717,16 +693,16 @@ export default function EvaluationPage() {
                       onClick={() => handleOpenTask(task)}
                     >
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-base truncate">{task.course_name}</CardTitle>
-                        <CardDescription className="truncate">{task.teacher_name}</CardDescription>
+                        <CardTitle className="text-base truncate">{task.courseName}</CardTitle>
+                        <CardDescription className="truncate">{task.teacherName}</CardDescription>
                         <CardAction>
                           <Badge variant={status.variant}>{status.label}</Badge>
                         </CardAction>
                       </CardHeader>
                       <CardContent className="flex flex-col gap-0.5 text-sm text-muted-foreground">
-                        <span className="truncate">{task.term_name} · {task.class_name}</span>
-                        {task.start_time && task.end_time && (
-                          <span className="truncate text-xs">{t("evaluation.dateRange", { start: task.start_time, end: task.end_time })}</span>
+                        <span className="truncate">{task.termName} · {task.className}</span>
+                        {task.startTime && task.endTime && (
+                          <span className="truncate text-xs">{t("evaluation.dateRange", { start: task.startTime, end: task.endTime })}</span>
                         )}
                       </CardContent>
                     </Card>
@@ -744,7 +720,7 @@ export default function EvaluationPage() {
           <ResponsiveModalHeader>
             <ResponsiveModalTitle>{detail?.name || t("evaluation.title")}</ResponsiveModalTitle>
             <ResponsiveModalDescription>
-              {selectedTask?.course_name} - {selectedTask?.teacher_name}
+              {selectedTask?.courseName} - {selectedTask?.teacherName}
             </ResponsiveModalDescription>
           </ResponsiveModalHeader>
 
@@ -768,20 +744,20 @@ export default function EvaluationPage() {
                   <div key={q.tmid} className="flex flex-col gap-3">
                     <div className="font-medium">
                       {q.order}. {q.text}
-                      {q.max_score > 0 && (
+                      {q.maxScore > 0 && (
                         <span className="text-sm text-muted-foreground ml-2">
-                          ({q.max_score})
+                          ({q.maxScore})
                         </span>
                       )}
                     </div>
-                    {q.question_type === "01" && q.options.length > 0 && (
+                    {q.questionType === "01" && q.options.length > 0 && (
                       <RadioGroup
-                        value={answers[q.tmid]?.option_ids?.[0] || ""}
+                        value={answers[q.tmid]?.optionIds?.[0] || ""}
                         onValueChange={(v) =>
                           handleAnswerChange(q, {
                             tmid: q.tmid,
-                            question_type: q.question_type || "",
-                            option_ids: [v],
+                            questionType: q.questionType || "",
+                            optionIds: [v],
                             text: "",
                           })
                         }
@@ -803,24 +779,24 @@ export default function EvaluationPage() {
                         </div>
                       </RadioGroup>
                     )}
-                    {q.question_type === "07" && q.options.length > 0 && (
+                    {q.questionType === "07" && q.options.length > 0 && (
                       <div className="flex flex-col gap-2">
                         {q.options.map((opt) => {
-                          const selected = answers[q.tmid]?.option_ids?.includes(opt.wid) || false;
+                          const selected = answers[q.tmid]?.optionIds?.includes(opt.wid) || false;
                           return (
                             <div key={opt.wid} className="flex items-center gap-2">
                               <Checkbox
                                 id={`${q.tmid}-${opt.wid}`}
                                 checked={selected}
                                 onCheckedChange={(checked) => {
-                                  const current = answers[q.tmid]?.option_ids || [];
+                                  const current = answers[q.tmid]?.optionIds || [];
                                   const next = checked
                                     ? [...current, opt.wid]
                                     : current.filter((id) => id !== opt.wid);
                                   handleAnswerChange(q, {
                                     tmid: q.tmid,
-                                    question_type: q.question_type || "",
-                                    option_ids: next,
+                                    questionType: q.questionType || "",
+                                    optionIds: next,
                                     text: "",
                                   });
                                 }}
@@ -838,15 +814,15 @@ export default function EvaluationPage() {
                         })}
                       </div>
                     )}
-                    {q.question_type !== "01" && q.question_type !== "07" && (
+                    {q.questionType !== "01" && q.questionType !== "07" && (
                       <Textarea
                         placeholder={t("evaluation.textPlaceholder")}
                         value={answers[q.tmid]?.text || ""}
                         onChange={(e) =>
                           handleAnswerChange(q, {
                             tmid: q.tmid,
-                            question_type: q.question_type || "",
-                            option_ids: [],
+                            questionType: q.questionType || "",
+                            optionIds: [],
                             text: e.target.value,
                           })
                         }
@@ -941,9 +917,9 @@ export default function EvaluationPage() {
                       className="mt-0.5"
                     />
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span className="truncate font-medium text-sm">{task.course_name}</span>
+                      <span className="truncate font-medium text-sm">{task.courseName}</span>
                       <span className="truncate text-xs text-muted-foreground">
-                        {task.teacher_name} · {task.term_name}
+                        {task.teacherName} · {task.termName}
                       </span>
                     </div>
                   </div>
@@ -980,7 +956,7 @@ export default function EvaluationPage() {
             />
             <div className="text-sm text-muted-foreground">
               {batchCurrentIdx < batchTasks.length
-                ? `${batchCurrentIdx + 1} / ${batchTasks.length} · ${batchTasks[batchCurrentIdx]?.task.course_name || ""}`
+                ? `${batchCurrentIdx + 1} / ${batchTasks.length} · ${batchTasks[batchCurrentIdx]?.task.courseName || ""}`
                 : `${t("evaluation.batchSuccess", { success: batchTasks.filter((r) => r.status === "submitted").length, failed: batchTasks.filter((r) => r.status === "failed").length })}`}
             </div>
             <div className="flex flex-col gap-2 md:max-h-[40vh] md:overflow-auto">
@@ -997,8 +973,8 @@ export default function EvaluationPage() {
                 return (
                   <div key={idx} className="flex items-center justify-between gap-2 rounded-lg border p-2 text-sm">
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span className="font-medium truncate">{r.task.course_name}</span>
-                      <span className="text-xs text-muted-foreground truncate">{r.task.teacher_name}</span>
+                      <span className="font-medium truncate">{r.task.courseName}</span>
+                      <span className="text-xs text-muted-foreground truncate">{r.task.teacherName}</span>
                     </div>
                     <span className={`shrink-0 text-xs ${s.color}`}>{s.label}</span>
                   </div>
@@ -1049,8 +1025,8 @@ export default function EvaluationPage() {
                       onClick={() => setBatchDetailIdx(idx)}
                     >
                       <CardHeader className="py-0 md:py-0">
-                        <CardTitle className="text-base truncate">{r.task.course_name}</CardTitle>
-                        <CardDescription className="truncate">{r.task.teacher_name}</CardDescription>
+                        <CardTitle className="text-base truncate">{r.task.courseName}</CardTitle>
+                        <CardDescription className="truncate">{r.task.teacherName}</CardDescription>
                         <CardAction className="self-center">
                           <div className="flex items-center gap-1.5">
                             <Badge variant={r.status === "filled" ? "default" : r.status === "failed" ? "destructive" : "secondary"}>
@@ -1084,8 +1060,8 @@ export default function EvaluationPage() {
               return (
                 <>
                   <ResponsiveModalHeader>
-                    <ResponsiveModalTitle className="truncate">{r.task.course_name}</ResponsiveModalTitle>
-                    <ResponsiveModalDescription className="truncate">{r.task.teacher_name}</ResponsiveModalDescription>
+                    <ResponsiveModalTitle className="truncate">{r.task.courseName}</ResponsiveModalTitle>
+                    <ResponsiveModalDescription className="truncate">{r.task.teacherName}</ResponsiveModalDescription>
                   </ResponsiveModalHeader>
                   <ResponsiveModalBody className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto text-sm">
                     {r.status === "filled" && r.scoreResult && (
