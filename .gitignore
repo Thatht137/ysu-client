@@ -22,10 +22,20 @@
 /android/*
 !/android/build.gradle
 !/android/variables.gradle
+!/android/gradle/
+/android/gradle/*
+!/android/gradle/wrapper/
+!/android/gradlew
+!/android/gradlew.bat
+!/android/settings.gradle
+!/android/gradle.properties
+!/android/capacitor.settings.gradle
 !/android/app/
 /android/app/*
 !/android/app/build.gradle
+!/android/app/capacitor.build.gradle
 !/android/app/proguard-rules.pro
+!/android/app/.gitignore
 !/android/app/src/
 /android/app/src/*
 !/android/app/src/main/
@@ -62,7 +72,7 @@ skills-lock.json
 # Android
 *.keystore
 *.jks
-gradle.properties
+/gradle.properties
 
 # Website build artifacts
 website/node_modules/
@@ -80,4 +90,9 @@ website/.edgeone/
 
 # Backup files
 *.bak
+
+# Build tool error output artifacts
+/Could
+/Failed
+/Toolchain
 
