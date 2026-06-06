@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { type KeyedMutator, type SWRConfiguration } from "swr";
+import { useAuthStore } from "@/lib/auth-store";
 import { cacheGetStale, cacheKey, cacheSet, DEFAULT_TTL_MS, LONG_TTL_MS } from "@/lib/cache";
 import { useRefreshStore } from "@/lib/refresh-store";
 import { assertCapability } from "../capabilities";
@@ -59,18 +60,20 @@ function getCachePolicy(feature: string): ProviderCachePolicy {
 
 export function providerQueryKey(
   providerId: string,
+  username: string | null,
   feature: string,
   params?: unknown,
 ): readonly unknown[] {
-  return ["provider", providerId, feature, params ?? null] as const;
+  return ["provider", providerId, username ?? null, feature, params ?? null] as const;
 }
 
 export function providerCacheKey(
   providerId: string,
+  username: string,
   feature: string,
   params?: unknown,
 ): string {
-  return cacheKey(["provider", providerId, feature, stableStringify(params ?? null)]);
+  return cacheKey(["provider", providerId, username, feature, stableStringify(params ?? null)]);
 }
 
 export function useProviderQuery<T>(
@@ -82,17 +85,19 @@ export function useProviderQuery<T>(
 ): ProviderQueryResult<T> {
   const provider = useProvider();
   const isReady = useProviderReady();
+  const username = useAuthStore((state) => state.username);
 
   assertCapability(provider, capability);
 
   const policy = getCachePolicy(feature);
+  const canPersist = policy.persist && !!username;
   const persistentKey = useMemo(
-    () => providerCacheKey(provider.id, feature, params),
-    [provider.id, feature, params],
+    () => (username ? providerCacheKey(provider.id, username, feature, params) : null),
+    [provider.id, username, feature, params],
   );
   const cached = useMemo(
-    () => (policy.persist ? cacheGetStale<T>(persistentKey, policy.ttl) : null),
-    [persistentKey, policy.persist, policy.ttl],
+    () => (canPersist && persistentKey ? cacheGetStale<T>(persistentKey, policy.ttl) : null),
+    [canPersist, persistentKey, policy.ttl],
   );
   const [servedStale, setServedStale] = useState(() => cached?.stale ?? false);
 
@@ -105,17 +110,17 @@ export function useProviderQuery<T>(
   }, [persistentKey]);
 
   const swr = useSWR<T, ProviderError>(
-    isReady ? providerQueryKey(provider.id, feature, params) : null,
+    isReady ? providerQueryKey(provider.id, username, feature, params) : null,
     async () => {
       try {
         const result = await fetcher();
-        if (policy.persist) {
+        if (canPersist && persistentKey) {
           cacheSet(persistentKey, result);
         }
         setServedStale(false);
         return result;
       } catch (err) {
-        if (policy.persist) {
+        if (canPersist && persistentKey) {
           const fallback = cacheGetStale<T>(persistentKey, policy.ttl);
           if (fallback) {
             setServedStale(true);
