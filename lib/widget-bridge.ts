@@ -1,11 +1,5 @@
 import { registerPlugin } from "@capacitor/core";
-import type { Course, CurrentWeek, ClassPeriod, Exam } from "./types";
-import type {
-  Course as ProviderCourse,
-  CurrentWeek as ProviderCurrentWeek,
-  ClassPeriod as ProviderClassPeriod,
-  Exam as ProviderExam,
-} from "@/providers/types";
+import type { Course, CurrentWeek, ClassPeriod, Exam } from "@/providers/types";
 
 export interface WidgetBridgePlugin {
   syncSchedule(options: {
@@ -66,37 +60,11 @@ export interface WidgetExam {
   seat_number?: string;
 }
 
-type WidgetSyncCourse = Course | ProviderCourse;
-type WidgetSyncCurrentWeek = CurrentWeek | ProviderCurrentWeek;
-type WidgetSyncClassPeriod = ClassPeriod | ProviderClassPeriod;
-
-function getCourseNumberField(
-  course: WidgetSyncCourse,
-  legacyKey: keyof Course,
-  providerKey: keyof ProviderCourse,
-): number {
-  return ((course as Course)[legacyKey] ?? (course as ProviderCourse)[providerKey]) as number;
-}
-
-function getPeriodStringField(
-  period: WidgetSyncClassPeriod | undefined,
-  legacyKey: keyof ClassPeriod,
-  providerKey: keyof ProviderClassPeriod,
-): string | undefined {
-  if (!period) return undefined;
-  return (
-    (period as ClassPeriod)[legacyKey] ?? (period as ProviderClassPeriod)[providerKey]
-  ) as string | undefined;
-}
-
-function getWeekTerm(week: WidgetSyncCurrentWeek): string | undefined {
-  return (week as CurrentWeek).term ?? (week as ProviderCurrentWeek).semester;
-}
 
 export async function syncScheduleToWidget(
-  courses: WidgetSyncCourse[],
-  currentWeek: WidgetSyncCurrentWeek | null,
-  periods: WidgetSyncClassPeriod[],
+  courses: Course[],
+  currentWeek: CurrentWeek | null,
+  periods: ClassPeriod[],
   syncReminderHours: number = 24,
   showNextDaySchedule: boolean = false,
 ): Promise<void> {
@@ -104,18 +72,18 @@ export async function syncScheduleToWidget(
     const periodMap = new Map(periods.map((p) => [p.section, p]));
 
     const widgetCourses: WidgetCourse[] = courses.map((c) => {
-      const startSection = getCourseNumberField(c, "start_section", "startSection");
-      const endSection = getCourseNumberField(c, "end_section", "endSection");
+      const startSection = c.startSection;
+      const endSection = c.endSection;
       const startPeriod = periodMap.get(startSection);
       const endPeriod = periodMap.get(endSection);
       return {
         name: c.name,
         classroom: c.classroom,
-        week_day: getCourseNumberField(c, "week_day", "weekDay"),
+        week_day: c.weekDay,
         start_section: startSection,
         end_section: endSection,
-        start_time: getPeriodStringField(startPeriod, "start_time", "startTime"),
-        end_time: getPeriodStringField(endPeriod, "end_time", "endTime"),
+        start_time: startPeriod?.startTime,
+        end_time: endPeriod?.endTime,
       };
     });
 
@@ -123,7 +91,7 @@ export async function syncScheduleToWidget(
       ? {
           week: currentWeek.week,
           weekday: currentWeek.weekday,
-          term: getWeekTerm(currentWeek),
+          term: currentWeek.semester,
           date: currentWeek.date,
         }
       : null;
@@ -150,30 +118,18 @@ export async function syncWidgetSettingsToWidget(
   }
 }
 
-type WidgetSyncExam = Exam | ProviderExam;
-
-function getExamField(
-  exam: WidgetSyncExam,
-  legacyKey: keyof Exam,
-  providerKey: keyof ProviderExam,
-): string | undefined {
-  return (
-    (exam as Exam)[legacyKey] ?? (exam as ProviderExam)[providerKey]
-  ) as string | undefined;
-}
-
 export async function syncExamsToWidget(
-  exams: WidgetSyncExam[],
+  exams: Exam[],
   syncReminderHours: number = 24,
 ): Promise<void> {
   try {
     const widgetExams: WidgetExam[] = exams.map((e) => ({
       name: e.name,
-      exam_name: getExamField(e, "exam_name", "examName"),
-      exam_date: getExamField(e, "exam_date", "examDate"),
-      exam_time: getExamField(e, "exam_time", "examTime"),
-      exam_location: getExamField(e, "exam_location", "examLocation"),
-      seat_number: getExamField(e, "seat_number", "seatNumber"),
+      exam_name: e.examName,
+      exam_date: e.examDate,
+      exam_time: e.examTime,
+      exam_location: e.examLocation,
+      seat_number: e.seatNumber,
     }));
 
     await WidgetBridge.syncExams({
