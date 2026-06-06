@@ -40,41 +40,26 @@ import {
   ResponsiveModalTitle,
 } from "@/components/responsive-modal";
 import { Separator } from "@/components/ui/separator";
-import { useAuthStore } from "@/lib/auth-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { useMobileHeaderRight } from "@/lib/mobile-header-store";
-import {
-  getGrades,
-  getGPAStats,
-  getCurrentWeek,
-  getGradeStatistics,
-  getGradeDistribution,
-  getGradeRanking,
-} from "@/lib/api";
-import { cacheGetStale, cacheSet, cacheKey } from "@/lib/cache";
-import { useRefreshStore } from "@/lib/refresh-store";
-import { useCachedData } from "@/lib/use-cached-data";
+import { useCurrentWeek, useGPAStats, useGrades } from "@/providers/hooks";
+import { useProvider } from "@/providers/use-provider";
 import type {
   Grade,
   GradeStatistics,
   GradeDistribution,
   GradeRanking,
-} from "@/lib/types";
+} from "@/providers/types";
 import { Search, ChevronDown, ChevronUp, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 
-export default function GradesPage() {
-  const credential = useAuthStore((s) => s.credential);
-  const { t } = useTranslation();
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [loading, setLoading] = useState(true);
+const ALL_TERM = "__all__";
 
-  const gpa = useCachedData(["gpa", credential], {
-    fetch: () => getGPAStats(credential!),
-    fallback: () => null,
-  });
-  const ALL_TERM = "__all__";
+export default function GradesPage() {
+  const provider = useProvider();
+  const { t } = useTranslation();
   const [term, setTerm] = useState(ALL_TERM);
   const [courseName, setCourseName] = useState("");
+  const [queriedCourseName, setQueriedCourseName] = useState("");
   const [showAllGpa, setShowAllGpa] = useState(false);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [selectedGrade, setSelectedGrade] = useState<Grade | null>(null);
@@ -88,48 +73,28 @@ export default function GradesPage() {
   const [sortMode, setSortMode] = useState<"default" | "asc" | "desc">("default");
   const didAutoSelectTerm = useRef(false);
 
+  const gradesQuery = useGrades({ courseName: queriedCourseName || undefined });
+  const gpa = useGPAStats();
+  const currentWeek = useCurrentWeek();
+  const grades = useMemo(() => gradesQuery.data ?? [], [gradesQuery.data]);
+  const loading = gradesQuery.isLoading || gradesQuery.isValidating;
+
   const terms = useMemo(
-    () => Array.from(new Set(grades.map((g) => g.term).filter(Boolean))).sort(),
+    () => Array.from(new Set(grades.map((g) => g.semester).filter(Boolean) as string[])).sort(),
     [grades],
   );
 
   useEffect(() => {
-    if (!credential) return;
+    const errors = [gradesQuery.error, gpa.error, currentWeek.error].filter(Boolean);
+    if (errors.length === 0) return;
+    toast.error(errors[0]?.message || t("app.updating"));
+  }, [gradesQuery.error, gpa.error, currentWeek.error, t]);
 
-    const cachedGrades = cacheGetStale<Grade[]>(cacheKey(["grades", credential]));
-    if (cachedGrades) setGrades(cachedGrades.data);
-    let refreshing = false;
-    if (cachedGrades) {
-      setLoading(false);
-      useRefreshStore.getState().start();
-      refreshing = true;
+  useEffect(() => {
+    if (currentWeek.data?.semester) {
+      setTerm((prev) => (prev === ALL_TERM ? currentWeek.data!.semester! : prev));
     }
-
-    async function load() {
-      try {
-        const [g, weekInfo] = await Promise.all([
-          getGrades(credential!),
-          getCurrentWeek(credential!).catch(() => null),
-        ]);
-        setGrades(g);
-        cacheSet(cacheKey(["grades", credential!]), g);
-        if (weekInfo?.term) {
-          setTerm((prev) => (prev === ALL_TERM ? weekInfo.term! : prev));
-        }
-        useRefreshStore.getState().markFresh();
-      } catch (err) {
-        if (cachedGrades) {
-          useRefreshStore.getState().markStale();
-        } else {
-          toast.error((err as Error).message || t("app.updating"));
-        }
-      } finally {
-        setLoading(false);
-        if (refreshing) useRefreshStore.getState().end();
-      }
-    }
-    load();
-  }, [credential, t]);
+  }, [currentWeek.data]);
 
   useEffect(() => {
     if (terms.length > 0 && term === ALL_TERM && !didAutoSelectTerm.current) {
@@ -137,45 +102,35 @@ export default function GradesPage() {
       const latest = terms[terms.length - 1];
       if (latest) setTerm(latest);
     }
-  }, [terms, term, ALL_TERM]);
+  }, [terms, term]);
 
   async function handleSearch() {
-    if (!credential) return;
-    setLoading(true);
-    try {
-      const g = await getGrades(credential, {
-        course_name: courseName || undefined,
-      });
-      setGrades(g);
-    } catch (err) {
-      toast.error((err as Error).message || t("app.updating"));
-    } finally {
-      setLoading(false);
+    const nextCourseName = courseName.trim();
+    if (nextCourseName === queriedCourseName) {
+      await gradesQuery.mutate();
+    } else {
+      setQueriedCourseName(nextCourseName);
     }
   }
 
   async function fetchStatsForScope(grade: Grade, scope: "class" | "course") {
-    if (!credential) return;
     setStatsResult(null);
     setDistributionResult(null);
     setRankingResult(null);
     setStatsError(null);
 
-    const params: { class_id?: string; course_code?: string; term?: string } = {
-      term: grade.term || undefined,
+    const params = {
+      semester: grade.semester || undefined,
+      classId: scope === "class" ? grade.classId?.trim() : undefined,
+      courseCode: scope === "course" ? grade.courseCode?.trim() : undefined,
     };
-    if (scope === "class") {
-      params.class_id = grade.class_id?.trim();
-    } else {
-      params.course_code = grade.course_code?.trim();
-    }
 
     setStatsLoading(true);
     try {
       const [stats, distribution, ranking] = await Promise.all([
-        getGradeStatistics(credential, params).catch(() => null),
-        getGradeDistribution(credential, params).catch(() => null),
-        getGradeRanking(credential, params).catch(() => null),
+        provider.getGradeStatistics(params).catch(() => null),
+        provider.getGradeDistribution(params).catch(() => null),
+        provider.getGradeRanking(params).catch(() => null),
       ]);
       setStatsResult(stats);
       setDistributionResult(distribution);
@@ -194,8 +149,8 @@ export default function GradesPage() {
     setSelectedGrade(grade);
     setStatsOpen(true);
 
-    const hasClass = !!grade.class_id?.trim();
-    const hasCourse = !!grade.course_code?.trim();
+    const hasClass = !!grade.classId?.trim();
+    const hasCourse = !!grade.courseCode?.trim();
     if (!hasClass && !hasCourse) {
       setStatsResult(null);
       setDistributionResult(null);
@@ -245,10 +200,12 @@ export default function GradesPage() {
     [term, sortMode, t],
   );
 
-  const filtered = grades.filter((g) => {
-    if (term !== ALL_TERM && g.term !== term) return false;
-    return true;
-  });
+  const filtered = useMemo(() => {
+    return grades.filter((g) => {
+      if (term !== ALL_TERM && g.semester !== term) return false;
+      return true;
+    });
+  }, [grades, term]);
 
   const sorted = useMemo(() => {
     if (sortMode === "default") return filtered;
@@ -269,7 +226,7 @@ export default function GradesPage() {
     let totalWeightedPoints = 0;
     let totalCredits = 0;
     for (const g of filtered) {
-      const gp = parseFloat(g.grade_point ?? "");
+      const gp = parseFloat(g.gradePoint ?? "");
       const cr = parseFloat(g.credit ?? "");
       if (Number.isFinite(gp) && Number.isFinite(cr) && cr > 0) {
         totalWeightedPoints += gp * cr;
@@ -281,17 +238,17 @@ export default function GradesPage() {
   }, [filtered, term]);
 
   const basicGpaItems = [
-    { label: t("grades.gpaInitial"), value: gpa.data?.gpa_initial },
-    { label: t("dashboard.weightedAvg"), value: gpa.data?.weighted_avg },
-    { label: t("dashboard.arithmeticAvg"), value: gpa.data?.arithmetic_avg },
+    { label: t("grades.gpaInitial"), value: gpa.data?.gpaInitial },
+    { label: t("dashboard.weightedAvg"), value: gpa.data?.weightedAvg },
+    { label: t("dashboard.arithmeticAvg"), value: gpa.data?.arithmeticAvg },
     ...(termWeightedGpa !== null ? [{ label: t("grades.termWeightedGpa"), value: termWeightedGpa }] : []),
   ];
 
   const extraGpaItems = [
-    { label: t("grades.gpaHighest"), value: gpa.data?.gpa_highest },
-    { label: t("grades.requiredGpaHighest"), value: gpa.data?.required_gpa_highest },
-    { label: t("grades.degreeGpaInitial"), value: gpa.data?.degree_gpa_initial },
-    { label: t("grades.degreeWeightedAvg"), value: gpa.data?.degree_weighted_avg },
+    { label: t("grades.gpaHighest"), value: gpa.data?.gpaHighest },
+    { label: t("grades.requiredGpaHighest"), value: gpa.data?.requiredGpaHighest },
+    { label: t("grades.degreeGpaInitial"), value: gpa.data?.degreeGpaInitial },
+    { label: t("grades.degreeWeightedAvg"), value: gpa.data?.degreeWeightedAvg },
   ];
 
   if (loading && grades.length === 0) {
@@ -315,7 +272,7 @@ export default function GradesPage() {
           <SelectContent>
             <SelectItem value={ALL_TERM}>{t("grades.allTerms")}</SelectItem>
             {terms.map((tItem) => (
-              <SelectItem key={tItem} value={tItem!}>
+              <SelectItem key={tItem} value={tItem}>
                 {tItem}
               </SelectItem>
             ))}
@@ -434,13 +391,13 @@ export default function GradesPage() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{g.course_name}</span>
+                  <span className="block truncate text-sm font-medium">{g.courseName}</span>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                    {g.term && <span>{g.term}</span>}
-                    {g.course_type && (
+                    {g.semester && <span>{g.semester}</span>}
+                    {g.courseType && (
                       <>
                         <span>·</span>
-                        <span>{g.course_type}</span>
+                        <span>{g.courseType}</span>
                       </>
                     )}
                     {g.credit && (
@@ -458,24 +415,24 @@ export default function GradesPage() {
                     <span className="text-lg font-semibold tabular-nums leading-none">
                       {g.score || "-"}
                     </span>
-                    {g.grade_level && (
+                    {g.gradeLevel && (
                       <span className="text-xs font-medium text-muted-foreground">
-                        {g.grade_level}
+                        {g.gradeLevel}
                       </span>
                     )}
                   </div>
-                  {g.grade_point && (
+                  {g.gradePoint && (
                     <span className="text-[10px] text-muted-foreground">
-                      GP {g.grade_point}
+                      GP {g.gradePoint}
                     </span>
                   )}
                   <div className="flex items-center gap-1">
-                    {g.is_degree_course && (
+                    {g.isDegreeCourse && (
                       <Badge variant="outline" className="text-[10px]">
                         {t("grades.degreeCourse")}
                       </Badge>
                     )}
-                    {g.is_pass ? (
+                    {g.isPass ? (
                       <Badge variant="default" className="text-[10px]">
                         {t("grades.table.pass")}
                       </Badge>
@@ -506,7 +463,7 @@ export default function GradesPage() {
         <ResponsiveModalContent className="sm:max-w-lg">
           <ResponsiveModalHeader>
             <ResponsiveModalTitle>
-              {selectedGrade?.course_name || t("grades.stats.title")}
+              {selectedGrade?.courseName || t("grades.stats.title")}
             </ResponsiveModalTitle>
             <ResponsiveModalDescription className="sr-only">
               {t("grades.stats.description")}
@@ -516,7 +473,7 @@ export default function GradesPage() {
             {selectedGrade && (
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm text-muted-foreground">
-                  {selectedGrade.term || "-"}
+                  {selectedGrade.semester || "-"}
                 </span>
                 <ToggleGroup
                   type="single"
@@ -530,13 +487,13 @@ export default function GradesPage() {
                 >
                   <ToggleGroupItem
                     value="class"
-                    disabled={!selectedGrade.class_id?.trim()}
+                    disabled={!selectedGrade.classId?.trim()}
                   >
                     {t("grades.stats.scopeClass")}
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="course"
-                    disabled={!selectedGrade.course_code?.trim()}
+                    disabled={!selectedGrade.courseCode?.trim()}
                   >
                     {t("grades.stats.scopeCourse")}
                   </ToggleGroupItem>
@@ -566,7 +523,7 @@ export default function GradesPage() {
                           {t("grades.stats.highest")}
                         </span>
                         <span className="text-base font-semibold tabular-nums">
-                          {statsResult.highest_score?.toFixed(1) ?? "-"}
+                          {statsResult.highestScore?.toFixed(1) ?? "-"}
                         </span>
                       </div>
                       <div className="flex flex-col gap-1 rounded-md border p-2.5">
@@ -574,7 +531,7 @@ export default function GradesPage() {
                           {t("grades.stats.lowest")}
                         </span>
                         <span className="text-base font-semibold tabular-nums">
-                          {statsResult.lowest_score?.toFixed(1) ?? "-"}
+                          {statsResult.lowestScore?.toFixed(1) ?? "-"}
                         </span>
                       </div>
                       <div className="flex flex-col gap-1 rounded-md border p-2.5">
@@ -582,7 +539,7 @@ export default function GradesPage() {
                           {t("grades.stats.average")}
                         </span>
                         <span className="text-base font-semibold tabular-nums">
-                          {statsResult.average_score?.toFixed(1) ?? "-"}
+                          {statsResult.averageScore?.toFixed(1) ?? "-"}
                         </span>
                       </div>
                     </div>
@@ -609,7 +566,7 @@ export default function GradesPage() {
                           return (
                             <div key={i} className="flex items-center gap-3 text-xs">
                               <span className="w-16 shrink-0 truncate">
-                                {d.level_name || d.level_code || "-"}
+                                {d.levelName || d.levelCode || "-"}
                               </span>
                               <div className="relative flex-1">
                                 <div className="h-5 w-full rounded-sm bg-muted">
