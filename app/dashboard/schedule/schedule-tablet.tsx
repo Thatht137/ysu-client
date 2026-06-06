@@ -13,8 +13,17 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { CalendarOff, Layers } from "lucide-react";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
-import type { Course, ClassPeriod, CurrentWeek } from "@/lib/types";
-import { computeMergedBlocks, buildSectionTimeMap, isCourseCurrent, type ScheduleBlock } from "./schedule-utils";
+import type { Course, ClassPeriod, CurrentWeek } from "@/providers/types";
+import {
+  computeMergedBlocks,
+  buildSectionTimeMap,
+  courseEndSection,
+  courseStartSection,
+  isCourseCurrent,
+  periodEndTime,
+  periodStartTime,
+  type ScheduleBlock,
+} from "./schedule-utils";
 import { COURSE_BG_CLASSES, courseColorIndex } from "./course-color";
 import { ActivityModal } from "./activity-modal";
 import { SigninModal } from "./signin-modal";
@@ -167,8 +176,8 @@ export function ScheduleTablet({ courses, periods, currentWeekday, currentWeek, 
                 style={{ gridRow: row, gridColumn: 1 }}
               >
                 <span className="text-xs font-semibold text-foreground">{p.section}</span>
-                {p.start_time && <span>{p.start_time}</span>}
-                {p.end_time && <span>{p.end_time}</span>}
+                {periodStartTime(p) && <span>{periodStartTime(p)}</span>}
+                {periodEndTime(p) && <span>{periodEndTime(p)}</span>}
               </div>
             );
           })}
@@ -298,7 +307,7 @@ export function ScheduleTablet({ courses, periods, currentWeekday, currentWeek, 
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="text-sm text-muted-foreground">
-                    {t("schedule.weeks")}: {c.weeks} · {t("schedule.sections")}: {c.start_section}-{c.end_section}
+                    {t("schedule.weeks")}: {c.weeks} · {t("schedule.sections")}: {courseStartSection(c)}-{courseEndSection(c)}
                   </CardContent>
                 </Card>
               );

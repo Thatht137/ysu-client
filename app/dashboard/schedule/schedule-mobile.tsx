@@ -18,8 +18,15 @@ import {
 import { CalendarOff, Layers } from "lucide-react";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
-import type { ClassPeriod, Course, CurrentWeek } from "@/lib/types";
-import { computeMergedBlocks, buildSectionTimeMap, isCourseCurrent, type ScheduleBlock } from "./schedule-utils";
+import type { ClassPeriod, Course, CurrentWeek } from "@/providers/types";
+import {
+  computeMergedBlocks,
+  buildSectionTimeMap,
+  isCourseCurrent,
+  periodEndTime,
+  periodStartTime,
+  type ScheduleBlock,
+} from "./schedule-utils";
 import { COURSE_BG_CLASSES, courseColorIndex } from "./course-color";
 import { ActivityModal } from "./activity-modal";
 import { SigninModal } from "./signin-modal";
@@ -228,8 +235,8 @@ export function ScheduleMobile({
               style={{ gridRow: row, gridColumn: 1 }}
             >
               <span className="text-xs font-semibold text-foreground">{p.section}</span>
-              {!compact && p.start_time && <span>{p.start_time}</span>}
-              {!compact && p.end_time && <span>{p.end_time}</span>}
+              {!compact && periodStartTime(p) && <span>{periodStartTime(p)}</span>}
+              {!compact && periodEndTime(p) && <span>{periodEndTime(p)}</span>}
             </div>
           );
         })}

@@ -1,6 +1,11 @@
 import { registerPlugin } from "@capacitor/core";
 import type { Course, CurrentWeek, ClassPeriod, Exam } from "./types";
-import type { Exam as ProviderExam } from "@/providers/types";
+import type {
+  Course as ProviderCourse,
+  CurrentWeek as ProviderCurrentWeek,
+  ClassPeriod as ProviderClassPeriod,
+  Exam as ProviderExam,
+} from "@/providers/types";
 
 export interface WidgetBridgePlugin {
   syncSchedule(options: {
@@ -61,10 +66,37 @@ export interface WidgetExam {
   seat_number?: string;
 }
 
+type WidgetSyncCourse = Course | ProviderCourse;
+type WidgetSyncCurrentWeek = CurrentWeek | ProviderCurrentWeek;
+type WidgetSyncClassPeriod = ClassPeriod | ProviderClassPeriod;
+
+function getCourseNumberField(
+  course: WidgetSyncCourse,
+  legacyKey: keyof Course,
+  providerKey: keyof ProviderCourse,
+): number {
+  return ((course as Course)[legacyKey] ?? (course as ProviderCourse)[providerKey]) as number;
+}
+
+function getPeriodStringField(
+  period: WidgetSyncClassPeriod | undefined,
+  legacyKey: keyof ClassPeriod,
+  providerKey: keyof ProviderClassPeriod,
+): string | undefined {
+  if (!period) return undefined;
+  return (
+    (period as ClassPeriod)[legacyKey] ?? (period as ProviderClassPeriod)[providerKey]
+  ) as string | undefined;
+}
+
+function getWeekTerm(week: WidgetSyncCurrentWeek): string | undefined {
+  return (week as CurrentWeek).term ?? (week as ProviderCurrentWeek).semester;
+}
+
 export async function syncScheduleToWidget(
-  courses: Course[],
-  currentWeek: CurrentWeek | null,
-  periods: ClassPeriod[],
+  courses: WidgetSyncCourse[],
+  currentWeek: WidgetSyncCurrentWeek | null,
+  periods: WidgetSyncClassPeriod[],
   syncReminderHours: number = 24,
   showNextDaySchedule: boolean = false,
 ): Promise<void> {
@@ -72,16 +104,18 @@ export async function syncScheduleToWidget(
     const periodMap = new Map(periods.map((p) => [p.section, p]));
 
     const widgetCourses: WidgetCourse[] = courses.map((c) => {
-      const startPeriod = periodMap.get(c.start_section);
-      const endPeriod = periodMap.get(c.end_section);
+      const startSection = getCourseNumberField(c, "start_section", "startSection");
+      const endSection = getCourseNumberField(c, "end_section", "endSection");
+      const startPeriod = periodMap.get(startSection);
+      const endPeriod = periodMap.get(endSection);
       return {
         name: c.name,
         classroom: c.classroom,
-        week_day: c.week_day,
-        start_section: c.start_section,
-        end_section: c.end_section,
-        start_time: startPeriod?.start_time,
-        end_time: endPeriod?.end_time,
+        week_day: getCourseNumberField(c, "week_day", "weekDay"),
+        start_section: startSection,
+        end_section: endSection,
+        start_time: getPeriodStringField(startPeriod, "start_time", "startTime"),
+        end_time: getPeriodStringField(endPeriod, "end_time", "endTime"),
       };
     });
 
@@ -89,7 +123,7 @@ export async function syncScheduleToWidget(
       ? {
           week: currentWeek.week,
           weekday: currentWeek.weekday,
-          term: currentWeek.term,
+          term: getWeekTerm(currentWeek),
           date: currentWeek.date,
         }
       : null;

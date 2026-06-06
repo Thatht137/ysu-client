@@ -1,4 +1,32 @@
-import type { Course, ClassPeriod } from "@/lib/types";
+import type { Course as LegacyCourse, ClassPeriod as LegacyClassPeriod } from "@/lib/types";
+import type { Course as ProviderCourse, ClassPeriod as ProviderClassPeriod } from "@/providers/types";
+
+export type ScheduleCourse = LegacyCourse | ProviderCourse;
+export type ScheduleClassPeriod = LegacyClassPeriod | ProviderClassPeriod;
+
+export function courseWeekDay(course: ScheduleCourse): number {
+  return (course as LegacyCourse).week_day ?? (course as ProviderCourse).weekDay;
+}
+
+export function courseStartSection(course: ScheduleCourse): number {
+  return (course as LegacyCourse).start_section ?? (course as ProviderCourse).startSection;
+}
+
+export function courseEndSection(course: ScheduleCourse): number {
+  return (course as LegacyCourse).end_section ?? (course as ProviderCourse).endSection;
+}
+
+export function periodStartTime(period: ScheduleClassPeriod): string | undefined {
+  return (period as LegacyClassPeriod).start_time ?? (period as ProviderClassPeriod).startTime;
+}
+
+export function periodEndTime(period: ScheduleClassPeriod): string | undefined {
+  return (period as LegacyClassPeriod).end_time ?? (period as ProviderClassPeriod).endTime;
+}
+
+export function periodIsInUse(period: ScheduleClassPeriod): boolean {
+  return (period as LegacyClassPeriod).is_in_use ?? (period as ProviderClassPeriod).isInUse;
+}
 
 export function parseTimeToMinutes(timeStr: string | undefined): number | null {
   if (!timeStr) return null;
@@ -7,11 +35,11 @@ export function parseTimeToMinutes(timeStr: string | undefined): number | null {
   return h * 60 + m;
 }
 
-export function buildSectionTimeMap(periods: ClassPeriod[]): Record<number, [number, number]> {
+export function buildSectionTimeMap(periods: ScheduleClassPeriod[]): Record<number, [number, number]> {
   const map: Record<number, [number, number]> = {};
   for (const p of periods) {
-    const start = parseTimeToMinutes(p.start_time);
-    const end = parseTimeToMinutes(p.end_time);
+    const start = parseTimeToMinutes(periodStartTime(p));
+    const end = parseTimeToMinutes(periodEndTime(p));
     if (start !== null && end !== null) {
       map[p.section] = [start, end];
     }
@@ -20,20 +48,20 @@ export function buildSectionTimeMap(periods: ClassPeriod[]): Record<number, [num
 }
 
 export function isCoursePast(
-  course: Course,
+  course: ScheduleCourse,
   nowMinutes: number,
   timeMap: Record<number, [number, number]>,
 ): boolean {
-  const endRange = timeMap[course.end_section];
+  const endRange = timeMap[courseEndSection(course)];
   return !!endRange && nowMinutes > endRange[1];
 }
 
 export function isCourseCurrent(
-  course: Course,
+  course: ScheduleCourse,
   nowMinutes: number,
   timeMap: Record<number, [number, number]>,
 ): boolean {
-  for (let s = course.start_section; s <= course.end_section; s++) {
+  for (let s = courseStartSection(course); s <= courseEndSection(course); s++) {
     const range = timeMap[s];
     if (range && nowMinutes >= range[0] && nowMinutes <= range[1]) {
       return true;
@@ -61,44 +89,49 @@ export function parseWeeks(weeksStr: string): number[] {
   return Array.from(result).sort((a, b) => a - b);
 }
 
-export function isCourseActiveInWeek(course: Course, week: number): boolean {
+export function isCourseActiveInWeek(course: ScheduleCourse, week: number): boolean {
   const weeks = parseWeeks(course.weeks || "");
   if (weeks.length === 0) return true;
   return weeks.includes(week);
 }
 
-export function coursesSignature(courses: Course[]): string {
+export function coursesSignature(courses: ScheduleCourse[]): string {
   return courses
     .map(
       (c) =>
-        `${c.code ?? ""}|${c.name ?? ""}|${c.teacher ?? ""}|${c.classroom ?? ""}|${c.start_section}|${c.end_section}`,
+        `${c.code ?? ""}|${c.name ?? ""}|${c.teacher ?? ""}|${c.classroom ?? ""}|${courseStartSection(c)}|${courseEndSection(c)}`,
     )
     .sort()
     .join("\n");
 }
 
-export interface ScheduleBlock {
+export interface ScheduleBlock<TCourse extends ScheduleCourse = ScheduleCourse> {
   day: number;
   start: number;
   end: number;
-  courses: Course[];
+  courses: TCourse[];
 }
 
-export function computeMergedBlocks(courses: Course[], periods: ClassPeriod[]): ScheduleBlock[] {
+export function computeMergedBlocks<TCourse extends ScheduleCourse>(
+  courses: TCourse[],
+  periods: ScheduleClassPeriod[],
+): ScheduleBlock<TCourse>[] {
   const maxSection = periods.length > 0 ? periods[periods.length - 1].section : 12;
-  const grid: { courses: Course[] }[][] = Array.from({ length: maxSection + 1 }, () =>
-    Array.from({ length: 8 }, () => ({ courses: [] as Course[] })),
+  const grid: { courses: TCourse[] }[][] = Array.from({ length: maxSection + 1 }, () =>
+    Array.from({ length: 8 }, () => ({ courses: [] as TCourse[] })),
   );
   for (const c of courses) {
-    if (c.week_day >= 1 && c.week_day <= 7 && c.start_section >= 1) {
-      for (let s = c.start_section; s <= c.end_section; s++) {
+    const weekDay = courseWeekDay(c);
+    const startSection = courseStartSection(c);
+    if (weekDay >= 1 && weekDay <= 7 && startSection >= 1) {
+      for (let s = startSection; s <= courseEndSection(c); s++) {
         if (s <= maxSection) {
-          grid[s][c.week_day].courses.push(c);
+          grid[s][weekDay].courses.push(c);
         }
       }
     }
   }
-  const blocks: ScheduleBlock[] = [];
+  const blocks: ScheduleBlock<TCourse>[] = [];
   for (let day = 1; day <= 7; day++) {
     let section = 1;
     while (section <= maxSection) {

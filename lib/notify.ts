@@ -13,6 +13,11 @@ import { getJar as getCasJar } from "./cas";
 import { loadCASTGC } from "./secure-storage";
 import { buildNativeServerConfig } from "./notify-config";
 import type { Course, CurrentWeek, ClassPeriod } from "./types";
+import type {
+  Course as ProviderCourse,
+  CurrentWeek as ProviderCurrentWeek,
+  ClassPeriod as ProviderClassPeriod,
+} from "@/providers/types";
 
 // ─── Config Sync ────────────────────────────────────────────────────────── //
 
@@ -161,7 +166,23 @@ function parseTimeToMinutes(timeStr: string): number {
   return parseInt(parts[0]!, 10) * 60 + parseInt(parts[1]!, 10);
 }
 
-function isCourseActiveInWeek(course: Course, week: number): boolean {
+type AlarmCourse = Course | ProviderCourse;
+type AlarmCurrentWeek = CurrentWeek | ProviderCurrentWeek;
+type AlarmClassPeriod = ClassPeriod | ProviderClassPeriod;
+
+function courseWeekDay(course: AlarmCourse): number {
+  return (course as Course).week_day ?? (course as ProviderCourse).weekDay;
+}
+
+function courseStartSection(course: AlarmCourse): number {
+  return (course as Course).start_section ?? (course as ProviderCourse).startSection;
+}
+
+function periodStartTime(period: AlarmClassPeriod): string | undefined {
+  return (period as ClassPeriod).start_time ?? (period as ProviderClassPeriod).startTime;
+}
+
+function isCourseActiveInWeek(course: AlarmCourse, week: number): boolean {
   const weeksStr = course.weeks;
   if (!weeksStr) return true;
   const weeks = new Set<number>();
@@ -178,9 +199,9 @@ function isCourseActiveInWeek(course: Course, week: number): boolean {
 }
 
 export function computeClassAlarms(
-  courses: Course[],
-  currentWeek: CurrentWeek | null,
-  periods: ClassPeriod[],
+  courses: AlarmCourse[],
+  currentWeek: AlarmCurrentWeek | null,
+  periods: AlarmClassPeriod[],
   remindMinutes: number = 15,
   days: number = 7,
 ): ClassAlarmConfig[] {
@@ -195,14 +216,16 @@ export function computeClassAlarms(
     const weekOverflow = Math.floor((todayWeekday - 1 + dayOffset) / 7);
     const targetWeek = baseWeek + weekOverflow;
     const dayCourses = courses.filter(
-      (c) => c.week_day === targetWeekday && isCourseActiveInWeek(c, targetWeek),
+      (c) => courseWeekDay(c) === targetWeekday && isCourseActiveInWeek(c, targetWeek),
     );
 
     for (const course of dayCourses) {
-      const startPeriod = periodMap.get(course.start_section);
-      if (!startPeriod?.start_time) continue;
+      const startSection = courseStartSection(course);
+      const startPeriod = periodMap.get(startSection);
+      const startTime = startPeriod ? periodStartTime(startPeriod) : undefined;
+      if (!startTime) continue;
 
-      const startMinutes = parseTimeToMinutes(startPeriod.start_time);
+      const startMinutes = parseTimeToMinutes(startTime);
       const alarmMinutes = startMinutes - remindMinutes;
       if (alarmMinutes < 0) continue;
 
@@ -212,13 +235,13 @@ export function computeClassAlarms(
 
       if (targetDate.getTime() <= now.getTime()) continue;
 
-      const alarmId = `${course.name}|${targetDate.toISOString().split("T")[0]}|${course.start_section}`;
+      const alarmId = `${course.name}|${targetDate.toISOString().split("T")[0]}|${startSection}`;
       alarms.push({
         alarmId,
         alarmTime: targetDate.getTime(),
         courseName: course.name,
         classroom: course.classroom || "",
-        startTime: startPeriod.start_time,
+        startTime,
         remindMinutes,
       });
     }
@@ -230,9 +253,9 @@ export function computeClassAlarms(
 let lastAlarmHash = "";
 
 export async function syncClassAlarmsToNative(
-  courses: Course[],
-  currentWeek: CurrentWeek | null,
-  periods: ClassPeriod[],
+  courses: AlarmCourse[],
+  currentWeek: AlarmCurrentWeek | null,
+  periods: AlarmClassPeriod[],
 ): Promise<void> {
   if (!isCapacitor()) return;
 

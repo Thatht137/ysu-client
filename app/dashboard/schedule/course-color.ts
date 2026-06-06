@@ -1,4 +1,4 @@
-import type { Course } from "@/lib/types";
+import type { Course } from "@/providers/types";
 
 const PALETTE_SIZE = 6;
 

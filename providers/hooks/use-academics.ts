@@ -7,6 +7,7 @@ import type {
   ClassPeriod,
   Course,
   CurrentWeek,
+  CurrentWeekQueryOptions,
   Exam,
   ExamQueryOptions,
   GPAQueryOptions,
@@ -94,9 +95,16 @@ export function useTermCalendar(
   );
 }
 
-export function useCurrentWeek(): ProviderQueryResult<CurrentWeek> {
+export function useCurrentWeek(
+  options?: CurrentWeekQueryOptions,
+): ProviderQueryResult<CurrentWeek> {
   const provider = useProvider();
-  return useProviderQuery("currentWeek", "current-week", () => provider.getCurrentWeek());
+  return useProviderQuery(
+    "currentWeek",
+    "current-week",
+    () => provider.getCurrentWeek(options),
+    options,
+  );
 }
 
 export function useExams(options?: ExamQueryOptions): ProviderQueryResult<Exam[]> {

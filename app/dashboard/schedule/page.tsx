@@ -20,18 +20,13 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { useAuthStore } from "@/lib/auth-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useMobileHeaderRight } from "@/lib/mobile-header-store";
-import { useRefreshStore } from "@/lib/refresh-store";
-import { getExperimentalSchedule, getClassPeriods, getCurrentWeek } from "@/lib/api";
-import { cacheGetStale, cacheSet, cacheKey, dedupedFetch } from "@/lib/cache";
-import { useCachedData } from "@/lib/use-cached-data";
-import type { Course, ClassPeriod, CurrentWeek } from "@/lib/types";
+import { useClassPeriods, useCurrentWeek, useSchedule } from "@/providers/hooks";
 import { ChevronDown, ChevronLeft, ChevronRight, Search, Grid3x2, Grid3x3 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { isCourseActiveInWeek } from "./schedule-utils";
+import { isCourseActiveInWeek, periodIsInUse } from "./schedule-utils";
 import { ScheduleTablet } from "./schedule-tablet";
 import { ScheduleMobile } from "./schedule-mobile";
 import { syncScheduleToWidget } from "@/lib/widget-bridge";
@@ -39,17 +34,32 @@ import { syncClassAlarmsToNative } from "@/lib/notify";
 import { useSettingsStore } from "@/lib/settings-store";
 
 export default function SchedulePage() {
-  const credential = useAuthStore((s) => s.credential);
   const { t } = useTranslation();
   const isMobile = useIsMobile();
   const compactMode = useSettingsStore((s) => s.scheduleCompactMode);
   const setCompactMode = useSettingsStore((s) => s.setScheduleCompactMode);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [currentWeek, setCurrentWeek] = useState<CurrentWeek | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<number>(0);
   const [term, setTerm] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [queriedTerm, setQueriedTerm] = useState("");
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+
+  const scheduleQuery = useSchedule({
+    semester: queriedTerm || undefined,
+    courseCategory: "all",
+    includeLabSchedule: true,
+  });
+  const currentWeekQuery = useCurrentWeek({ semester: queriedTerm || undefined });
+  const periodsQuery = useClassPeriods();
+
+  const courses = useMemo(() => scheduleQuery.data ?? [], [scheduleQuery.data]);
+  const currentWeek = currentWeekQuery.data ?? null;
+  const loading =
+    scheduleQuery.isLoading ||
+    scheduleQuery.isValidating ||
+    currentWeekQuery.isLoading ||
+    currentWeekQuery.isValidating ||
+    periodsQuery.isLoading ||
+    periodsQuery.isValidating;
 
   // In compact mode, adjust <main> padding-bottom to match the actual nav bar height,
   // so the content area ends exactly at the nav top edge.
@@ -70,13 +80,10 @@ export default function SchedulePage() {
     };
   }, [compactMode]);
 
-  const periodsHook = useCachedData<ClassPeriod[]>(["periods", credential], {
-    fetch: () => getClassPeriods(),
-  });
   const periods = useMemo(() => {
-    if (!periodsHook.data) return [];
-    return periodsHook.data.filter((x) => x.is_in_use).sort((a, b) => a.section - b.section);
-  }, [periodsHook.data]);
+    if (!periodsQuery.data) return [];
+    return periodsQuery.data.filter(periodIsInUse).sort((a, b) => a.section - b.section);
+  }, [periodsQuery.data]);
 
   const [nowMinutes, setNowMinutes] = useState(() => {
     const now = new Date();
@@ -102,89 +109,44 @@ export default function SchedulePage() {
   });
 
   useEffect(() => {
-    if (!credential) return;
+    if (!currentWeek?.week) return;
+    setSelectedWeek((curr) => (curr === 0 ? currentWeek.week : curr));
+  }, [currentWeek]);
 
-    const schedKey = cacheKey(["schedule", credential]);
-    const weekKey = cacheKey(["week", credential]);
-    const cachedCourses = cacheGetStale<Course[]>(schedKey);
-    const cachedWeek = cacheGetStale<CurrentWeek>(weekKey);
+  useEffect(() => {
+    const errors = [scheduleQuery.error, currentWeekQuery.error, periodsQuery.error].filter(Boolean);
+    if (errors.length === 0) return;
+    toast.error(errors[0]?.message || t("app.updating"));
+  }, [scheduleQuery.error, currentWeekQuery.error, periodsQuery.error, t]);
 
-    if (cachedCourses) setCourses(cachedCourses.data);
-    if (cachedWeek) {
-      setCurrentWeek(cachedWeek.data);
-      if (cachedWeek.data.week) setSelectedWeek(cachedWeek.data.week);
-    }
-
-    const hasCache = !!(cachedCourses || cachedWeek);
-    let refreshing = false;
-    if (hasCache) {
-      setLoading(false);
-      useRefreshStore.getState().start();
-      refreshing = true;
-    }
-
-    async function load() {
-      try {
-        const [c, w] = await Promise.all([
-          dedupedFetch(schedKey, () => getExperimentalSchedule(credential!, undefined, "all")),
-          dedupedFetch(weekKey, () => getCurrentWeek(credential!)),
-        ]);
-        setCourses(c);
-        setCurrentWeek(w);
-        if (w?.week) {
-          const cachedWeekValue = cachedWeek?.data.week;
-          setSelectedWeek((curr) => {
-            if (curr === 0 || curr === cachedWeekValue) return w.week;
-            return curr;
-          });
-        }
-        cacheSet(schedKey, c);
-        cacheSet(weekKey, w);
-        const activeCourses = w?.week ? c.filter((course) => isCourseActiveInWeek(course, w.week)) : c;
-        syncScheduleToWidget(activeCourses, w, periodsRef.current, useSettingsStore.getState().widgetSyncReminderHours, useSettingsStore.getState().widgetShowNextDaySchedule).catch(() => {});
-        syncClassAlarmsToNative(activeCourses, w, periodsRef.current).catch(() => {});
-        useRefreshStore.getState().markFresh();
-      } catch (err) {
-        if (hasCache) {
-          useRefreshStore.getState().markStale();
-        } else {
-          toast.error((err as Error).message || t("app.updating"));
-        }
-      } finally {
-        setLoading(false);
-        if (refreshing) useRefreshStore.getState().end();
-      }
-    }
-    load();
-  }, [credential, t]);
+  useEffect(() => {
+    if (!scheduleQuery.data || !currentWeek) return;
+    const activeCourses = currentWeek.week
+      ? scheduleQuery.data.filter((course) => isCourseActiveInWeek(course, currentWeek.week))
+      : scheduleQuery.data;
+    syncScheduleToWidget(
+      activeCourses,
+      currentWeek,
+      periodsRef.current,
+      useSettingsStore.getState().widgetSyncReminderHours,
+      useSettingsStore.getState().widgetShowNextDaySchedule,
+    ).catch(() => {});
+    syncClassAlarmsToNative(activeCourses, currentWeek, periodsRef.current).catch(() => {});
+  }, [scheduleQuery.data, currentWeek]);
 
   async function handleQuery() {
-    if (!credential) return;
-    setLoading(true);
-    try {
-      const [c, w] = await Promise.all([
-        getExperimentalSchedule(credential, term || undefined, "all").catch(() => null),
-        getCurrentWeek(credential!, term || undefined).catch(() => null),
+    const nextTerm = term.trim();
+    if (nextTerm === queriedTerm) {
+      await Promise.all([
+        scheduleQuery.mutate(),
+        currentWeekQuery.mutate(),
+        periodsQuery.mutate(),
       ]);
-      if (c !== null) {
-        setCourses(c);
-        cacheSet(cacheKey(["schedule", credential!]), c);
-      }
-      if (w !== null) {
-        setCurrentWeek(w);
-        cacheSet(cacheKey(["week", credential!]), w);
-      }
-      if (c !== null && w !== null) {
-        const activeCourses = w.week ? c.filter((course) => isCourseActiveInWeek(course, w.week)) : c;
-        syncScheduleToWidget(activeCourses, w, periods, useSettingsStore.getState().widgetSyncReminderHours, useSettingsStore.getState().widgetShowNextDaySchedule).catch(() => {});
-        syncClassAlarmsToNative(activeCourses, w, periodsRef.current).catch(() => {});
-      }
-      setFilterDrawerOpen(false);
-    } catch (err) {
-      toast.error((err as Error).message || t("app.updating"));
-    } finally {
-      setLoading(false);
+    } else {
+      setQueriedTerm(nextTerm);
+      setSelectedWeek(0);
     }
+    setFilterDrawerOpen(false);
   }
 
   useMobileHeaderRight(
