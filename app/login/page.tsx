@@ -34,7 +34,7 @@ import {
   loadRememberedCredentials,
   saveRememberedCredentials,
   clearRememberedCredentials,
-} from "@/lib/secure-storage";
+} from "@/lib/storage/secure";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { useMFAModalStore } from "@/lib/mfa-modal-store";
 import { getActiveProvider, setActiveProviderSchool } from "@/providers/provider-service";

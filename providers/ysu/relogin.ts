@@ -13,7 +13,7 @@ import { initializeSession } from "./session";
 import { useAuthStore } from "@/lib/auth-store";
 import { useMFAModalStore } from "@/lib/mfa-modal-store";
 import { getText } from "@/lib/i18n/get-text";
-import { loadRememberedCredentials } from "@/lib/secure-storage";
+import { loadRememberedCredentials } from "@/lib/storage/secure";
 
 let inflightAutoLogin: Promise<boolean> | null = null;
 

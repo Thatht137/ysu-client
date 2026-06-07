@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSettingsStore } from "@/lib/settings-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
-import { saveAvatarImage, removeAvatarImage } from "@/lib/avatar-storage";
+import { saveAvatarImage, removeAvatarImage } from "@/lib/storage/avatar";
 import { ImagePlus, Trash2 } from "lucide-react";
 import { useAuthStore } from "@/lib/auth-store";
 

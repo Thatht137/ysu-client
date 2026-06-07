@@ -10,14 +10,14 @@ import { useAuthStore } from "@/lib/auth-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { isCapacitor } from "@/lib/native/platform";
 import { getSchoolConfig, getSchoolId, serverConfig } from "@/lib/server-config";
-import { loadCASTGC, loadRememberedCredentials } from "@/lib/secure-storage";
+import { loadCASTGC, loadRememberedCredentials } from "@/lib/storage/secure";
 import { useProvider } from "@/providers/use-provider";
 import { useSettingsStore } from "@/lib/settings-store";
 import { startNativePolling, stopNativePolling } from "@/lib/native/notify";
 import { NotifyPlugin } from "@/lib/native/notify-plugin";
 import { RefreshCw, Trash2, Bug, Bell, Play, Send, Smartphone, Shield, Power } from "lucide-react";
 import { toast } from "sonner";
-import { clearAllCache } from "@/lib/cache";
+import { clearAllCache } from "@/lib/storage/cache";
 
 interface DiagnosticResult {
   school: {
@@ -294,7 +294,7 @@ export default function DebugPage() {
     }
     try {
       // 诊断：从 secure storage 直接读取 CASTGC
-      const { loadCASTGC } = await import("@/lib/secure-storage");
+      const { loadCASTGC } = await import("@/lib/storage/secure");
       const storedTgc = await loadCASTGC();
       logNative(`secureStorage CASTGC: ${storedTgc ? "存在" : "无"}`);
 

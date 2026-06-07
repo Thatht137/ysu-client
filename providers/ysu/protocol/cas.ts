@@ -17,7 +17,7 @@ import {
 import {
   saveCASTGC as saveCASTGCSecure,
   loadCASTGC,
-} from "@/lib/secure-storage";
+} from "@/lib/storage/secure";
 import {
   serverConfig,
   casUrls,

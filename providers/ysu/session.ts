@@ -25,11 +25,11 @@ import {
 } from "./protocol/jwmobile";
 import { useAuthStore } from "@/lib/auth-store";
 import { initServerConfig } from "@/lib/server-config";
-import { clearAllCache, cleanStaleCacheVersions } from "@/lib/cache";
+import { clearAllCache, cleanStaleCacheVersions } from "@/lib/storage/cache";
 import { useRefreshStore } from "@/lib/refresh-store";
 import { isCapacitor } from "@/lib/native/platform";
 import { stopNotify } from "@/lib/native/notify";
-import { removeCASTGC } from "@/lib/secure-storage";
+import { removeCASTGC } from "@/lib/storage/secure";
 
 /** 从 auth-store 恢复 CAS 凭据、JWXT 会话和 mobile 会话到各自的 jar。 */
 export async function initializeSession(): Promise<void> {

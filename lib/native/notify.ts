@@ -9,7 +9,7 @@
 import { useSettingsStore } from "../settings-store";
 import { isCapacitor } from "./platform";
 import { NotifyPlugin } from "./notify-plugin";
-import { loadCASTGC } from "../secure-storage";
+import { loadCASTGC } from "../storage/secure";
 import { buildNativeServerConfig } from "./notify-config";
 import { casUrls } from "../server-config";
 import type { Course, CurrentWeek, ClassPeriod } from "@/providers/types";

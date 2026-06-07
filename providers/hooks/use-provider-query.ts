@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { type KeyedMutator, type SWRConfiguration } from "swr";
 import { useAuthStore } from "@/lib/auth-store";
-import { cacheGetStale, cacheKey, cacheSet, DEFAULT_TTL_MS, LONG_TTL_MS } from "@/lib/cache";
+import { cacheGetStale, cacheKey, cacheSet, DEFAULT_TTL_MS, LONG_TTL_MS } from "@/lib/storage/cache";
 import { useRefreshStore } from "@/lib/refresh-store";
 import { assertCapability } from "../capabilities";
 import { ProviderError } from "../errors";

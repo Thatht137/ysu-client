@@ -5,7 +5,7 @@ const CACHE_VERSION = 1;
 const CACHE_PREFIX = "ysu-cache:";
 
 import { toast } from "sonner";
-import { getText } from "./i18n/get-text";
+import { getText } from "../i18n/get-text";
 
 /** 默认 TTL: 24 小时 */
 export const DEFAULT_TTL_MS = 1000 * 60 * 60 * 24;
