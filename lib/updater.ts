@@ -2,6 +2,7 @@ import { CapacitorUpdater } from "@capgo/capacitor-updater";
 import { App } from "@capacitor/app";
 import { registerPlugin } from "@capacitor/core";
 import { clean, compare, gt, prerelease, valid } from "semver";
+import { getLocalStorageItemWithFallback, STORAGE_KEYS } from "./storage/keys";
 import { APP_VERSION } from "./version";
 
 export type UpdateChannel = "stable" | "prerelease";
@@ -43,9 +44,11 @@ const GITHUB_RELEASE_BASE =
 const ASSET_NAME = "dist.zip";
 const VERSION_JSON_NAME = "version.json";
 const APK_NAME = "app-release.apk";
-const LAST_CHECK_KEY = "ysu-last-update-check";
+const LAST_CHECK_KEY = STORAGE_KEYS.lastUpdateCheck;
+const LEGACY_LAST_CHECK_KEY = STORAGE_KEYS.legacyLastUpdateCheck;
 const CHECK_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
-export const OTA_CLEANUP_FLAG = "ysu-ota-cleanup";
+export const OTA_CLEANUP_FLAG = STORAGE_KEYS.otaCleanup;
+export const LEGACY_OTA_CLEANUP_FLAG = STORAGE_KEYS.legacyOtaCleanup;
 
 export const UPDATE_MIRRORS: readonly UpdateMirror[] = [
   { label: "官方源", value: OFFICIAL_BASE },
@@ -190,7 +193,10 @@ export async function checkForUpdate(
   channel: UpdateChannel = "stable",
 ): Promise<UpdateInfo> {
   if (auto) {
-    const last = localStorage.getItem(`${LAST_CHECK_KEY}:${channel}`);
+    const last = getLocalStorageItemWithFallback(
+      `${LAST_CHECK_KEY}:${channel}`,
+      `${LEGACY_LAST_CHECK_KEY}:${channel}`,
+    );
     if (last && Date.now() - Number(last) < CHECK_COOLDOWN_MS) {
       return EMPTY_RESULT;
     }

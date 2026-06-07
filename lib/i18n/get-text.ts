@@ -1,10 +1,12 @@
+import { getLocalStorageItemWithFallback, STORAGE_KEYS } from "../storage/keys";
 import { zh, en } from "./dict";
 
-const STORAGE_KEY = "ysu-locale";
+const STORAGE_KEY = STORAGE_KEYS.locale;
+const LEGACY_STORAGE_KEY = STORAGE_KEYS.legacyLocale;
 
 export function getText(key: string): string {
   if (typeof window === "undefined") return key;
-  const locale = localStorage.getItem(STORAGE_KEY) === "en" ? "en" : "zh";
+  const locale = getLocalStorageItemWithFallback(STORAGE_KEY, LEGACY_STORAGE_KEY) === "en" ? "en" : "zh";
   const dict = locale === "en" ? en : zh;
 
   const keys = key.split(".");

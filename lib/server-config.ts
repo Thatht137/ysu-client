@@ -5,6 +5,7 @@
  * 修改后需重新登录才能生效（cookie 域名变更）。
  */
 
+import { getLocalStorageItemWithFallback, STORAGE_KEYS } from './storage/keys';
 import ysuConfig from './school-configs/ysu.json';
 import nbuConfig from './school-configs/nbu.json';
 
@@ -158,7 +159,10 @@ export function getJwxtCookieDomain(): string {
 
 export function initServerConfig(): void {
   try {
-    const raw = localStorage.getItem('ysu-settings');
+    const raw = getLocalStorageItemWithFallback(
+      STORAGE_KEYS.settings,
+      STORAGE_KEYS.legacySettings,
+    );
     if (!raw) return;
     const parsed = JSON.parse(raw);
 

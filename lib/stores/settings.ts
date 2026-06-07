@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { UpdateChannel } from "../updater";
+import { migrateLocalStorageKey, STORAGE_KEYS } from "../storage/keys";
+
+migrateLocalStorageKey(STORAGE_KEYS.settings, STORAGE_KEYS.legacySettings);
 
 export type CardStyle = "solid" | "translucent" | "glass";
 export type BackgroundStyle = "overlay" | "blur-overlay";
@@ -146,7 +149,7 @@ export const useSettingsStore = create<SettingsState>()(
       setHasHydrated: (v) => set({ hasHydrated: v }),
     }),
     {
-      name: "ysu-settings",
+      name: STORAGE_KEYS.settings,
       storage: createJSONStorage(() => localStorage),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);

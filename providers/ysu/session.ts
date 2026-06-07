@@ -25,6 +25,7 @@ import {
 } from "./protocol/jwmobile";
 import { useAuthStore } from "@/lib/stores/auth";
 import { initServerConfig } from "@/lib/server-config";
+import { STORAGE_KEYS } from "@/lib/storage/keys";
 import { clearAllCache, cleanStaleCacheVersions } from "@/lib/storage/cache";
 import { useRefreshStore } from "@/lib/stores/refresh";
 import { isCapacitor } from "@/lib/native/platform";
@@ -38,8 +39,12 @@ export async function initializeSession(): Promise<void> {
   // 清理因 credential 轮换产生的孤立缓存
   cleanStaleCacheVersions();
   // OTA 更新后清理旧版本和下载缓存，仅当 updater 设置了标志位时才执行
-  if (localStorage.getItem("ysu-ota-cleanup")) {
-    localStorage.removeItem("ysu-ota-cleanup");
+  if (
+    localStorage.getItem(STORAGE_KEYS.otaCleanup) ||
+    localStorage.getItem(STORAGE_KEYS.legacyOtaCleanup)
+  ) {
+    localStorage.removeItem(STORAGE_KEYS.otaCleanup);
+    localStorage.removeItem(STORAGE_KEYS.legacyOtaCleanup);
     cleanOtaArtifacts();
   }
   // Restore CASTGC to CapacitorHttp system cookie store (for native platforms)

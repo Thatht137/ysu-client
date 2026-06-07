@@ -2,10 +2,12 @@
 const CACHE_VERSION = 1;
 
 /** 缓存键前缀 */
-const CACHE_PREFIX = "ysu-cache:";
-
 import { toast } from "sonner";
 import { getText } from "../i18n/get-text";
+import { STORAGE_KEYS } from "./keys";
+
+const CACHE_PREFIX = STORAGE_KEYS.cachePrefix;
+const LEGACY_CACHE_PREFIX = STORAGE_KEYS.legacyCachePrefix;
 
 /** 默认 TTL: 24 小时 */
 export const DEFAULT_TTL_MS = 1000 * 60 * 60 * 24;
@@ -48,13 +50,20 @@ export function cacheGetStale<T>(
   key: string,
   ttl = DEFAULT_TTL_MS,
 ): { data: T; stale: boolean } | null {
+  const currentKey = `${CACHE_PREFIX}${key}`;
+  const legacyKey = `${LEGACY_CACHE_PREFIX}${key}`;
   try {
-    const raw = localStorage.getItem(`${CACHE_PREFIX}${key}`);
+    const raw = localStorage.getItem(currentKey) ?? localStorage.getItem(legacyKey);
     if (!raw) return null;
     const entry: CacheEntry<T> = JSON.parse(raw);
     if (entry.v !== CACHE_VERSION) {
-      localStorage.removeItem(`${CACHE_PREFIX}${key}`);
+      localStorage.removeItem(currentKey);
+      localStorage.removeItem(legacyKey);
       return null;
+    }
+    if (!localStorage.getItem(currentKey)) {
+      localStorage.setItem(currentKey, raw);
+      localStorage.removeItem(legacyKey);
     }
     const stale = Date.now() - entry.ts > ttl;
     return { data: entry.data, stale };
@@ -84,7 +93,10 @@ export function clearAllCache(): void {
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.startsWith(CACHE_PREFIX)) {
+      if (
+        key &&
+        (key.startsWith(CACHE_PREFIX) || key.startsWith(LEGACY_CACHE_PREFIX))
+      ) {
         keysToRemove.push(key);
       }
     }
