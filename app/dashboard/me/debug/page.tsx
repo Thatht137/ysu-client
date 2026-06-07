@@ -10,7 +10,7 @@ import { useAuthStore } from "@/lib/stores/auth";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { isCapacitor } from "@/lib/native/platform";
 import { getSchoolConfig, getSchoolId, serverConfig } from "@/lib/server-config";
-import { loadCASTGC, loadRememberedCredentials } from "@/lib/storage/secure";
+import { loadRememberedCredentials } from "@/lib/storage/secure";
 import { useProvider } from "@/providers/use-provider";
 import { useSettingsStore } from "@/lib/stores/settings";
 import { startNativePolling, stopNativePolling } from "@/lib/native/notify";
@@ -42,22 +42,22 @@ interface DiagnosticResult {
     username: string | null;
     isAuthenticated: boolean;
     hasHydrated: boolean;
-    jwxtSessionExists: boolean;
+    academicSessionExists: boolean;
   };
-  casJar: {
+  authCookies: {
     cookieCount: number;
     cookies: { name: string; domain: string; path: string }[];
   };
-  jwxtJar: {
+  academicCookies: {
     cookieCount: number;
     cookies: { name: string; domain: string; path: string }[];
   };
   secureStorage: {
-    castgcExists: boolean;
+    authTokenExists: boolean;
     rememberMeExists: boolean;
   };
   apiTests: {
-    casAuth: { ok: boolean | null; error?: string };
+    authSession: { ok: boolean | null; error?: string };
     studentInfo: { ok: boolean | null; error?: string };
     schedule: { ok: boolean | null; error?: string };
     currentWeek: { ok: boolean | null; error?: string };
@@ -85,6 +85,16 @@ export default function DebugPage() {
   const notifyCheckInterval = useSettingsStore((s) => s.notifyCheckInterval);
   const notifyGrades = useSettingsStore((s) => s.notifyGrades);
   const notifyExams = useSettingsStore((s) => s.notifyExams);
+  const diagnosticLabels = provider.diagnostics?.labels ?? {
+    authSystem: t("debug.authSystem"),
+    academicSystem: t("debug.academicSystem"),
+    authToken: t("debug.authToken"),
+    authCookies: t("debug.authCookies"),
+    academicCookies: t("debug.academicCookies"),
+    authSession: t("debug.authSession"),
+    academicSession: t("debug.academicSession"),
+    mobileAuth: t("debug.mobileAuth"),
+  };
 
   function logNative(msg: string) {
     setNativeTestLog((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
@@ -123,10 +133,10 @@ export default function DebugPage() {
       }
 
       const diagnostics = provider.diagnostics;
-      const casCookies = diagnostics ? await diagnostics.getAuthCookies() : [];
-      const jwxtCookies = diagnostics ? await diagnostics.getAcademicCookies() : [];
+      const authCookies = diagnostics ? await diagnostics.getAuthCookies() : [];
+      const academicCookies = diagnostics ? await diagnostics.getAcademicCookies() : [];
 
-      const castgc = await loadCASTGC();
+      const authToken = await provider.nativeNotification?.getAuthToken();
       const rememberMe = await loadRememberedCredentials();
 
       const schoolConfig = getSchoolConfig();
@@ -153,30 +163,30 @@ export default function DebugPage() {
           username: username || null,
           isAuthenticated,
           hasHydrated,
-          jwxtSessionExists: !!jwxtSession,
+          academicSessionExists: !!jwxtSession,
         },
-        casJar: {
-          cookieCount: casCookies.length,
-          cookies: casCookies.map((c: { name: string; domain: string; path: string }) => ({
+        authCookies: {
+          cookieCount: authCookies.length,
+          cookies: authCookies.map((c: { name: string; domain: string; path: string }) => ({
             name: c.name,
             domain: c.domain,
             path: c.path,
           })),
         },
-        jwxtJar: {
-          cookieCount: jwxtCookies.length,
-          cookies: jwxtCookies.map((c: { name: string; domain: string; path: string }) => ({
+        academicCookies: {
+          cookieCount: academicCookies.length,
+          cookies: academicCookies.map((c: { name: string; domain: string; path: string }) => ({
             name: c.name,
             domain: c.domain,
             path: c.path,
           })),
         },
         secureStorage: {
-          castgcExists: !!castgc,
+          authTokenExists: !!authToken,
           rememberMeExists: !!rememberMe,
         },
         apiTests: {
-          casAuth: { ok: null },
+          authSession: { ok: null },
           studentInfo: { ok: null },
           schedule: { ok: null },
           currentWeek: { ok: null },
@@ -187,11 +197,11 @@ export default function DebugPage() {
       // API tests (sequential to avoid overwhelming the server)
       if (credential) {
         try {
-          result.apiTests.casAuth = diagnostics
+          result.apiTests.authSession = diagnostics
             ? { ok: await diagnostics.checkAuth() }
             : { ok: null, error: "Provider diagnostics unavailable" };
         } catch (e) {
-          result.apiTests.casAuth = { ok: false, error: (e as Error).message };
+          result.apiTests.authSession = { ok: false, error: (e as Error).message };
         }
 
         try {
@@ -251,9 +261,9 @@ export default function DebugPage() {
     runDiagnostics();
   }
 
-  function handleClearJWXTJar() {
+  function handleClearAcademicSession() {
     provider.diagnostics?.resetAcademicSession();
-    toast.success(t("debug.jwxtJarCleared"));
+    toast.success(t("debug.academicSessionCleared"));
     runDiagnostics();
   }
 
@@ -287,16 +297,15 @@ export default function DebugPage() {
     }
   }
 
-  async function handleNativeSetCastgc() {
+  async function handleNativeSetAuthToken() {
     if (!isCapacitor()) {
       logNative("非 Capacitor 平台，跳过");
       return;
     }
     try {
-      // 诊断：从 secure storage 直接读取 CASTGC
-      const { loadCASTGC } = await import("@/lib/storage/secure");
-      const storedTgc = await loadCASTGC();
-      logNative(`secureStorage CASTGC: ${storedTgc ? "存在" : "无"}`);
+      // 诊断：从当前 provider 读取认证 token
+      const providerToken = await provider.nativeNotification?.getAuthToken();
+      logNative(`provider auth token (${diagnosticLabels.authToken}): ${providerToken ? "存在" : "无"}`);
 
       // 诊断：从 CapacitorCookies 读取
       const { CapacitorCookies } = await import("@capacitor/core");
@@ -307,23 +316,23 @@ export default function DebugPage() {
       logNative(`CapacitorCookies: ${JSON.stringify(cookies)}`);
 
       // 诊断：从 JS cookie jar 读取
-      const casCookies = provider.diagnostics
+      const authCookies = provider.diagnostics
         ? await provider.diagnostics.getAuthCookies()
         : [];
-      const jarCastgc = casCookies.find((c) => c.name === "CASTGC");
-      logNative(`JS cookie jar CASTGC: ${jarCastgc?.value ? `存在(len=${jarCastgc.value.length})` : "无"}`);
+      const cookieToken = authCookies.find((c) => c.value)?.value;
+      logNative(`JS auth cookie token: ${cookieToken ? `存在(len=${cookieToken.length})` : "无"}`);
 
-      // 诊断：直接调用 setCastgc
-      if (jarCastgc?.value) {
-        const castgc = jarCastgc.value;
-        logNative(`直接调用 setCastgc, castgc len=${castgc.length}`);
-        await NotifyPlugin.setCastgc({ castgc });
-        logNative("setCastgc 调用完成");
+      // 诊断：直接同步认证 token 到原生通知插件
+      const authToken = providerToken ?? cookieToken;
+      if (authToken) {
+        logNative(`直接同步认证 token, len=${authToken.length}`);
+        await NotifyPlugin.setCastgc({ castgc: authToken });
+        logNative("认证 token 同步完成");
       } else {
-        logNative("跳过 setCastgc: castgc 为空");
+        logNative("跳过认证 token 同步: token 为空");
       }
     } catch (e) {
-      logNative(`syncCastgcToNative 失败: ${(e as Error).message}`);
+      logNative(`sync auth token failed: ${(e as Error).message}`);
     }
   }
 
@@ -450,11 +459,11 @@ export default function DebugPage() {
                 <span className="font-mono text-xs">{diag.school.name} ({diag.school.nameEn})</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">{t("debug.schoolCasUrl")}</span>
+                <span className="text-muted-foreground">{diagnosticLabels.authSystem} URL</span>
                 <span className="font-mono text-xs break-all">{diag.school.cerBaseUrl}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">{t("debug.schoolJwxtUrl")}</span>
+                <span className="text-muted-foreground">{diagnosticLabels.academicSystem} URL</span>
                 <span className="font-mono text-xs break-all">{diag.school.jwxtBaseUrl}</span>
               </div>
               <div className="flex items-center justify-between">
@@ -494,8 +503,8 @@ export default function DebugPage() {
                 {statusBadge(diag.authStore.hasHydrated)}
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">{t("debug.jwxtSession")}</span>
-                {statusBadge(diag.authStore.jwxtSessionExists)}
+                <span className="text-muted-foreground">{diagnosticLabels.academicSession}</span>
+                {statusBadge(diag.authStore.academicSessionExists)}
               </div>
             </CardContent>
           </Card>
@@ -506,8 +515,8 @@ export default function DebugPage() {
             </CardHeader>
             <CardContent className="flex flex-col gap-1.5 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">{t("debug.castgc")}</span>
-                {statusBadge(diag.secureStorage.castgcExists)}
+                <span className="text-muted-foreground">{diagnosticLabels.authToken}</span>
+                {statusBadge(diag.secureStorage.authTokenExists)}
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">{t("debug.rememberMe")}</span>
@@ -522,11 +531,11 @@ export default function DebugPage() {
             </CardHeader>
             <CardContent className="flex flex-col gap-1.5 text-sm">
               {[
-                { label: t("debug.casAuth"), test: diag.apiTests.casAuth },
+                { label: diagnosticLabels.authSession, test: diag.apiTests.authSession },
                 { label: t("debug.studentInfo"), test: diag.apiTests.studentInfo },
                 { label: t("debug.schedule"), test: diag.apiTests.schedule },
                 { label: t("debug.currentWeek"), test: diag.apiTests.currentWeek },
-                { label: t("debug.mobileAuth"), test: diag.apiTests.mobileAuth },
+                { label: diagnosticLabels.mobileAuth, test: diag.apiTests.mobileAuth },
               ].map((item) => (
                 <div key={item.label} className="flex flex-col gap-0.5">
                   <div className="flex items-center justify-between">
@@ -545,15 +554,15 @@ export default function DebugPage() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">{t("debug.casJar")} ({diag.casJar.cookieCount})</CardTitle>
+              <CardTitle className="text-sm">{diagnosticLabels.authCookies} ({diag.authCookies.cookieCount})</CardTitle>
             </CardHeader>
             <CardContent>
               <ScrollArea className="h-32 rounded-md border bg-muted/30 p-2">
-                {diag.casJar.cookies.length === 0 ? (
+                {diag.authCookies.cookies.length === 0 ? (
                   <span className="text-xs text-muted-foreground">{t("debug.empty")}</span>
                 ) : (
                   <ul className="flex flex-col gap-1">
-                    {diag.casJar.cookies.map((c, i) => (
+                    {diag.authCookies.cookies.map((c, i) => (
                       <li key={i} className="text-xs font-mono">
                         {c.name} @ {c.domain}{c.path}
                       </li>
@@ -566,15 +575,15 @@ export default function DebugPage() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">{t("debug.jwxtJar")} ({diag.jwxtJar.cookieCount})</CardTitle>
+              <CardTitle className="text-sm">{diagnosticLabels.academicCookies} ({diag.academicCookies.cookieCount})</CardTitle>
             </CardHeader>
             <CardContent>
               <ScrollArea className="h-32 rounded-md border bg-muted/30 p-2">
-                {diag.jwxtJar.cookies.length === 0 ? (
+                {diag.academicCookies.cookies.length === 0 ? (
                   <span className="text-xs text-muted-foreground">{t("debug.empty")}</span>
                 ) : (
                   <ul className="flex flex-col gap-1">
-                    {diag.jwxtJar.cookies.map((c, i) => (
+                    {diag.academicCookies.cookies.map((c, i) => (
                       <li key={i} className="text-xs font-mono">
                         {c.name} @ {c.domain}{c.path}
                       </li>
@@ -647,9 +656,9 @@ export default function DebugPage() {
                   <Shield className="size-3.5 mr-1" />
                   请求权限
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleNativeSetCastgc}>
+                <Button variant="outline" size="sm" onClick={handleNativeSetAuthToken}>
                   <Send className="size-3.5 mr-1" />
-                  同步 CASTGC
+                  同步认证 token
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleNativeStartPolling}>
                   <Power className="size-3.5 mr-1" />
@@ -695,9 +704,9 @@ export default function DebugPage() {
               <Trash2 className="size-4 mr-2" />
               {t("debug.clearCache")}
             </Button>
-            <Button variant="outline" onClick={handleClearJWXTJar} className="w-full">
+            <Button variant="outline" onClick={handleClearAcademicSession} className="w-full">
               <Trash2 className="size-4 mr-2" />
-              {t("debug.clearJWXTJar")}
+              {t("debug.clearAcademicSession")}
             </Button>
           </div>
         </>

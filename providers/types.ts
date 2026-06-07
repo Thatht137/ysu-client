@@ -551,7 +551,19 @@ export interface ProviderDiagnosticCookie {
   value?: string;
 }
 
+export interface ProviderDiagnosticLabels {
+  authSystem: string;
+  academicSystem: string;
+  authToken: string;
+  authCookies: string;
+  academicCookies: string;
+  authSession: string;
+  academicSession: string;
+  mobileAuth: string;
+}
+
 export interface ProviderDiagnostics {
+  readonly labels: ProviderDiagnosticLabels;
   getAuthCookies(): Promise<ProviderDiagnosticCookie[]>;
   getAcademicCookies(): Promise<ProviderDiagnosticCookie[]>;
   getAuthCookieUrl?(): string;

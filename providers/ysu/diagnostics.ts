@@ -17,6 +17,16 @@ async function getJarCookies(
 }
 
 export const ysuDiagnostics: ProviderDiagnostics = {
+  labels: {
+    authSystem: "CAS",
+    academicSystem: "JWXT",
+    authToken: "CASTGC",
+    authCookies: "CAS Jar",
+    academicCookies: "JWXT Jar",
+    authSession: "CAS Auth",
+    academicSession: "JWXT Session",
+    mobileAuth: "Mobile Auth",
+  },
   getAuthCookies: () => getJarCookies(getCasJar),
   getAcademicCookies: () => getJarCookies(getJwxtJar),
   getAuthCookieUrl: () => casUrls.authLogin,
