@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/empty";
 import { useSettingsStore } from "@/lib/settings-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
-import { syncExamsToWidget } from "@/lib/widget-bridge";
+import { syncExamsToWidget } from "@/lib/native/widget-bridge";
 import { useExams } from "@/providers/hooks";
 import type { Exam } from "@/providers/types";
 import {

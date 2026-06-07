@@ -27,7 +27,7 @@ import { useMFAModalStore } from "@/lib/mfa-modal-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { getActiveProvider } from "@/providers/provider-service";
 import { useAuthStore } from "@/lib/auth-store";
-import { isTablet } from "@/lib/platform";
+import { isTablet } from "@/lib/native/platform";
 import { toast } from "sonner";
 
 const COUNTDOWN_SECONDS = 120;

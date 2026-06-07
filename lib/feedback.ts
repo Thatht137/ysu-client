@@ -1,5 +1,5 @@
 import { APP_VERSION } from "@/lib/version";
-import { isCapacitor } from "@/lib/platform";
+import { isCapacitor } from "@/lib/native/platform";
 import { useSettingsStore } from "@/lib/settings-store";
 
 const FEEDBACK_ENDPOINT = "https://ysu.welain.com/api/feedback";

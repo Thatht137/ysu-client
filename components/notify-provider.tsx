@@ -2,8 +2,8 @@
 
 import { useEffect } from "react";
 import { useAuthStore } from "@/lib/auth-store";
-import { startNotifyIfNeeded, stopNotify, syncServerConfigToNative } from "@/lib/notify";
-import { isCapacitor } from "@/lib/platform";
+import { startNotifyIfNeeded, stopNotify, syncServerConfigToNative } from "@/lib/native/notify";
+import { isCapacitor } from "@/lib/native/platform";
 
 /**
  * 启动成绩/考试通知轮询。

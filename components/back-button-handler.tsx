@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { App } from "@capacitor/app";
-import { isCapacitor } from "@/lib/platform";
+import { isCapacitor } from "@/lib/native/platform";
 
 /** Primary routes shown in the bottom navigation bar. */
 const PRIMARY_ROUTES = [

@@ -27,8 +27,8 @@ import {
   isCoursePast,
   periodIsInUse,
 } from "@/app/dashboard/schedule/schedule-utils";
-import { syncScheduleToWidget, syncExamsToWidget } from "@/lib/widget-bridge";
-import { syncClassAlarmsToNative } from "@/lib/notify";
+import { syncScheduleToWidget, syncExamsToWidget } from "@/lib/native/widget-bridge";
+import { syncClassAlarmsToNative } from "@/lib/native/notify";
 import type { Course, Exam } from "@/providers/types";
 import { Calendar, GraduationCap, BarChart3, Clock, BookOpen, Eye, EyeOff } from "lucide-react";
 

@@ -29,8 +29,8 @@ import { cn } from "@/lib/utils";
 import { isCourseActiveInWeek, periodIsInUse } from "./schedule-utils";
 import { ScheduleTablet } from "./schedule-tablet";
 import { ScheduleMobile } from "./schedule-mobile";
-import { syncScheduleToWidget } from "@/lib/widget-bridge";
-import { syncClassAlarmsToNative } from "@/lib/notify";
+import { syncScheduleToWidget } from "@/lib/native/widget-bridge";
+import { syncClassAlarmsToNative } from "@/lib/native/notify";
 import { useSettingsStore } from "@/lib/settings-store";
 
 export default function SchedulePage() {

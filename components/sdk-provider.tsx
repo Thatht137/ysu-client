@@ -8,8 +8,8 @@ import { useAuthStore } from "@/lib/auth-store";
 import { useSettingsStore } from "@/lib/settings-store";
 import { useUpdateStore } from "@/lib/update-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
-import { isCapacitor } from "@/lib/platform";
-import { initSafeArea } from "@/lib/webview-compat";
+import { isCapacitor } from "@/lib/native/platform";
+import { initSafeArea } from "@/lib/native/webview-compat";
 import { trackAppLaunch } from "@/lib/analytics";
 import { syncFeedbackReplies } from "@/lib/feedback-check";
 import { AnalyticsPrompt } from "@/components/analytics-prompt";
@@ -105,7 +105,7 @@ export function SDKProvider({ children }: { children: React.ReactNode }) {
 
         // Check WebView compatibility (Capacitor only)
         if (isCapacitor()) {
-          import("@/lib/webview-compat").then(({ checkWebViewCompat }) => {
+          import("@/lib/native/webview-compat").then(({ checkWebViewCompat }) => {
             checkWebViewCompat(localeRef.current);
           });
         }

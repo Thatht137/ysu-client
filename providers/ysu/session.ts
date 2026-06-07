@@ -27,8 +27,8 @@ import { useAuthStore } from "@/lib/auth-store";
 import { initServerConfig } from "@/lib/server-config";
 import { clearAllCache, cleanStaleCacheVersions } from "@/lib/cache";
 import { useRefreshStore } from "@/lib/refresh-store";
-import { isCapacitor } from "@/lib/platform";
-import { stopNotify } from "@/lib/notify";
+import { isCapacitor } from "@/lib/native/platform";
+import { stopNotify } from "@/lib/native/notify";
 import { removeCASTGC } from "@/lib/secure-storage";
 
 /** 从 auth-store 恢复 CAS 凭据、JWXT 会话和 mobile 会话到各自的 jar。 */

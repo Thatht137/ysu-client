@@ -6,12 +6,12 @@
  *
  * 上课提醒由 AlarmManager 在指定时间触发 ClassAlarmReceiver。
  */
-import { useSettingsStore } from "./settings-store";
+import { useSettingsStore } from "../settings-store";
 import { isCapacitor } from "./platform";
 import { NotifyPlugin } from "./notify-plugin";
-import { loadCASTGC } from "./secure-storage";
+import { loadCASTGC } from "../secure-storage";
 import { buildNativeServerConfig } from "./notify-config";
-import { casUrls } from "./server-config";
+import { casUrls } from "../server-config";
 import type { Course, CurrentWeek, ClassPeriod } from "@/providers/types";
 
 // ─── Config Sync ────────────────────────────────────────────────────────── //

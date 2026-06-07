@@ -1,4 +1,4 @@
-import { getSchoolConfig, serverConfig } from "./server-config";
+import { getSchoolConfig, serverConfig } from "../server-config";
 
 export interface NativeFieldMappings {
   grade: Record<string, string[]>;

@@ -23,14 +23,14 @@ import { useSettingsStore, type LandingPage } from "@/lib/settings-store";
 import { Input } from "@/components/ui/input";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { logoutActiveProvider, reloginActiveProvider } from "@/providers/provider-service";
-import { isCapacitor } from "@/lib/platform";
+import { isCapacitor } from "@/lib/native/platform";
 
-import { syncWidgetSettingsToWidget } from "@/lib/widget-bridge";
+import { syncWidgetSettingsToWidget } from "@/lib/native/widget-bridge";
 import { checkRateLimit, recordLoginAttempt } from "@/lib/rate-limit";
 import { useUpdateStore } from "@/lib/update-store";
 import { useTheme } from "next-themes";
-import { startNotifyIfNeeded, stopNativePolling, triggerNotifyCheck } from "@/lib/notify";
-import { NotifyPlugin } from "@/lib/notify-plugin";
+import { startNotifyIfNeeded, stopNativePolling, triggerNotifyCheck } from "@/lib/native/notify";
+import { NotifyPlugin } from "@/lib/native/notify-plugin";
 import {
   LayoutDashboard,
   Calendar,

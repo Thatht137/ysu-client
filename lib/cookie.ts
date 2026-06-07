@@ -318,7 +318,7 @@ export async function fetchWithJar(
   return followRedirects(jar, req);
 }
 
-import { isCapacitor } from './platform';
+import { isCapacitor } from './native/platform';
 
 // Cache Capacitor core module to avoid dynamic import overhead on every request.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
