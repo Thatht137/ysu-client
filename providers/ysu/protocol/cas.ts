@@ -500,8 +500,9 @@ export async function checkCaptchaNeeded(username: string): Promise<boolean> {
     });
     const data = JSON.parse(await resp.text()) as Record<string, unknown>;
     return Boolean(data['isNeed']);
-  } catch {
-    return false;
+  } catch (e) {
+    if (e instanceof CASError) throw e;
+    throw new CASProtocolError('Failed to check captcha requirement');
   }
 }
 

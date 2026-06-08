@@ -80,7 +80,9 @@ function mapJWXTError(e: unknown): ProviderError {
 async function withJWXT<T>(fn: () => Promise<T>): Promise<T> {
   try {
     const result = await fn();
-    persistJWXTSession().catch(() => {});
+    persistJWXTSession().catch((e) => {
+      console.warn("Failed to persist JWXT session", e);
+    });
     return result;
   } catch (e) {
     throw mapJWXTError(e);

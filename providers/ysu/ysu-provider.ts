@@ -583,12 +583,13 @@ export class YSUProvider extends BaseProvider {
 
   async getEvaluationTasks(options?: TermQueryOptions): Promise<EvaluationTask[]> {
     const types = await this.getEvaluationTypes(options);
-    const tasks: EvaluationTask[] = [];
-    for (const type of types) {
-      if (!type.code) continue;
-      tasks.push(...(await this.getPendingEvaluations(type.code, options)));
-    }
-    return tasks;
+    const typeCodes = types
+      .map((type) => type.code)
+      .filter((code): code is string => !!code);
+    const taskGroups = await Promise.all(
+      typeCodes.map((code) => this.getPendingEvaluations(code, options)),
+    );
+    return taskGroups.flat();
   }
 
   async getEvaluationDetail(query: EvaluationDetailQuery): Promise<EvaluationDetail> {

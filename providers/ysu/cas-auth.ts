@@ -90,8 +90,8 @@ export function resetLoginSession(): void {
 export async function checkCaptchaNeeded(username: string): Promise<boolean> {
   try {
     return await _checkCaptchaNeeded(username);
-  } catch {
-    return false;
+  } catch (e) {
+    throw mapCASError(e);
   }
 }
 
