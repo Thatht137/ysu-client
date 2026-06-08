@@ -161,7 +161,7 @@ if (stage) {
   }
 }
 const versionCode = major * 1_000_000 + minor * 10_000 + patch * 100 + stageCode;
-process.stdout.write(`${versionName} ${versionCode}`);
+console.log(`${versionName} ${versionCode}`);
 NODE
 )
 
