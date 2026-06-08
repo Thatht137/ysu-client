@@ -131,10 +131,14 @@ The release script (`scripts/release.sh`) auto-extracts `^\s*[-*]\s+` lines into
 
 ## Version Numbering
 
-- **Web version** (`package.json`): `major.minor.patch` (e.g. `0.7.4`)
-- **APK versionCode** (`android/app/build.gradle`): `major*10000 + minor*100 + patch` (e.g. `704`)
-- Both must stay in sync — bump them together before release
-- APK version and Web version are independant.
+- **Web version** (`package.json`): SemVer, including prerelease tags for preview channel releases (e.g. `1.0.0`, `1.0.0-rc.1`)
+- **APK versionName** (`android/app/build.gradle`): SemVer for native shell releases, independently versioned from Web resources (e.g. `1.5.0`, `1.5.0-rc.1`)
+- **APK versionCode**: `major*1000000 + minor*10000 + patch*100 + stageCode`
+  - stable: `stageCode = 99`
+  - alpha.N: `stageCode = N` (`1..19`)
+  - beta.N: `stageCode = 20 + N` (`21..49`)
+  - rc.N: `stageCode = 50 + N` (`51..98`)
+- Stable releases should update stable channel metadata; prerelease releases should update only `channels.prerelease` and use versioned OTA/APK asset paths.
 
 ## Release Checklist
 

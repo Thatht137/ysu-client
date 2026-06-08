@@ -122,14 +122,14 @@ function getWebDownloadUrl(
   return webDownloadUrl;
 }
 
-function getApkUrl(mirrorPrefix: string, githubUrl: string): string {
-  if (isOfficialSource(mirrorPrefix)) {
+function getApkUrl(mirrorPrefix: string, apkDownloadUrl: string): string {
+  if (isOfficialSource(mirrorPrefix) && apkDownloadUrl.startsWith("https://github.com/")) {
     return `${OFFICIAL_BASE}${APK_NAME}`;
   }
-  if (!mirrorPrefix) {
-    return githubUrl;
+  if (!mirrorPrefix || !apkDownloadUrl.startsWith("https://github.com/")) {
+    return apkDownloadUrl;
   }
-  return `${mirrorPrefix}${githubUrl}`;
+  return `${mirrorPrefix}${apkDownloadUrl}`;
 }
 
 function toTopLevelEntry(data: VersionManifest): VersionManifestEntry {

@@ -11,9 +11,39 @@ android {
         applicationId "com.youwenqwq.ysuclient"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionName "1.4.0"
-        def v = versionName.split('\\.')
-        versionCode v[0].toInteger() * 10000 + v[1].toInteger() * 100 + v[2].toInteger()
+        versionName "1.5.0-rc.1"
+        def versionMatcher = versionName =~ /^(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta|rc)\.(\d+))?$/
+        if (!versionMatcher.matches()) {
+            throw new GradleException("Invalid versionName: ${versionName}")
+        }
+        def major = versionMatcher[0][1].toInteger()
+        def minor = versionMatcher[0][2].toInteger()
+        def patch = versionMatcher[0][3].toInteger()
+        def prereleaseStage = versionMatcher[0][4]
+        def prereleaseNumber = versionMatcher[0][5] ? versionMatcher[0][5].toInteger() : 0
+        def stageCode = 99
+        if (prereleaseStage != null) {
+            if (prereleaseNumber < 1) {
+                throw new GradleException("Invalid prerelease number in versionName: ${versionName}")
+            }
+            if (prereleaseStage == "alpha") {
+                if (prereleaseNumber > 19) {
+                    throw new GradleException("alpha prerelease number must be 1..19: ${versionName}")
+                }
+                stageCode = prereleaseNumber
+            } else if (prereleaseStage == "beta") {
+                if (prereleaseNumber > 29) {
+                    throw new GradleException("beta prerelease number must be 1..29: ${versionName}")
+                }
+                stageCode = 20 + prereleaseNumber
+            } else if (prereleaseStage == "rc") {
+                if (prereleaseNumber > 48) {
+                    throw new GradleException("rc prerelease number must be 1..48: ${versionName}")
+                }
+                stageCode = 50 + prereleaseNumber
+            }
+        }
+        versionCode major * 1000000 + minor * 10000 + patch * 100 + stageCode
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
