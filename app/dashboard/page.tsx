@@ -105,7 +105,6 @@ export default function DashboardPage() {
     return examRows
       .filter((e) => !isExamCompleted(e))
       .sort(compareExamStartTime)
-      .slice(0, 3);
   }, [examRows]);
 
   const [nowMinutes, setNowMinutes] = useState(() => {
