@@ -1,9 +1,59 @@
-import type { AcademicCapabilities, AcademicProvider } from "./types";
+import type {
+  AcademicCapabilities,
+  AcademicCompletion,
+  AcademicProvider,
+  AcademicWarning,
+  AuthStatus,
+  ClassPeriod,
+  Course,
+  Credential,
+  CurrentWeek,
+  CurrentWeekQueryOptions,
+  EvaluationDetail,
+  EvaluationDetailQuery,
+  EvaluationScoreInput,
+  EvaluationSubmitInput,
+  EvaluationTask,
+  EvaluationType,
+  Exam,
+  ExamQueryOptions,
+  GPAQueryOptions,
+  GPAStats,
+  Grade,
+  GradeAnalyticsQueryOptions,
+  GradeDistribution,
+  GradeQueryOptions,
+  GradeRanking,
+  GradeRankingQueryOptions,
+  GradeStatistics,
+  LoginStep1Input,
+  LoginStep1Result,
+  MfaChallenge,
+  MfaRequestInput,
+  MfaSubmitInput,
+  PageQueryOptions,
+  ProviderDiagnostics,
+  ProviderMobile,
+  ProviderNativeNotification,
+  ScheduleQueryOptions,
+  StudentInfo,
+  TermCalendar,
+  TermCalendarQueryOptions,
+  TermQueryOptions,
+  TrainingPlan,
+  UnscheduledCourseQueryOptions,
+  WechatMfaContext,
+  WechatQrPollResult,
+} from "./types";
 
 export abstract class BaseProvider implements AcademicProvider {
   abstract readonly id: string;
   abstract readonly name: string;
   abstract readonly capabilities: AcademicCapabilities;
+
+  readonly mobile?: ProviderMobile = undefined;
+  readonly diagnostics?: ProviderDiagnostics = undefined;
+  readonly nativeNotification?: ProviderNativeNotification = undefined;
 
   private initialized = false;
 
@@ -26,36 +76,39 @@ export abstract class BaseProvider implements AcademicProvider {
   abstract resetLoginSession(): Promise<void> | void;
   abstract getCaptchaUrl(): string | null;
   abstract checkCaptchaNeeded(username: string): Promise<boolean>;
-  abstract login(credential: import("./types").Credential): Promise<void>;
-  abstract loginStep1(input: import("./types").LoginStep1Input): Promise<import("./types").LoginStep1Result>;
-  abstract requestMfaCode(input: import("./types").MfaRequestInput): Promise<import("./types").MfaChallenge>;
-  abstract submitMfaCode(input: import("./types").MfaSubmitInput): Promise<string>;
-  abstract initiateWechatMfa(): Promise<import("./types").WechatMfaContext>;
-  abstract pollWechatMfaQr(uuid: string, lastErrcode?: number): Promise<import("./types").WechatQrPollResult>;
+  abstract login(credential: Credential): Promise<void>;
+  abstract loginStep1(input: LoginStep1Input): Promise<LoginStep1Result>;
+  abstract requestMfaCode(input: MfaRequestInput): Promise<MfaChallenge>;
+  abstract submitMfaCode(input: MfaSubmitInput): Promise<string>;
+  abstract initiateWechatMfa(): Promise<WechatMfaContext>;
+  abstract pollWechatMfaQr(uuid: string, lastErrcode?: number): Promise<WechatQrPollResult>;
   abstract completeWechatMfa(code: string, state: string): Promise<string>;
-  abstract checkAuthStatus(): Promise<import("./types").AuthStatus>;
+  abstract checkAuthStatus(): Promise<AuthStatus>;
   abstract logout(): Promise<void>;
   abstract isAuthenticated(): boolean;
-  abstract getStudentInfo(): Promise<import("./types").StudentInfo>;
-  abstract getGrades(options?: import("./types").GradeQueryOptions): Promise<import("./types").Grade[]>;
-  abstract getGPAStats(options?: import("./types").GPAQueryOptions): Promise<import("./types").GPAStats>;
-  abstract getGradeStatistics(options?: import("./types").GradeAnalyticsQueryOptions): Promise<import("./types").GradeStatistics>;
-  abstract getGradeDistribution(options?: import("./types").GradeAnalyticsQueryOptions): Promise<import("./types").GradeDistribution[]>;
-  abstract getGradeRanking(options?: import("./types").GradeRankingQueryOptions): Promise<import("./types").GradeRanking>;
-  abstract getSchedule(options?: import("./types").ScheduleQueryOptions): Promise<import("./types").Course[]>;
-  abstract getUnscheduledCourses(options?: import("./types").UnscheduledCourseQueryOptions): Promise<import("./types").Course[]>;
-  abstract getClassPeriods(): Promise<import("./types").ClassPeriod[]>;
-  abstract getTermCalendar(options?: import("./types").TermCalendarQueryOptions): Promise<import("./types").TermCalendar>;
-  abstract getCurrentWeek(options?: import("./types").CurrentWeekQueryOptions): Promise<import("./types").CurrentWeek>;
-  abstract getCurrentWeekNumber(options?: import("./types").CurrentWeekQueryOptions): Promise<number>;
-  abstract getExams(options?: import("./types").ExamQueryOptions): Promise<import("./types").Exam[]>;
-  abstract getTrainingPlan(options?: import("./types").PageQueryOptions): Promise<import("./types").TrainingPlan[]>;
-  abstract getAcademicCompletion(): Promise<import("./types").AcademicCompletion>;
-  abstract getAcademicWarnings(): Promise<import("./types").AcademicWarning[]>;
-  abstract getEvaluationTypes(options?: import("./types").TermQueryOptions): Promise<import("./types").EvaluationType[]>;
-  abstract getPendingEvaluations(evalType: string, options?: import("./types").TermQueryOptions): Promise<import("./types").EvaluationTask[]>;
-  abstract getEvaluationTasks(options?: import("./types").TermQueryOptions): Promise<import("./types").EvaluationTask[]>;
-  abstract getEvaluationDetail(query: import("./types").EvaluationDetailQuery): Promise<import("./types").EvaluationDetail>;
-  abstract calculateEvaluationScore(input: import("./types").EvaluationScoreInput): Promise<Record<string, unknown>>;
-  abstract submitEvaluation(input: import("./types").EvaluationSubmitInput): Promise<void>;
+  abstract getStudentInfo(): Promise<StudentInfo>;
+  abstract getGrades(options?: GradeQueryOptions): Promise<Grade[]>;
+  abstract getGPAStats(options?: GPAQueryOptions): Promise<GPAStats>;
+  abstract getGradeStatistics(options?: GradeAnalyticsQueryOptions): Promise<GradeStatistics>;
+  abstract getGradeDistribution(options?: GradeAnalyticsQueryOptions): Promise<GradeDistribution[]>;
+  abstract getGradeRanking(options?: GradeRankingQueryOptions): Promise<GradeRanking>;
+  abstract getSchedule(options?: ScheduleQueryOptions): Promise<Course[]>;
+  abstract getUnscheduledCourses(options?: UnscheduledCourseQueryOptions): Promise<Course[]>;
+  abstract getClassPeriods(): Promise<ClassPeriod[]>;
+  abstract getTermCalendar(options?: TermCalendarQueryOptions): Promise<TermCalendar>;
+  abstract getCurrentWeek(options?: CurrentWeekQueryOptions): Promise<CurrentWeek>;
+  abstract getCurrentWeekNumber(options?: CurrentWeekQueryOptions): Promise<number>;
+  abstract getExams(options?: ExamQueryOptions): Promise<Exam[]>;
+  abstract getTrainingPlan(options?: PageQueryOptions): Promise<TrainingPlan[]>;
+  abstract getAcademicCompletion(): Promise<AcademicCompletion>;
+  abstract getAcademicWarnings(): Promise<AcademicWarning[]>;
+  abstract getEvaluationTypes(options?: TermQueryOptions): Promise<EvaluationType[]>;
+  abstract getPendingEvaluations(
+    evalType: string,
+    options?: TermQueryOptions,
+  ): Promise<EvaluationTask[]>;
+  abstract getEvaluationTasks(options?: TermQueryOptions): Promise<EvaluationTask[]>;
+  abstract getEvaluationDetail(query: EvaluationDetailQuery): Promise<EvaluationDetail>;
+  abstract calculateEvaluationScore(input: EvaluationScoreInput): Promise<Record<string, unknown>>;
+  abstract submitEvaluation(input: EvaluationSubmitInput): Promise<void>;
 }
