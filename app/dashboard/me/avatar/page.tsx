@@ -5,11 +5,11 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useSettingsStore } from "@/lib/settings-store";
+import { useSettingsStore } from "@/lib/stores/settings";
 import { useTranslation } from "@/lib/i18n/use-translation";
-import { saveAvatarImage, removeAvatarImage } from "@/lib/avatar-storage";
+import { saveAvatarImage, removeAvatarImage } from "@/lib/storage/avatar";
 import { ImagePlus, Trash2 } from "lucide-react";
-import { useAuthStore } from "@/lib/auth-store";
+import { useAuthStore } from "@/lib/stores/auth";
 
 export default function AvatarSettingsPage() {
   const { t } = useTranslation();

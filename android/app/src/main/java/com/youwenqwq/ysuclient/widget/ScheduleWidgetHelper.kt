@@ -3,6 +3,7 @@ package com.youwenqwq.ysuclient.widget
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import android.graphics.Paint
 import android.widget.RemoteViews
 import com.youwenqwq.ysuclient.R
 import com.youwenqwq.ysuclient.cache.UnifiedCache
@@ -43,13 +44,14 @@ class ScheduleWidgetHelper(private val context: Context) {
         val syncInfo = loadSyncInfo()
         val todayCourses = filterTodayCourses(courses)
         val hasCoursesToday = todayCourses.isNotEmpty()
+        val remainingTodayCourses = getRemainingCourses(todayCourses)
 
         val showNextDay = loadShowNextDaySchedule()
         var remainingCourses: List<WidgetCourse>
         var targetDay: Calendar? = null
 
-        if (hasCoursesToday) {
-            remainingCourses = getRemainingCourses(todayCourses)
+        if (remainingTodayCourses.isNotEmpty()) {
+            remainingCourses = remainingTodayCourses
         } else if (showNextDay) {
             val nextDay = findNextDayWithCourses(courses)
             if (nextDay != null) {
@@ -64,12 +66,16 @@ class ScheduleWidgetHelper(private val context: Context) {
 
         val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
         val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
+        val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
 
         // Choose layout based on width: <180dp is small, >=180dp is medium
         val isSmall = minWidth < 180
 
         val views = if (isSmall) {
             buildSmallWidget(remainingCourses, weekInfo, hasCoursesToday, hasSynced, syncInfo, targetDay)
+        } else if (shouldPreferSingleColumn(remainingCourses, minWidth)) {
+            val courseLimit = if (minHeight >= 180) 4 else 2
+            buildSingleColumnMediumWidget(remainingCourses, weekInfo, hasCoursesToday, hasSynced, syncInfo, targetDay, courseLimit)
         } else {
             buildMediumWidget(remainingCourses, weekInfo, hasCoursesToday, hasSynced, syncInfo, targetDay)
         }
@@ -161,7 +167,51 @@ class ScheduleWidgetHelper(private val context: Context) {
         targetDay: Calendar? = null
     ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.schedule_widget_medium)
+        bindMediumHeaderAndState(views, remainingCourses, weekInfo, hasCoursesToday, hasSynced, syncInfo, targetDay)
 
+        if (remainingCourses.isNotEmpty()) {
+            val displayCourses = remainingCourses.take(4)
+            bindCourseItem(views, displayCourses.getOrNull(0), R.id.widget_course_1_container, R.id.widget_course_1_color_bar, R.id.widget_course_1_name, R.id.widget_course_1_detail)
+            bindCourseItem(views, displayCourses.getOrNull(1), R.id.widget_course_2_container, R.id.widget_course_2_color_bar, R.id.widget_course_2_name, R.id.widget_course_2_detail)
+            bindCourseItem(views, displayCourses.getOrNull(2), R.id.widget_course_3_container, R.id.widget_course_3_color_bar, R.id.widget_course_3_name, R.id.widget_course_3_detail)
+            bindCourseItem(views, displayCourses.getOrNull(3), R.id.widget_course_4_container, R.id.widget_course_4_color_bar, R.id.widget_course_4_name, R.id.widget_course_4_detail)
+        }
+
+        return views
+    }
+
+    private fun buildSingleColumnMediumWidget(
+        remainingCourses: List<WidgetCourse>,
+        weekInfo: WidgetWeekInfo?,
+        hasCoursesToday: Boolean,
+        hasSynced: Boolean,
+        syncInfo: SyncInfo,
+        targetDay: Calendar? = null,
+        courseLimit: Int = 4,
+    ): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.schedule_widget_single_column)
+        bindMediumHeaderAndState(views, remainingCourses, weekInfo, hasCoursesToday, hasSynced, syncInfo, targetDay)
+
+        if (remainingCourses.isNotEmpty()) {
+            val displayCourses = remainingCourses.take(courseLimit)
+            bindCourseItem(views, displayCourses.getOrNull(0), R.id.widget_course_1_container, R.id.widget_course_1_color_bar, R.id.widget_course_1_name, R.id.widget_course_1_detail)
+            bindCourseItem(views, displayCourses.getOrNull(1), R.id.widget_course_2_container, R.id.widget_course_2_color_bar, R.id.widget_course_2_name, R.id.widget_course_2_detail)
+            bindCourseItem(views, displayCourses.getOrNull(2), R.id.widget_course_3_container, R.id.widget_course_3_color_bar, R.id.widget_course_3_name, R.id.widget_course_3_detail)
+            bindCourseItem(views, displayCourses.getOrNull(3), R.id.widget_course_4_container, R.id.widget_course_4_color_bar, R.id.widget_course_4_name, R.id.widget_course_4_detail)
+        }
+
+        return views
+    }
+
+    private fun bindMediumHeaderAndState(
+        views: RemoteViews,
+        remainingCourses: List<WidgetCourse>,
+        weekInfo: WidgetWeekInfo?,
+        hasCoursesToday: Boolean,
+        hasSynced: Boolean,
+        syncInfo: SyncInfo,
+        targetDay: Calendar? = null
+    ) {
         val calendar = targetDay ?: Calendar.getInstance()
         val month = calendar.get(Calendar.MONTH) + 1
         val day = calendar.get(Calendar.DAY_OF_MONTH)
@@ -203,15 +253,43 @@ class ScheduleWidgetHelper(private val context: Context) {
                 context.getString(R.string.widget_remaining_courses, remainingCourses.size)
             }
             views.setTextViewText(R.id.widget_header_remaining, remainingText)
+        }
+    }
 
-            val displayCourses = remainingCourses.take(4)
-            bindCourseItem(views, displayCourses.getOrNull(0), R.id.widget_course_1_container, R.id.widget_course_1_color_bar, R.id.widget_course_1_name, R.id.widget_course_1_detail)
-            bindCourseItem(views, displayCourses.getOrNull(1), R.id.widget_course_2_container, R.id.widget_course_2_color_bar, R.id.widget_course_2_name, R.id.widget_course_2_detail)
-            bindCourseItem(views, displayCourses.getOrNull(2), R.id.widget_course_3_container, R.id.widget_course_3_color_bar, R.id.widget_course_3_name, R.id.widget_course_3_detail)
-            bindCourseItem(views, displayCourses.getOrNull(3), R.id.widget_course_4_container, R.id.widget_course_4_color_bar, R.id.widget_course_4_name, R.id.widget_course_4_detail)
+    private fun shouldPreferSingleColumn(courses: List<WidgetCourse>, minWidthDp: Int): Boolean {
+        if (courses.size <= 1) return false
+
+        val twoColumnTextWidthDp = ((minWidthDp - 30) / 2f) - 27f
+        if (twoColumnTextWidthDp <= 0f) return true
+
+        val density = context.resources.displayMetrics.density
+        val textWidthPx = twoColumnTextWidthDp * density
+        val namePaint = Paint().apply {
+            isFakeBoldText = true
+            textSize = 13f * context.resources.displayMetrics.density * context.resources.configuration.fontScale
+        }
+        val detailPaint = Paint().apply {
+            textSize = 11f * context.resources.displayMetrics.density * context.resources.configuration.fontScale
         }
 
-        return views
+        return courses.take(4).any { course ->
+            namePaint.measureText(course.name) > textWidthPx ||
+                detailPaint.measureText(buildCourseDetailText(course)) > textWidthPx
+        }
+    }
+
+    private fun buildCourseDetailText(course: WidgetCourse): String {
+        val timeText = if (!course.startTime.isNullOrEmpty() && !course.endTime.isNullOrEmpty()) {
+            "${course.startTime} - ${course.endTime}"
+        } else {
+            context.getString(R.string.widget_section_format, course.startSection, course.endSection)
+        }
+
+        return if (!course.classroom.isNullOrEmpty()) {
+            "$timeText  ${course.classroom}"
+        } else {
+            timeText
+        }
     }
 
     private fun bindCourseItem(
@@ -230,18 +308,7 @@ class ScheduleWidgetHelper(private val context: Context) {
         views.setViewVisibility(containerId, android.view.View.VISIBLE)
         views.setTextViewText(nameId, course.name)
 
-        val timeText = if (!course.startTime.isNullOrEmpty() && !course.endTime.isNullOrEmpty()) {
-            "${course.startTime} - ${course.endTime}"
-        } else {
-            context.getString(R.string.widget_section_format, course.startSection, course.endSection)
-        }
-
-        val detailText = if (!course.classroom.isNullOrEmpty()) {
-            "$timeText  ${course.classroom}"
-        } else {
-            timeText
-        }
-        views.setTextViewText(detailId, detailText)
+        views.setTextViewText(detailId, buildCourseDetailText(course))
 
         val color = WidgetConfig.getCourseColor(course.name)
         views.setInt(colorBarId, "setBackgroundColor", color)

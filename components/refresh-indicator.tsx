@@ -1,7 +1,7 @@
 "use client";
 
 import { Spinner } from "@/components/ui/spinner";
-import { useRefreshStore } from "@/lib/refresh-store";
+import { useRefreshStore } from "@/lib/stores/refresh";
 import { cn } from "@/lib/utils";
 
 export function RefreshIndicator({ className }: { className?: string }) {

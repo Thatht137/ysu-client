@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
-import { useAuthStore } from "@/lib/auth-store";
-import { startNotifyIfNeeded, stopNotify, syncServerConfigToNative } from "@/lib/notify";
-import { isCapacitor } from "@/lib/platform";
+import { useAuthStore } from "@/lib/stores/auth";
+import { startNotifyIfNeeded, stopNotify } from "@/lib/native/notify";
+import { isCapacitor } from "@/lib/native/platform";
+import { useProvider } from "@/providers/use-provider";
 
 /**
  * 启动成绩/考试通知轮询。
@@ -11,15 +12,16 @@ import { isCapacitor } from "@/lib/platform";
  */
 export function NotifyProvider() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const provider = useProvider();
+  const nativeNotification = provider.nativeNotification;
 
   useEffect(() => {
-    if (!isCapacitor() || !isAuthenticated) return;
-    syncServerConfigToNative().catch(() => {});
-    startNotifyIfNeeded();
+    if (!isCapacitor() || !isAuthenticated || !nativeNotification) return;
+    startNotifyIfNeeded(nativeNotification, provider.id);
     return () => {
       stopNotify();
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, nativeNotification, provider.id]);
 
   return null;
 }

@@ -13,7 +13,6 @@ import androidx.work.WorkerParameters
 import com.youwenqwq.ysuclient.MainActivity
 import com.youwenqwq.ysuclient.R
 import com.youwenqwq.ysuclient.cache.UnifiedCache
-import org.json.JSONArray
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -36,6 +35,7 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         const val CHANNEL_ID = "ysu_notify_channel"
         const val NOTIFICATION_ID_BASE = 1000
         private const val MAX_CONSECUTIVE_FAILURES = 3
+        private const val MAX_INDIVIDUAL_CHANGE_NOTIFICATIONS = 5
         private const val KEY_CONSECUTIVE_FAILURES = "notify_consecutive_failures"
 
         private val nextNotificationId = AtomicInteger(NOTIFICATION_ID_BASE)
@@ -68,8 +68,10 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 return Result.success()
             }
 
-            // 1. 建立 JWXT 会话
-            val sessionOk = NotifyHelper.establishSession(ctx, castgc)
+            val nativeProvider = NativeAcademicProviders.active(ctx) ?: return Result.success()
+
+            // 1. 建立 provider 原生会话
+            val sessionOk = nativeProvider.establishSession(ctx, castgc)
             if (!sessionOk) {
                 Log.w(TAG, "Failed to establish JWXT session, CASTGC expired")
                 NotifyHelper.setSessionExpired(ctx, true)
@@ -78,29 +80,45 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 return Result.success()
             }
 
+            NotifyHelper.ensureBaselineIdentity(ctx)
+
             var hasChanges = false
 
             // 2. 检查成绩
             if (checkGrades) {
                 try {
-                    val newGrades = NotifyHelper.fetchGrades(ctx)
-                    val cachedGrades = NotifyHelper.getCachedGrades(ctx)
-                    val diff = NotifyHelper.diffGrades(cachedGrades, newGrades)
+                    val gradeResult = nativeProvider.fetchGrades(ctx)
+                    if (gradeResult is FetchResult.Failure) {
+                        if (gradeResult.error is IOException) throw gradeResult.error
+                        Log.w(TAG, "Skipping grade cache update: ${gradeResult.message ?: "fetch failed"}", gradeResult.error)
+                    } else if (gradeResult is FetchResult.Success) {
+                        val newGrades = gradeResult.items
+                        if (!NotifyHelper.isGradesBaselineInitialized(ctx)) {
+                            NotifyHelper.saveCachedGrades(ctx, newGrades)
+                            NotifyHelper.setGradesBaselineInitialized(ctx, true)
+                            Log.d(TAG, "Grades baseline initialized: new=${newGrades.size}")
+                        } else {
+                            val cachedGrades = NotifyHelper.getCachedGrades(ctx)
+                            val diff = NotifyHelper.diffGrades(cachedGrades, newGrades)
 
-                    Log.d(TAG, "Grades: cached=${cachedGrades.size}, new=${newGrades.size}, diff=${diff.size}")
+                            Log.d(TAG, "Grades: cached=${cachedGrades.size}, new=${newGrades.size}, diff=${diff.size}")
 
-                    if (diff.isNotEmpty()) {
-                        hasChanges = true
-                        for (grade in diff) {
-                            val courseName = grade.optString("course_name", ctx.getString(R.string.notify_fallback_course_name))
-                            val score = grade.optString("score", "")
-                            sendGradeNotification(ctx, courseName, score)
+                            if (diff.isNotEmpty()) {
+                                hasChanges = true
+                                if (shouldSendSummary(diff.size, newGrades.size)) {
+                                    sendGradeSummaryNotification(ctx, diff.size)
+                                } else {
+                                    for (grade in diff) {
+                                        val courseName = grade.optString("course_name", ctx.getString(R.string.notify_fallback_course_name))
+                                        val score = grade.optString("score", "")
+                                        sendGradeNotification(ctx, courseName, score)
+                                    }
+                                }
+                            }
+
+                            NotifyHelper.saveCachedGrades(ctx, newGrades)
                         }
                     }
-
-                    val arr = JSONArray()
-                    for (g in newGrades) arr.put(g)
-                    UnifiedCache.saveCachedGrades(ctx, arr)
                 } catch (e: IOException) {
                     throw e // Let outer handler deal with network errors
                 } catch (e: Exception) {
@@ -111,26 +129,39 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             // 3. 检查考试
             if (checkExams) {
                 try {
-                    val newExams = NotifyHelper.fetchExams(ctx)
-                    val cachedExams = NotifyHelper.getCachedExams(ctx)
-                    val diff = NotifyHelper.diffExams(cachedExams, newExams)
+                    val examResult = nativeProvider.fetchExams(ctx)
+                    if (examResult is FetchResult.Failure) {
+                        if (examResult.error is IOException) throw examResult.error
+                        Log.w(TAG, "Skipping exam cache update: ${examResult.message ?: "fetch failed"}", examResult.error)
+                    } else if (examResult is FetchResult.Success) {
+                        val newExams = examResult.items
+                        if (!NotifyHelper.isExamsBaselineInitialized(ctx)) {
+                            NotifyHelper.saveCachedExams(ctx, newExams)
+                            NotifyHelper.setExamsBaselineInitialized(ctx, true)
+                            Log.d(TAG, "Exams baseline initialized: new=${newExams.size}")
+                        } else {
+                            val cachedExams = NotifyHelper.getCachedExams(ctx)
+                            val diff = NotifyHelper.diffExams(cachedExams, newExams)
 
-                    Log.d(TAG, "Exams: cached=${cachedExams.size}, new=${newExams.size}, diff=${diff.size}")
+                            Log.d(TAG, "Exams: cached=${cachedExams.size}, new=${newExams.size}, diff=${diff.size}")
 
-                    if (diff.isNotEmpty()) {
-                        hasChanges = true
-                        for (exam in diff) {
-                            val name = exam.optString("name", ctx.getString(R.string.notify_fallback_exam_name))
-                            val date = exam.optString("exam_date", "")
-                            val time = exam.optString("exam_time", "")
-                            val location = exam.optString("exam_location", "")
-                            sendExamNotification(ctx, name, date, time, location)
+                            if (diff.isNotEmpty()) {
+                                hasChanges = true
+                                if (shouldSendSummary(diff.size, newExams.size)) {
+                                    sendExamSummaryNotification(ctx, diff.size)
+                                } else {
+                                    for (exam in diff) {
+                                        val name = exam.optString("name", ctx.getString(R.string.notify_fallback_exam_name))
+                                        val time = exam.optString("time_text", "")
+                                        val location = exam.optString("exam_location", "")
+                                        sendExamNotification(ctx, name, time, location)
+                                    }
+                                }
+                            }
+
+                            NotifyHelper.saveCachedExams(ctx, newExams)
                         }
                     }
-
-                    val arr = JSONArray()
-                    for (e in newExams) arr.put(e)
-                    UnifiedCache.saveCachedExams(ctx, arr)
                 } catch (e: IOException) {
                     throw e
                 } catch (e: Exception) {
@@ -195,6 +226,11 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         UnifiedCache.putInt(ctx, KEY_CONSECUTIVE_FAILURES, 0)
     }
 
+    private fun shouldSendSummary(diffCount: Int, newCount: Int): Boolean {
+        return diffCount > MAX_INDIVIDUAL_CHANGE_NOTIFICATIONS ||
+                (newCount > MAX_INDIVIDUAL_CHANGE_NOTIFICATIONS && diffCount == newCount)
+    }
+
     // ─── Notifications ─────────────────────────────────────────────────────
 
     private fun createNotificationChannel(ctx: Context) {
@@ -243,7 +279,7 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         nm.notify(id, notification)
     }
 
-    private fun sendExamNotification(ctx: Context, name: String, date: String, time: String, location: String) {
+    private fun sendExamNotification(ctx: Context, name: String, time: String, location: String) {
         createNotificationChannel(ctx)
         val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
@@ -269,6 +305,38 @@ class NotifyWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
         val id = nextNotificationId.getAndIncrement()
         nm.notify(id, notification)
+    }
+
+    private fun sendGradeSummaryNotification(ctx: Context, count: Int) {
+        createNotificationChannel(ctx)
+        val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val notification = NotificationCompat.Builder(ctx, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(ctx.getString(R.string.notify_grade_summary_title))
+            .setContentText(ctx.getString(R.string.notify_grade_summary_text, count))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(getOpenAppIntent(ctx))
+            .setAutoCancel(true)
+            .build()
+
+        nm.notify(NOTIFICATION_ID_BASE + 9996, notification)
+    }
+
+    private fun sendExamSummaryNotification(ctx: Context, count: Int) {
+        createNotificationChannel(ctx)
+        val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val notification = NotificationCompat.Builder(ctx, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(ctx.getString(R.string.notify_exam_summary_title))
+            .setContentText(ctx.getString(R.string.notify_exam_summary_text, count))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(getOpenAppIntent(ctx))
+            .setAutoCancel(true)
+            .build()
+
+        nm.notify(NOTIFICATION_ID_BASE + 9995, notification)
     }
 
     private fun sendSessionExpiredNotification(ctx: Context) {

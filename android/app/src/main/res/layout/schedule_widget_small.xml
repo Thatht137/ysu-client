@@ -62,7 +62,7 @@
 
                 <TextView
                     android:id="@+id/widget_single_course_name"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:textColor="@color/widget_text_primary"
                     android:textSize="11sp"
@@ -72,7 +72,7 @@
 
                 <TextView
                     android:id="@+id/widget_single_course_detail"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="1dp"
                     android:textColor="@color/widget_text_secondary"
@@ -117,7 +117,7 @@
 
                     <TextView
                         android:id="@+id/widget_course_1_name"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:textColor="@color/widget_text_primary"
                         android:textSize="11sp"
@@ -127,7 +127,7 @@
 
                     <TextView
                         android:id="@+id/widget_course_1_detail"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
                         android:textColor="@color/widget_text_secondary"
@@ -164,7 +164,7 @@
 
                     <TextView
                         android:id="@+id/widget_course_2_name"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:textColor="@color/widget_text_primary"
                         android:textSize="11sp"
@@ -174,7 +174,7 @@
 
                     <TextView
                         android:id="@+id/widget_course_2_detail"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
                         android:textColor="@color/widget_text_secondary"

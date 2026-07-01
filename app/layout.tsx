@@ -12,6 +12,7 @@ import { BackgroundImage } from "@/components/background-image"
 import { BackButtonHandler } from "@/components/back-button-handler"
 import { DeepLinkHandler } from "@/components/deep-link-handler"
 import { NotifyProvider } from "@/components/notify-provider"
+import { ProviderProvider } from "@/providers/provider-context"
 import { cn } from "@/lib/utils";
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' })
@@ -54,17 +55,19 @@ export default function RootLayout({
       <body>
         <I18nProvider>
           <ThemeProvider>
-            <SDKProvider>
-              <TooltipProvider>
-                <BackgroundImage />
-                <BackButtonHandler />
-                <DeepLinkHandler />
-                <NotifyProvider />
-                {children}
-                <Toaster />
-                <MFAModal />
-              </TooltipProvider>
-            </SDKProvider>
+            <ProviderProvider>
+              <SDKProvider>
+                <TooltipProvider>
+                  <BackgroundImage />
+                  <BackButtonHandler />
+                  <DeepLinkHandler />
+                  <NotifyProvider />
+                  {children}
+                  <Toaster />
+                  <MFAModal />
+                </TooltipProvider>
+              </SDKProvider>
+            </ProviderProvider>
           </ThemeProvider>
         </I18nProvider>
       </body>

@@ -23,12 +23,12 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from "@/components/ui/toggle-group";
-import { useMFAModalStore } from "@/lib/mfa-modal-store";
+import { useMFAModalStore } from "@/lib/stores/mfa-modal";
 import { useTranslation } from "@/lib/i18n/use-translation";
-import { requestMFACode } from "@/lib/api";
-import { initiateWechatMFA, pollWechatQR, completeWechatMFA } from "@/lib/cas";
-import { useAuthStore } from "@/lib/auth-store";
-import { isTablet } from "@/lib/platform";
+import { getActiveProvider } from "@/providers/provider-service";
+import type { YSUMfaMethod } from "@/providers/ysu";
+import { useAuthStore } from "@/lib/stores/auth";
+import { isTablet } from "@/lib/native/platform";
 import { toast } from "sonner";
 
 const COUNTDOWN_SECONDS = 120;
@@ -41,7 +41,7 @@ export function MFAModal() {
     useMFAModalStore();
   const showWechat = isTablet();
   const defaultMethod = showWechat ? "weixin" : "sms";
-  const [mfaMethod, setMfaMethod] = useState<"sms" | "cpdaily" | "weixin">(defaultMethod);
+  const [mfaMethod, setMfaMethod] = useState<YSUMfaMethod>(defaultMethod);
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [localHint, setLocalHint] = useState("");
@@ -95,13 +95,9 @@ export function MFAModal() {
     requestingRef.current = true;
     setLoading(true);
     try {
-      const method = mfaMethod as "sms" | "cpdaily";
-      const res = await requestMFACode(
-        { username, method },
-        undefined,
-      );
-      setLocalHint(res.mobile_hint);
-      setLocalMethodCode(res.method_code);
+      const res = await getActiveProvider().requestMfaCode({ username, method: mfaMethod });
+      setLocalHint(res.mobileHint);
+      setLocalMethodCode(res.methodCode);
       setCountdown(COUNTDOWN_SECONDS);
     } catch (err) {
       toast.error((err as Error).message || t("login.errorMfaRequestFailed"));
@@ -115,7 +111,7 @@ export function MFAModal() {
     e.preventDefault();
     if (!code || !localMethodCode || isWechat) return;
     submitMFA({
-      method: mfaMethod as "sms" | "cpdaily",
+      method: mfaMethod,
       methodCode: localMethodCode,
       code,
     });
@@ -136,7 +132,8 @@ export function MFAModal() {
     setWechatError('');
 
     try {
-      const ctx = await initiateWechatMFA();
+      const provider = getActiveProvider();
+      const ctx = await provider.initiateWechatMfa();
       wechatCtxRef.current = { uuid: ctx.uuid, state: ctx.state };
 
       // CAS's WeChat app only supports qrconnect (PC QR-scan login).
@@ -150,7 +147,7 @@ export function MFAModal() {
       while (pollingRef.current) {
         let result: { status: 'waiting' | 'scanned' | 'confirmed'; code?: string };
         try {
-          result = await pollWechatQR(ctx.uuid, lastErrcode);
+          result = await provider.pollWechatMfaQr(ctx.uuid, lastErrcode);
         } catch {
           // Poll request itself failed (network, timeout) — retry.
           continue;
@@ -161,9 +158,8 @@ export function MFAModal() {
           pollingRef.current = false;
 
           try {
-            const credential = await completeWechatMFA(result.code, ctx.state);
-            const json = credential.toJSON();
-            useAuthStore.getState().setCredential(json, username);
+            const credential = await provider.completeWechatMfa(result.code, ctx.state);
+            useAuthStore.getState().setCredential(credential, username);
             storeComplete();
           } catch (err) {
             setWechatStatus('error');
@@ -194,7 +190,7 @@ export function MFAModal() {
   function handleMethodChange(v: string) {
     if (!v) return;
     pollingRef.current = false;
-    setMfaMethod(v as "sms" | "cpdaily" | "weixin");
+    setMfaMethod(v as YSUMfaMethod);
     setLocalMethodCode('');
     setLocalHint('');
     setCountdown(0);

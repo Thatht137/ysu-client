@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { useMobileHeaderStore } from "@/lib/mobile-header-store";
-import { useSettingsStore } from "@/lib/settings-store";
+import { useMobileHeaderStore } from "@/lib/stores/mobile-header";
+import { useSettingsStore } from "@/lib/stores/settings";
 import { RefreshIndicator } from "@/components/refresh-indicator";
 import { StaleIndicator } from "@/components/stale-indicator";
 import { cn } from "@/lib/utils";

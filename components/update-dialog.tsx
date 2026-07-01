@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useTranslation } from "@/lib/i18n/use-translation";
-import { useUpdateStore } from "@/lib/update-store";
+import { useUpdateStore } from "@/lib/stores/update";
 import {
   downloadAndApply,
   applyAndRestart,

@@ -19,10 +19,11 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useAuthStore } from "@/lib/auth-store";
-import { useSettingsStore } from "@/lib/settings-store";
+import { useAuthStore } from "@/lib/stores/auth";
+import { useSettingsStore } from "@/lib/stores/settings";
 import { useTranslation } from "@/lib/i18n/use-translation";
-import { casUrls, getAvailableSchools, setSchoolConfig, getSchoolId } from "@/lib/server-config";
+import { getSchoolId, setSchoolConfig } from "@/lib/server-config";
+import { getSelectableSchools } from "@/providers/supported-schools";
 import {
   Select,
   SelectContent,
@@ -34,16 +35,10 @@ import {
   loadRememberedCredentials,
   saveRememberedCredentials,
   clearRememberedCredentials,
-} from "@/lib/secure-storage";
-import {
-  checkCaptchaNeeded,
-  loginStep1,
-  prepareLogin,
-  submitMFACode,
-} from "@/lib/api";
+} from "@/lib/storage/secure";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { useMFAModalStore } from "@/lib/mfa-modal-store";
-import { resetCAS } from "@/lib/cas";
+import { useMFAModalStore } from "@/lib/stores/mfa-modal";
+import { getActiveProvider, setActiveProviderSchool } from "@/providers/provider-service";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -51,7 +46,7 @@ export default function LoginPage() {
   const setSchoolId = useSettingsStore((s) => s.setSchoolId);
   const { t } = useTranslation();
 
-  const schools = getAvailableSchools();
+  const schools = getSelectableSchools();
   const [selectedSchool, setSelectedSchool] = useState(getSchoolId());
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -90,13 +85,13 @@ export default function LoginPage() {
     setSelectedSchool(schoolId);
     setSchoolId(schoolId);
     setSchoolConfig(schoolId);
+    setActiveProviderSchool(schoolId);
   }
 
   function showCaptcha() {
     setNeedsCaptcha(true);
-    setCaptchaUrl(
-      `${casUrls.captcha}?${Date.now()}`,
-    );
+    const captchaUrl = getActiveProvider().getCaptchaUrl();
+    setCaptchaUrl(captchaUrl ? `${captchaUrl}?${Date.now()}` : null);
   }
 
   async function syncRememberedLoginPreference() {
@@ -108,15 +103,16 @@ export default function LoginPage() {
   }
 
   async function prepareFreshLoginSession() {
-    resetCAS();
-    await prepareLogin();
+    const provider = getActiveProvider();
+    await provider.resetLoginSession();
+    await provider.prepareLogin();
   }
 
   async function handleCheckCaptcha() {
     if (!username) return;
     try {
       await prepareFreshLoginSession();
-      const captchaNeeded = await checkCaptchaNeeded(username);
+      const captchaNeeded = await getActiveProvider().checkCaptchaNeeded(username);
       if (captchaNeeded) {
         showCaptcha();
       } else {
@@ -136,11 +132,11 @@ export default function LoginPage() {
         await prepareFreshLoginSession();
       }
 
-      const res = await loginStep1({
+      const res = await getActiveProvider().loginStep1({
         username,
         password,
         captcha: needsCaptcha ? captcha : undefined,
-        skip_rate_limit: skipRateLimitCheck,
+        skipRateLimit: skipRateLimitCheck,
       });
 
       if (res.authenticated && res.credential) {
@@ -152,7 +148,7 @@ export default function LoginPage() {
         return;
       }
 
-      if (res.needs_mfa) {
+      if (res.needsMfa) {
         toast.info(t("login.mfaRequired"));
         const store = useMFAModalStore.getState();
         try {
@@ -164,15 +160,15 @@ export default function LoginPage() {
             router.replace(landing === "schedule" ? "/dashboard/schedule/" : "/dashboard");
             return;
           }
-          await submitMFACode(
-            {
+          await getActiveProvider().submitMfaCode({
+            challenge: {
               method: result.method,
-              method_code: result.methodCode,
+              methodCode: result.methodCode,
+              mobileHint: "",
               username,
-              code: result.code,
             },
-            res.credential ?? undefined,
-          );
+            code: result.code,
+          });
           await syncRememberedLoginPreference();
           toast.success(t("login.loginSuccess"));
           const landing = useSettingsStore.getState().defaultLandingPage;
@@ -291,9 +287,7 @@ export default function LoginPage() {
                     alt="captcha"
                     className="rounded-md border cursor-pointer transition-opacity hover:opacity-80"
                     onClick={() =>
-                      setCaptchaUrl(
-                        `${casUrls.captcha}?${Date.now()}`,
-                      )
+                      showCaptcha()
                     }
                   />
                   <Input

@@ -79,7 +79,7 @@
 
                         <TextView
                             android:id="@+id/widget_course_1_name"
-                            android:layout_width="wrap_content"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:textColor="@color/widget_text_primary"
                             android:textSize="13sp"
@@ -89,7 +89,7 @@
 
                         <TextView
                             android:id="@+id/widget_course_1_detail"
-                            android:layout_width="wrap_content"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
                             android:textColor="@color/widget_text_secondary"
@@ -126,7 +126,7 @@
 
                         <TextView
                             android:id="@+id/widget_course_2_name"
-                            android:layout_width="wrap_content"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:textColor="@color/widget_text_primary"
                             android:textSize="13sp"
@@ -136,7 +136,7 @@
 
                         <TextView
                             android:id="@+id/widget_course_2_detail"
-                            android:layout_width="wrap_content"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
                             android:textColor="@color/widget_text_secondary"
@@ -181,7 +181,7 @@
 
                         <TextView
                             android:id="@+id/widget_course_3_name"
-                            android:layout_width="wrap_content"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:textColor="@color/widget_text_primary"
                             android:textSize="13sp"
@@ -191,7 +191,7 @@
 
                         <TextView
                             android:id="@+id/widget_course_3_detail"
-                            android:layout_width="wrap_content"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
                             android:textColor="@color/widget_text_secondary"
@@ -228,7 +228,7 @@
 
                         <TextView
                             android:id="@+id/widget_course_4_name"
-                            android:layout_width="wrap_content"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:textColor="@color/widget_text_primary"
                             android:textSize="13sp"
@@ -238,7 +238,7 @@
 
                         <TextView
                             android:id="@+id/widget_course_4_detail"
-                            android:layout_width="wrap_content"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
                             android:textColor="@color/widget_text_secondary"

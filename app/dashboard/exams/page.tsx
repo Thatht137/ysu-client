@@ -20,12 +20,11 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { useAuthStore } from "@/lib/auth-store";
-import { useSettingsStore } from "@/lib/settings-store";
+import { useSettingsStore } from "@/lib/stores/settings";
 import { useTranslation } from "@/lib/i18n/use-translation";
-import { getExams } from "@/lib/api";
-import { syncExamsToWidget } from "@/lib/widget-bridge";
-import type { Exam } from "@/lib/types";
+import { compareExamStartTime, formatExamTime, isExamCompleted } from "@/lib/academic/exam-utils";
+import { syncExamsToWidget } from "@/lib/native/widget-bridge";
+import { useExams } from "@/providers/hooks";
 import {
   CalendarOff,
   CheckCircle2,
@@ -34,79 +33,36 @@ import {
   Search,
 } from "lucide-react";
 
-function getExamEndTime(exam: Exam): Date | null {
-  if (!exam.exam_date) return null;
-  const base = new Date(exam.exam_date.replace(/-/g, "/"));
-  if (Number.isNaN(base.getTime())) return null;
-
-  if (exam.exam_time) {
-    const times = exam.exam_time.match(/\d{1,2}:\d{2}/g);
-    if (times && times.length >= 2) {
-      const [h, m] = times[times.length - 1].split(":").map(Number);
-      base.setHours(h, m, 0, 0);
-      return base;
-    } else if (times && times.length === 1) {
-      const [h, m] = times[0].split(":").map(Number);
-      base.setHours(h, m, 0, 0);
-      return base;
-    }
-  }
-  base.setHours(23, 59, 59, 999);
-  return base;
-}
-
-function isExamCompleted(exam: Exam): boolean {
-  const end = getExamEndTime(exam);
-  if (!end) return false;
-  return end < new Date();
-}
-
 export default function ExamsPage() {
-  const credential = useAuthStore((s) => s.credential);
   const { t } = useTranslation();
-  const [exams, setExams] = useState<Exam[]>([]);
-  const [loading, setLoading] = useState(true);
   const [term, setTerm] = useState("");
+  const [queriedTerm, setQueriedTerm] = useState("");
   const widgetSyncReminderHours = useSettingsStore((s) => s.widgetSyncReminderHours);
+  const examsQuery = useExams({ semester: queriedTerm || undefined });
+  const exams = examsQuery.data ?? [];
+  const loading = examsQuery.isLoading || examsQuery.isValidating;
 
   useEffect(() => {
-    if (!credential) return;
-    async function load() {
-      try {
-        const e = await getExams(credential!);
-        setExams(e);
-        syncExamsToWidget(e, widgetSyncReminderHours).catch(() => {});
-      } catch (err) {
-        toast.error((err as Error).message || t("app.updating"));
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, [credential, t, widgetSyncReminderHours]);
+    if (!examsQuery.data) return;
+    syncExamsToWidget(examsQuery.data, widgetSyncReminderHours).catch(() => {});
+  }, [examsQuery.data, widgetSyncReminderHours]);
+
+  useEffect(() => {
+    if (!examsQuery.error) return;
+    toast.error(examsQuery.error.message || t("app.updating"));
+  }, [examsQuery.error, t]);
 
   async function handleQuery() {
-    if (!credential) return;
-    setLoading(true);
-    try {
-      const e = await getExams(credential, term || undefined);
-      setExams(e);
-      syncExamsToWidget(e, widgetSyncReminderHours).catch(() => {});
-    } catch (err) {
-      toast.error((err as Error).message || t("app.updating"));
-    } finally {
-      setLoading(false);
+    const nextTerm = term.trim();
+    if (nextTerm === queriedTerm) {
+      await examsQuery.mutate();
+      return;
     }
+    setQueriedTerm(nextTerm);
   }
 
-  function compareExamDate(a: Exam, b: Exam) {
-    const da = a.exam_date ? new Date(a.exam_date.replace(/-/g, "/")).getTime() : 0;
-    const db = b.exam_date ? new Date(b.exam_date.replace(/-/g, "/")).getTime() : 0;
-    return da - db;
-  }
-
-  const upcomingExams = exams.filter((e) => !isExamCompleted(e)).sort(compareExamDate);
-  const completedExams = exams.filter((e) => isExamCompleted(e)).sort(compareExamDate);
+  const upcomingExams = exams.filter((e) => !isExamCompleted(e)).sort(compareExamStartTime);
+  const completedExams = exams.filter((e) => isExamCompleted(e)).sort(compareExamStartTime);
 
   if (loading && exams.length === 0) {
     return (
@@ -172,19 +128,19 @@ export default function ExamsPage() {
                       <CardTitle className="text-base">{exam.name}</CardTitle>
                       <Badge variant="default">{t("exams.upcomingExams")}</Badge>
                     </div>
-                    <CardDescription>{exam.exam_name}</CardDescription>
+                    <CardDescription>{exam.examName}</CardDescription>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-2 text-sm">
                     <div className="flex items-center gap-2">
                       <Clock className="size-4 text-muted-foreground" />
-                      <span>{exam.exam_time}</span>
+                      <span>{formatExamTime(exam)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <MapPin className="size-4 text-muted-foreground" />
-                      <span>{exam.exam_location}</span>
+                      <span>{exam.examLocation}</span>
                     </div>
-                    {exam.seat_number && (
-                      <Badge variant="outline">{t("exams.seatNumber")}: {exam.seat_number}</Badge>
+                    {exam.seatNumber && (
+                      <Badge variant="outline">{t("exams.seatNumber")}: {exam.seatNumber}</Badge>
                     )}
                   </CardContent>
                 </Card>
@@ -206,19 +162,19 @@ export default function ExamsPage() {
                           {t("exams.completed")}
                         </Badge>
                       </div>
-                      <CardDescription>{exam.exam_name}</CardDescription>
+                      <CardDescription>{exam.examName}</CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-col gap-2 text-sm">
                       <div className="flex items-center gap-2">
                         <Clock className="size-4 text-muted-foreground" />
-                        <span>{exam.exam_time}</span>
+                        <span>{formatExamTime(exam)}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <MapPin className="size-4 text-muted-foreground" />
-                        <span>{exam.exam_location}</span>
+                        <span>{exam.examLocation}</span>
                       </div>
-                      {exam.seat_number && (
-                        <Badge variant="outline">{t("exams.seatNumber")}: {exam.seat_number}</Badge>
+                      {exam.seatNumber && (
+                        <Badge variant="outline">{t("exams.seatNumber")}: {exam.seatNumber}</Badge>
                       )}
                     </CardContent>
                   </Card>

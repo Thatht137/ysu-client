@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useSettingsStore } from "@/lib/settings-store";
+import { useSettingsStore } from "@/lib/stores/settings";
 
 export function BackgroundImage() {
   const backgroundImage = useSettingsStore((s) => s.backgroundImage);

@@ -33,6 +33,10 @@
     <string name="notify_exam_title">考试安排更新</string>
     <string name="notify_exam_text">%1$s — %2$s</string>
     <string name="notify_exam_text_no_details">%1$s</string>
+    <string name="notify_grade_summary_title">成绩批量更新</string>
+    <string name="notify_grade_summary_text">检测到 %1$d 条成绩变化，请打开应用查看详情</string>
+    <string name="notify_exam_summary_title">考试安排批量更新</string>
+    <string name="notify_exam_summary_text">检测到 %1$d 条考试安排变化，请打开应用查看详情</string>
     <string name="notify_session_expired_title">会话已过期</string>
     <string name="notify_session_expired_text">请打开应用重新登录以恢复通知功能</string>
     <string name="notify_network_error_title">网络连接失败</string>

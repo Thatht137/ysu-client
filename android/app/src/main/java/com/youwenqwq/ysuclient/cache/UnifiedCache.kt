@@ -21,6 +21,14 @@ object UnifiedCache {
     const val KEY_CACHED_CURRENT_WEEK = "cached_current_week"
     const val KEY_CACHED_EXAMS = "cached_exams"
     const val KEY_CACHED_GRADES = "cached_grades"
+    const val KEY_WIDGET_CACHED_EXAMS = "widget_cached_exams"
+    const val KEY_NOTIFY_CACHED_EXAMS = "notify_cached_exams"
+    const val KEY_NOTIFY_CACHED_GRADES = "notify_cached_grades"
+    const val KEY_NOTIFY_GRADES_BASELINE_INITIALIZED = "notify_grades_baseline_initialized"
+    const val KEY_NOTIFY_EXAMS_BASELINE_INITIALIZED = "notify_exams_baseline_initialized"
+    const val KEY_NOTIFY_PROVIDER_ID = "notify_provider_id"
+    const val KEY_NOTIFY_ACCOUNT_HASH = "notify_account_hash"
+    const val KEY_NOTIFY_SCHEMA_VERSION = "notify_schema_version"
     const val KEY_NOTIFY_SETTINGS = "notify_settings"
     const val KEY_CLASS_ALARMS = "class_alarms"
     const val KEY_HAS_SYNCED_SCHEDULE = "has_synced_schedule"
@@ -120,15 +128,17 @@ object UnifiedCache {
 
     fun saveCachedExams(context: Context, exams: JSONArray) {
         val editor = prefs(context).edit()
-        editor.putString(KEY_CACHED_EXAMS, exams.toString())
+        editor.putString(KEY_WIDGET_CACHED_EXAMS, exams.toString())
         editor.putBoolean(KEY_HAS_SYNCED_EXAMS, true)
         editor.putLong(KEY_LAST_EXAM_SYNC_TIME, System.currentTimeMillis())
         editor.apply()
     }
 
-    /** Returns empty JSONArray if no exams cached. */
+    /** Returns empty JSONArray if no widget exams cached. */
     fun getCachedExams(context: Context): JSONArray {
-        return getJsonArray(context, KEY_CACHED_EXAMS) ?: JSONArray()
+        return getJsonArray(context, KEY_WIDGET_CACHED_EXAMS)
+            ?: getJsonArray(context, KEY_CACHED_EXAMS)
+            ?: JSONArray()
     }
 
     fun saveCachedSchedule(context: Context, courses: JSONArray) {

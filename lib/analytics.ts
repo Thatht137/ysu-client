@@ -1,6 +1,6 @@
-import { useSettingsStore } from "@/lib/settings-store";
+import { useSettingsStore } from "@/lib/stores/settings";
 import { APP_VERSION } from "@/lib/version";
-import { isCapacitor } from "@/lib/platform";
+import { isCapacitor } from "@/lib/native/platform";
 
 const STATS_ENDPOINT = "https://ysu.welain.com/api/stats";
 

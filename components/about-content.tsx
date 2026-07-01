@@ -37,9 +37,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useTranslation } from "@/lib/i18n/use-translation";
-import { isCapacitor } from "@/lib/platform";
-import { useSettingsStore } from "@/lib/settings-store";
-import { useUpdateStore } from "@/lib/update-store";
+import { isCapacitor } from "@/lib/native/platform";
+import { useSettingsStore } from "@/lib/stores/settings";
+import { useUpdateStore } from "@/lib/stores/update";
 import { useLongPress } from "@/hooks/use-long-press";
 import {
   APP_VERSION,

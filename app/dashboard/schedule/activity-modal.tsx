@@ -14,9 +14,8 @@ import {
   ResponsiveModalTitle,
 } from "@/components/responsive-modal";
 import { useTranslation } from "@/lib/i18n/use-translation";
-import { useAuthStore } from "@/lib/auth-store";
-import { getCurrentLesson } from "@/lib/api";
-import type { Course, CurrentLesson, LessonActivity } from "@/lib/types";
+import { useProvider } from "@/providers/use-provider";
+import type { Course, CurrentLesson, LessonActivity } from "@/providers/types";
 import { Signpost, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -56,34 +55,34 @@ function formatDateTime(iso: string | null): string {
 
 export function ActivityModal({ course, week, open, onOpenChange, onSigninActivity }: Props) {
   const { t } = useTranslation();
-  const credential = useAuthStore((s) => s.credential);
+  const provider = useProvider();
   const [loading, setLoading] = useState(false);
   const [lesson, setLesson] = useState<CurrentLesson | null>(null);
 
   useEffect(() => {
-    if (!open || !course || !credential) {
+    if (!open || !course) {
       setLesson(null);
       return;
     }
 
     const c = course;
     async function load() {
-      const classType = c.class_type || "1";
-      const teachClassId = classType === "1" ? c.class_id : c.syxzdm;
-      if (!teachClassId || !c?.schedule_id) {
+      const classType = c.classType || "1";
+      const teachClassId = classType === "1" ? c.classId : c.syxzdm;
+      if (!teachClassId || !c?.scheduleId || !provider.mobile) {
         toast.error(t("activity.errorNoCourseInfo"));
         return;
       }
       setLoading(true);
       try {
-        const result = await getCurrentLesson(credential!, {
-          teach_class_id: teachClassId,
-          teach_class_type: classType,
-          schedule_id: c.schedule_id,
+        const result = await provider.mobile.getCurrentLesson({
+          teachClassId,
+          teachClassType: classType,
+          scheduleId: c.scheduleId,
           week,
-          week_day: c.week_day,
-          start_node: c.start_section,
-          end_node: c.end_section,
+          weekDay: c.weekDay,
+          startNode: c.startSection,
+          endNode: c.endSection,
         });
         setLesson(result);
       } catch (err) {
@@ -93,10 +92,10 @@ export function ActivityModal({ course, week, open, onOpenChange, onSigninActivi
       }
     }
     load();
-  }, [open, course, week, credential, t]);
+  }, [open, course, week, provider.mobile, t]);
 
-  const signinActivities = lesson?.activity_list.filter((a) => a.sign_clazz === "1") ?? [];
-  const signoutActivities = lesson?.activity_list.filter((a) => a.sign_clazz === "2") ?? [];
+  const signinActivities = lesson?.activityList.filter((a) => a.signClazz === "1") ?? [];
+  const signoutActivities = lesson?.activityList.filter((a) => a.signClazz === "2") ?? [];
 
   return (
     <ResponsiveModal open={open} onOpenChange={onOpenChange}>
@@ -116,9 +115,9 @@ export function ActivityModal({ course, week, open, onOpenChange, onSigninActivi
           </ResponsiveModalDescription>
           {course && (
             <div className="flex flex-wrap items-center justify-center gap-1 pt-1">
-              {course.course_type && (
+              {course.courseType && (
                 <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
-                  {course.course_type}
+                  {course.courseType}
                 </Badge>
               )}
               {course.credit && (
@@ -157,7 +156,7 @@ export function ActivityModal({ course, week, open, onOpenChange, onSigninActivi
                   <h4 className="text-sm font-semibold">{t("activity.signinSection")}</h4>
                   {signinActivities.map((activity) => (
                     <ActivityItem
-                      key={activity.activity_id}
+                      key={activity.activityId}
                       activity={activity}
                       onSignin={onSigninActivity}
                     />
@@ -171,7 +170,7 @@ export function ActivityModal({ course, week, open, onOpenChange, onSigninActivi
                   <h4 className="text-sm font-semibold">{t("activity.signoutSection")}</h4>
                   {signoutActivities.map((activity) => (
                     <ActivityItem
-                      key={activity.activity_id}
+                      key={activity.activityId}
                       activity={activity}
                       onSignin={onSigninActivity}
                     />
@@ -179,7 +178,7 @@ export function ActivityModal({ course, week, open, onOpenChange, onSigninActivi
                 </div>
               )}
 
-              {lesson.activity_list.length === 0 && (
+              {lesson.activityList.length === 0 && (
                 <div className="flex flex-col items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
                   <Signpost className="size-8 opacity-40" />
                   <span>{t("activity.noActivities")}</span>
@@ -201,15 +200,15 @@ function ActivityItem({
   onSignin?: (activityId: string, signinType: number) => void;
 }) {
   const { t } = useTranslation();
-  const isSignin = activity.sign_clazz === "1";
+  const isSignin = activity.signClazz === "1";
   const label = isSignin ? t("activity.signinItem") : t("activity.signoutItem");
-  const canJoin = !activity.is_end;
+  const canJoin = !activity.isEnd;
 
   return (
     <button
       type="button"
       disabled={!canJoin}
-      onClick={() => canJoin && onSignin?.(activity.activity_id, Number(activity.sign_type) || 1)}
+      onClick={() => canJoin && onSignin?.(activity.activityId, Number(activity.signType) || 1)}
       className={cn(
         "flex w-full items-center gap-3 rounded-lg border p-3 text-left",
         canJoin
@@ -222,15 +221,15 @@ function ActivityItem({
       </div>
       <div className="flex flex-1 flex-col gap-0.5 min-w-0">
         <span className="text-sm font-medium truncate">{label}</span>
-        {activity.create_time && (
+        {activity.createTime && (
           <span className="text-xs text-muted-foreground flex items-center gap-1">
             <Clock className="size-3" />
-            {formatDateTime(activity.create_time)}
+            {formatDateTime(activity.createTime)}
           </span>
         )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        <SigninStatusBadge isEnd={activity.is_end} />
+        <SigninStatusBadge isEnd={activity.isEnd} />
       </div>
     </button>
   );

@@ -1,4 +1,4 @@
-import { useSettingsStore } from "@/lib/settings-store";
+import { useSettingsStore } from "@/lib/stores/settings";
 import { checkFeedbackReply } from "@/lib/feedback";
 import { getText } from "@/lib/i18n/get-text";
 import { toast } from "sonner";
@@ -9,8 +9,8 @@ export async function syncFeedbackReplies(force = false): Promise<void> {
   if (!feedbackIds.length) return;
 
   let changed = false;
-  let ids = [...feedbackIds];
-  let history = [...state.feedbackHistory];
+  const ids = [...feedbackIds];
+  const history = [...state.feedbackHistory];
 
   for (const id of feedbackIds) {
     const entry = history.find((h) => h.id === id);

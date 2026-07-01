@@ -19,19 +19,19 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from "@/components/ui/toggle-group";
-import { useAuthStore } from "@/lib/auth-store";
-import { useSettingsStore, type LandingPage } from "@/lib/settings-store";
+import { useSettingsStore, type LandingPage } from "@/lib/stores/settings";
 import { Input } from "@/components/ui/input";
 import { useTranslation } from "@/lib/i18n/use-translation";
-import { resetSDK } from "@/lib/sdk";
-import { isCapacitor } from "@/lib/platform";
+import { logoutActiveProvider, reloginActiveProvider } from "@/providers/provider-service";
+import { useProvider } from "@/providers/use-provider";
+import { isCapacitor } from "@/lib/native/platform";
 
-import { syncWidgetSettingsToWidget } from "@/lib/widget-bridge";
+import { syncWidgetSettingsToWidget } from "@/lib/native/widget-bridge";
 import { checkRateLimit, recordLoginAttempt } from "@/lib/rate-limit";
-import { useUpdateStore } from "@/lib/update-store";
+import { useUpdateStore } from "@/lib/stores/update";
 import { useTheme } from "next-themes";
-import { startNotifyIfNeeded, stopNativePolling, triggerNotifyCheck } from "@/lib/notify";
-import { NotifyPlugin } from "@/lib/notify-plugin";
+import { startNotifyIfNeeded, stopNativePolling, triggerNotifyCheck } from "@/lib/native/notify";
+import { NotifyPlugin } from "@/lib/native/notify-plugin";
 import {
   LayoutDashboard,
   Calendar,
@@ -56,7 +56,8 @@ import {
 
 export default function SettingsPage() {
   const router = useRouter();
-  const clearCredential = useAuthStore((s) => s.clearCredential);
+  const provider = useProvider();
+  const nativeNotification = provider.nativeNotification;
   const { t, locale, setLocale } = useTranslation();
   const { theme, setTheme } = useTheme();
   const hasUpdate = useUpdateStore((s) => s.hasUpdate);
@@ -112,10 +113,9 @@ export default function SettingsPage() {
     return () => { listener?.remove(); };
   }, []);
 
-  function handleLogout() {
+  async function handleLogout() {
     setLogoutDialogOpen(false);
-    clearCredential();
-    resetSDK();
+    await logoutActiveProvider();
     toast.success(t("app.logout"));
     router.replace("/login");
   }
@@ -138,8 +138,7 @@ export default function SettingsPage() {
     recordLoginAttempt();
 
     try {
-      const { tryAutoLogin } = await import("@/lib/auto-login");
-      const success = await tryAutoLogin();
+      const success = await reloginActiveProvider();
       if (success) {
         toast.success(t("login.loginSuccess"));
         return;
@@ -147,8 +146,7 @@ export default function SettingsPage() {
     } catch {
       // fall through
     }
-    clearCredential();
-    resetSDK();
+    await logoutActiveProvider();
     router.replace("/login");
   }
 
@@ -340,7 +338,7 @@ export default function SettingsPage() {
                   onCheckedChange={(enabled) => {
                     setNotifyEnabled(enabled);
                     if (enabled) {
-                      startNotifyIfNeeded().then(() => triggerNotifyCheck()).catch(() => {});
+                      startNotifyIfNeeded(nativeNotification, provider.id).then(() => triggerNotifyCheck()).catch(() => {});
                     } else {
                       stopNativePolling().catch(() => {});
                     }

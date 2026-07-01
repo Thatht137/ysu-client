@@ -3,8 +3,8 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { useAuthStore } from "@/lib/auth-store";
-import { useSettingsStore } from "@/lib/settings-store";
+import { useAuthStore } from "@/lib/stores/auth";
+import { useSettingsStore } from "@/lib/stores/settings";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import {
   Sidebar,
@@ -29,7 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { resetSDK } from "@/lib/sdk";
+import { logoutActiveProvider, reloginActiveProvider } from "@/providers/provider-service";
 import { checkRateLimit, recordLoginAttempt } from "@/lib/rate-limit";
 import {
   BookOpen,
@@ -59,7 +59,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const rawPathname = usePathname();
   const pathname = rawPathname.replace(/\/$/, "");
-  const { isAuthenticated, hasHydrated, username, clearCredential } = useAuthStore();
+  const { isAuthenticated, hasHydrated, username } = useAuthStore();
   const { t } = useTranslation();
 
   const backgroundImage = useSettingsStore((s) => s.backgroundImage);
@@ -102,9 +102,8 @@ export default function DashboardLayout({
     }
   }, [hasHydrated, isAuthenticated, router]);
 
-  function handleLogout() {
-    clearCredential();
-    resetSDK();
+  async function handleLogout() {
+    await logoutActiveProvider();
     toast.success(t("app.logout"));
     router.replace("/login");
   }
@@ -127,8 +126,7 @@ export default function DashboardLayout({
     recordLoginAttempt();
 
     try {
-      const { tryAutoLogin } = await import("@/lib/auto-login");
-      const success = await tryAutoLogin();
+      const success = await reloginActiveProvider();
       if (success) {
         toast.success(t("login.loginSuccess"));
         return;
@@ -136,8 +134,7 @@ export default function DashboardLayout({
     } catch {
       // fall through
     }
-    clearCredential();
-    resetSDK();
+    await logoutActiveProvider();
     router.replace("/login");
   }
 

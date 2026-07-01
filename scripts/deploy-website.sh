@@ -59,11 +59,12 @@ if [[ -n "${LATEST_TAG:-}" ]]; then
   mkdir -p website/public/updates
   TMP_RELEASE_DIR=$(mktemp -d)
   gh release download "$LATEST_TAG" --repo "$REPO" \
-    --pattern "dist.zip" --pattern "app-release.apk" --pattern "version.json" \
+    --pattern "dist.zip" --pattern "app-release*.apk" --pattern "version.json" \
     --dir "$TMP_RELEASE_DIR" 2>/dev/null || true
 
   [[ -f "$TMP_RELEASE_DIR/dist.zip" ]] && cp "$TMP_RELEASE_DIR/dist.zip" website/public/updates/dist.zip
-  [[ -f "$TMP_RELEASE_DIR/app-release.apk" ]] && cp "$TMP_RELEASE_DIR/app-release.apk" website/public/updates/app-release.apk
+  STABLE_APK=$(find "$TMP_RELEASE_DIR" -maxdepth 1 -name 'app-release*.apk' -print -quit)
+  [[ -n "${STABLE_APK:-}" ]] && cp "$STABLE_APK" website/public/updates/app-release.apk
 
   if [[ -f "$TMP_RELEASE_DIR/version.json" ]]; then
     if [[ -f website/public/updates/version.json ]]; then

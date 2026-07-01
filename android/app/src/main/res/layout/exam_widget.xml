@@ -50,7 +50,7 @@
             <!-- Course name directly -->
             <TextView
                 android:id="@+id/exam_countdown_prefix"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:textColor="@color/widget_text_primary"
                 android:textSize="14sp"
@@ -89,13 +89,24 @@
             <!-- Time only -->
             <TextView
                 android:id="@+id/exam_countdown_date"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:textColor="@color/widget_text_secondary"
                 android:textSize="12sp"
                 android:maxLines="1"
                 android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/exam_countdown_detail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textColor="@color/widget_text_secondary"
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:visibility="gone" />
 
             <!-- Blue underline decoration -->
             <ImageView

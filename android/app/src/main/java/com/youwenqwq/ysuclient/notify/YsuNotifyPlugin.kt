@@ -85,7 +85,7 @@ class YsuNotifyPlugin : Plugin() {
 
     @PluginMethod
     fun getCachedGrades(call: PluginCall) {
-        val gradesJson = UnifiedCache.getString(context, UnifiedCache.KEY_CACHED_GRADES, "[]")
+        val gradesJson = UnifiedCache.getString(context, UnifiedCache.KEY_NOTIFY_CACHED_GRADES, "[]")
         val ret = JSObject()
         ret.put("gradesJson", gradesJson)
         call.resolve(ret)
@@ -98,13 +98,14 @@ class YsuNotifyPlugin : Plugin() {
             call.reject("gradesJson is required")
             return
         }
-        UnifiedCache.putString(context, UnifiedCache.KEY_CACHED_GRADES, gradesJson)
+        UnifiedCache.putString(context, UnifiedCache.KEY_NOTIFY_CACHED_GRADES, gradesJson)
+        NotifyHelper.setGradesBaselineInitialized(context, true)
         call.resolve()
     }
 
     @PluginMethod
     fun getCachedExams(call: PluginCall) {
-        val examsJson = UnifiedCache.getString(context, UnifiedCache.KEY_CACHED_EXAMS, "[]")
+        val examsJson = UnifiedCache.getString(context, UnifiedCache.KEY_NOTIFY_CACHED_EXAMS, "[]")
         val ret = JSObject()
         ret.put("examsJson", examsJson)
         call.resolve(ret)
@@ -117,7 +118,20 @@ class YsuNotifyPlugin : Plugin() {
             call.reject("examsJson is required")
             return
         }
-        UnifiedCache.putString(context, UnifiedCache.KEY_CACHED_EXAMS, examsJson)
+        UnifiedCache.putString(context, UnifiedCache.KEY_NOTIFY_CACHED_EXAMS, examsJson)
+        NotifyHelper.setExamsBaselineInitialized(context, true)
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun setProviderIdentity(call: PluginCall) {
+        val providerId = call.getString("providerId")
+        val accountHash = call.getString("accountHash")
+        if (providerId.isNullOrEmpty() || accountHash.isNullOrEmpty()) {
+            call.reject("providerId and accountHash are required")
+            return
+        }
+        NotifyHelper.saveProviderIdentity(context, providerId, accountHash)
         call.resolve()
     }
 

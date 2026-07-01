@@ -37,14 +37,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useAuthStore } from "@/lib/auth-store";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import {
-  getTrainingPlan,
-  getAcademicCompletion,
-  getAcademicWarnings,
-} from "@/lib/api";
-import { useCachedData } from "@/lib/use-cached-data";
+  useAcademicCompletion,
+  useAcademicWarnings,
+  useTrainingPlan,
+} from "@/providers/hooks";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -57,7 +55,6 @@ const REQUIRED_YES = "__required__";
 const REQUIRED_NO = "__elective__";
 
 export default function TrainingPlanPage() {
-  const credential = useAuthStore((s) => s.credential);
   const { t } = useTranslation();
 
   const [search, setSearch] = useState("");
@@ -65,19 +62,9 @@ export default function TrainingPlanPage() {
   const [termFilter, setTermFilter] = useState(ALL);
   const [groupFilter, setGroupFilter] = useState(ALL);
 
-  const plans = useCachedData(["training-plan", credential], {
-    fetch: () => getTrainingPlan(credential!),
-  });
-
-  const completion = useCachedData(["academic-completion", credential], {
-    fetch: () => getAcademicCompletion(credential!),
-    fallback: () => null,
-  });
-
-  const warnings = useCachedData(["academic-warnings", credential], {
-    fetch: () => getAcademicWarnings(credential!),
-    fallback: () => [],
-  });
+  const plans = useTrainingPlan();
+  const completion = useAcademicCompletion();
+  const warnings = useAcademicWarnings();
 
   const termOptions = useMemo(
     () =>
@@ -89,13 +76,13 @@ export default function TrainingPlanPage() {
   const groupOptions = useMemo(
     () =>
       Array.from(
-        new Set((plans.data ?? []).map((p) => p.course_group).filter(Boolean) as string[]),
+        new Set((plans.data ?? []).map((p) => p.courseGroup).filter(Boolean) as string[]),
       ).sort(),
     [plans.data],
   );
 
   const activeWarnings = useMemo(
-    () => (warnings.data ?? []).filter((w) => w.warning_level !== "1"),
+    () => (warnings.data ?? []).filter((w) => w.warningLevel !== "1"),
     [warnings.data],
   );
 
@@ -103,13 +90,13 @@ export default function TrainingPlanPage() {
     const keyword = search.trim().toLowerCase();
     return (plans.data ?? []).filter((p) => {
       if (keyword) {
-        const haystack = `${p.course_name ?? ""} ${p.course_code ?? ""}`.toLowerCase();
+        const haystack = `${p.courseName ?? ""} ${p.courseCode ?? ""}`.toLowerCase();
         if (!haystack.includes(keyword)) return false;
       }
       if (requiredFilter === REQUIRED_YES && !p.required) return false;
       if (requiredFilter === REQUIRED_NO && p.required) return false;
       if (termFilter !== ALL && p.term !== termFilter) return false;
-      if (groupFilter !== ALL && p.course_group !== groupFilter) return false;
+      if (groupFilter !== ALL && p.courseGroup !== groupFilter) return false;
       return true;
     });
   }, [plans.data, search, requiredFilter, termFilter, groupFilter]);
@@ -127,7 +114,7 @@ export default function TrainingPlanPage() {
     setGroupFilter(ALL);
   }
 
-  if (plans.loading && !plans.data && !completion.data) {
+  if (plans.isLoading && !plans.data && !completion.data) {
     return (
       <div className="flex flex-col gap-6">
         <Skeleton className="h-40" />
@@ -138,8 +125,8 @@ export default function TrainingPlanPage() {
   }
 
   const completionItems = [
-    { label: t("academic.planName"), value: completion.data?.plan_name },
-    { label: t("academic.totalRequired"), value: completion.data?.total_required },
+    { label: t("academic.planName"), value: completion.data?.planName },
+    { label: t("academic.totalRequired"), value: completion.data?.totalRequired },
     { label: t("academic.completed"), value: completion.data?.completed },
     { label: t("academic.elective"), value: completion.data?.elective },
   ];
@@ -200,9 +187,9 @@ export default function TrainingPlanPage() {
                 <Alert key={idx} variant="destructive">
                   <AlertTriangle className="size-4" />
                   <AlertTitle className="flex flex-wrap items-center gap-2">
-                    <span>{w.warning_type}</span>
-                    {w.warning_level && (
-                      <Badge variant="destructive">{w.warning_level}</Badge>
+                    <span>{w.warningType}</span>
+                    {w.warningLevel && (
+                      <Badge variant="destructive">{w.warningLevel}</Badge>
                     )}
                     {w.term && (
                       <span className="text-xs font-normal text-muted-foreground">
@@ -366,9 +353,9 @@ export default function TrainingPlanPage() {
                   filtered.map((p, idx) => (
                     <TableRow key={idx}>
                       <TableCell className="font-medium">
-                        {p.course_name}
+                        {p.courseName}
                       </TableCell>
-                      <TableCell>{p.course_code}</TableCell>
+                      <TableCell>{p.courseCode}</TableCell>
                       <TableCell>{p.credit}</TableCell>
                       <TableCell>
                         {p.required ? (
@@ -382,7 +369,7 @@ export default function TrainingPlanPage() {
                         )}
                       </TableCell>
                       <TableCell>{p.term}</TableCell>
-                      <TableCell>{p.course_group}</TableCell>
+                      <TableCell>{p.courseGroup}</TableCell>
                     </TableRow>
                   ))
                 )}

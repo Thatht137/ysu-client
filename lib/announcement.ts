@@ -9,8 +9,11 @@ export interface AnnouncementInfo {
   expireAt: string;
 }
 
+import { getLocalStorageItemWithFallback, STORAGE_KEYS } from "./storage/keys";
+
 const ANNOUNCEMENT_URL = "https://ysu.welain.com/updates/announcement.json";
-const LAST_DISMISSED_KEY = "ysu-last-dismissed-announcement-id";
+const LAST_DISMISSED_KEY = STORAGE_KEYS.lastDismissedAnnouncementId;
+const LEGACY_LAST_DISMISSED_KEY = STORAGE_KEYS.legacyLastDismissedAnnouncementId;
 
 function isExpired(expireAt: string): boolean {
   return new Date(expireAt).getTime() <= Date.now();
@@ -28,7 +31,10 @@ export async function checkAnnouncement(): Promise<AnnouncementInfo | null> {
     if (!data.id || !data.title) return null;
     if (data.publishedAt && isFuture(data.publishedAt)) return null;
     if (data.expireAt && isExpired(data.expireAt)) return null;
-    const lastDismissed = localStorage.getItem(LAST_DISMISSED_KEY);
+    const lastDismissed = getLocalStorageItemWithFallback(
+      LAST_DISMISSED_KEY,
+      LEGACY_LAST_DISMISSED_KEY,
+    );
     if (lastDismissed === data.id) return null;
     return data as AnnouncementInfo;
   } catch {
@@ -38,4 +44,5 @@ export async function checkAnnouncement(): Promise<AnnouncementInfo | null> {
 
 export function dismissAnnouncement(id: string): void {
   localStorage.setItem(LAST_DISMISSED_KEY, id);
+  localStorage.removeItem(LEGACY_LAST_DISMISSED_KEY);
 }

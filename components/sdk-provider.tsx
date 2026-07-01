@@ -1,21 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { mutate } from "swr";
 import { toast } from "sonner";
-import { initSDK } from "@/lib/sdk";
-import { checkAuthStatus } from "@/lib/api";
-import { warmupWEU } from "@/lib/jwxt";
-import { useAuthStore } from "@/lib/auth-store";
-import { useSettingsStore } from "@/lib/settings-store";
-import { useUpdateStore } from "@/lib/update-store";
+import { initializeActiveProvider, setActiveProviderSchool } from "@/providers/provider-service";
+import { useProviderContext } from "@/providers/provider-context";
+import { useAuthStore } from "@/lib/stores/auth";
+import { useSettingsStore } from "@/lib/stores/settings";
+import { useUpdateStore } from "@/lib/stores/update";
 import { useTranslation } from "@/lib/i18n/use-translation";
-import { isCapacitor } from "@/lib/platform";
-import { initSafeArea } from "@/lib/webview-compat";
+import { isCapacitor } from "@/lib/native/platform";
+import { initSafeArea } from "@/lib/native/webview-compat";
 import { trackAppLaunch } from "@/lib/analytics";
 import { syncFeedbackReplies } from "@/lib/feedback-check";
 import { AnalyticsPrompt } from "@/components/analytics-prompt";
 import { APP_VERSION } from "@/lib/version";
-import { useAnnouncementStore } from "@/lib/announcement-store";
+import { useAnnouncementStore } from "@/lib/stores/announcement";
 import { checkAnnouncement } from "@/lib/announcement";
 import { AnnouncementDialog } from "@/components/announcement-dialog";
 
@@ -27,11 +27,17 @@ export function SDKProvider({ children }: { children: React.ReactNode }) {
   }, [locale]);
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
   const settingsHydrated = useSettingsStore((s) => s.hasHydrated);
+  const schoolId = useSettingsStore((s) => s.schoolId);
   const updateMirror = useSettingsStore((s) => s.updateMirror);
   const updateChannel = useSettingsStore((s) => s.updateChannel);
   const setUpdateStatus = useUpdateStore((s) => s.setUpdateStatus);
-  const didInit = useRef(false);
-  const [sdkReady, setSdkReady] = useState(false);
+  const {
+    markProviderInitializing,
+    markProviderReady,
+    markProviderError,
+  } = useProviderContext();
+  const didNotifyAppReady = useRef(false);
+  const didRunStartupSideEffects = useRef(false);
   const [showAnalyticsPrompt, setShowAnalyticsPrompt] = useState(false);
 
   const performUpdateCheck = useCallback(async () => {
@@ -76,20 +82,31 @@ export function SDKProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!hasHydrated || !settingsHydrated || didInit.current) return;
-    didInit.current = true;
+    if (!hasHydrated || !settingsHydrated) return;
 
     // Signal the updater plugin that the current bundle loaded successfully.
-    // Must run before initSDK() to maximize the chance it fires within appReadyTimeout.
-    if (isCapacitor()) {
-      import("@capgo/capacitor-updater").then(({ CapacitorUpdater }) => {
-        CapacitorUpdater.notifyAppReady().catch(() => {});
-      });
+    // Must run before provider session initialization to maximize the chance it fires within appReadyTimeout.
+    if (!didNotifyAppReady.current) {
+      didNotifyAppReady.current = true;
+      if (isCapacitor()) {
+        import("@capgo/capacitor-updater").then(({ CapacitorUpdater }) => {
+          CapacitorUpdater.notifyAppReady().catch(() => {});
+        });
+      }
     }
 
-    initSDK()
-      .then(() => {
-        setSdkReady(true);
+    let cancelled = false;
+    markProviderInitializing();
+    setActiveProviderSchool(schoolId);
+
+    initializeActiveProvider()
+      .then((provider) => {
+        if (cancelled) return;
+        markProviderReady(provider);
+        mutate((key) => Array.isArray(key) && key[0] === "provider");
+
+        if (didRunStartupSideEffects.current) return;
+        didRunStartupSideEffects.current = true;
 
         // Show analytics consent prompt if user hasn't made a choice yet
         const analyticsPromptVersion = useSettingsStore.getState().analyticsPromptVersion;
@@ -107,7 +124,7 @@ export function SDKProvider({ children }: { children: React.ReactNode }) {
 
         // Check WebView compatibility (Capacitor only)
         if (isCapacitor()) {
-          import("@/lib/webview-compat").then(({ checkWebViewCompat }) => {
+          import("@/lib/native/webview-compat").then(({ checkWebViewCompat }) => {
             checkWebViewCompat(localeRef.current);
           });
         }
@@ -115,19 +132,16 @@ export function SDKProvider({ children }: { children: React.ReactNode }) {
         // Background: verify auth + warm up WEU tokens after the UI is
         // already visible so the user sees cached data immediately.
         (async () => {
-          let status = await checkAuthStatus();
+          let status = await provider.checkAuthStatus();
           if (!status.authenticated) {
             // Cookie restoration may not be immediately effective on
             // Capacitor; wait briefly and retry once before concluding
             // the session is actually expired.
             await new Promise((r) => setTimeout(r, 800));
-            status = await checkAuthStatus();
+            status = await provider.checkAuthStatus();
           }
           if (status.authenticated) {
-            warmupWEU().catch(() => {});
-            import("@/lib/jwmobile").then(({ ensureMobileAuthorized }) => {
-              ensureMobileAuthorized(true).catch(() => {});
-            });
+            provider.warmup?.().catch(() => {});
           }
           if (!status.authenticated) {
             toast.error(t("app.sessionExpired"));
@@ -142,17 +156,31 @@ export function SDKProvider({ children }: { children: React.ReactNode }) {
         });
       })
       .catch((err) => {
+        if (cancelled) return;
+        markProviderError(err);
         const e = err as Error & { code?: string; status?: number };
         if (e.code === "AUTH_REQUIRED" || e.status === 401) {
           toast.error(t("app.sessionExpired"));
         }
         // Silently ignore non-auth errors during startup to avoid
         // false alarms caused by transient network issues.
-        setSdkReady(true);
       });
-  }, [hasHydrated, settingsHydrated, setUpdateStatus, t, updateMirror, updateChannel, checkAnnouncementsThenUpdates]);
 
-  if (!hasHydrated || !settingsHydrated || !sdkReady) {
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    hasHydrated,
+    settingsHydrated,
+    schoolId,
+    t,
+    checkAnnouncementsThenUpdates,
+    markProviderInitializing,
+    markProviderReady,
+    markProviderError,
+  ]);
+
+  if (!hasHydrated || !settingsHydrated) {
     return (
       <div className="flex min-h-svh items-center justify-center">
         <div className="text-muted-foreground" suppressHydrationWarning>

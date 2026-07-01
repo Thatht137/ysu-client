@@ -1,7 +1,7 @@
 "use client";
 
 import { CloudOff } from "lucide-react";
-import { useRefreshStore } from "@/lib/refresh-store";
+import { useRefreshStore } from "@/lib/stores/refresh";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";

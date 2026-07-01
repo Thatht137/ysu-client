@@ -14,9 +14,9 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { useSettingsStore, type CardStyle, type BackgroundStyle } from "@/lib/settings-store";
+import { useSettingsStore, type CardStyle, type BackgroundStyle } from "@/lib/stores/settings";
 import { useTranslation } from "@/lib/i18n/use-translation";
-import { saveBackgroundImage, removeBackgroundImage } from "@/lib/background-storage";
+import { saveBackgroundImage, removeBackgroundImage } from "@/lib/storage/background";
 import { ImagePlus, Trash2 } from "lucide-react";
 
 export default function BackgroundSettingsPage() {
