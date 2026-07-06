@@ -92,13 +92,13 @@ export default function DownloadDialog({
               >
                 {cancelText}
               </button>
-              <button
+              {/* <button
                 onClick={handleAgree}
                 className="inline-flex items-center justify-center rounded-xl bg-primary px-6 py-3 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:scale-105 hover:shadow-xl"
               >
                 <Download className="w-4 h-4 mr-2" />
                 {agreeText}
-              </button>
+              </button> */}
             </div>
           </div>
         </div>
