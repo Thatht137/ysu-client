@@ -21,12 +21,17 @@ pnpm run build            # Static export to dist/
 pnpm run typecheck        # tsc --noEmit
 pnpm run lint             # ESLint
 pnpm run format           # Prettier write
+pnpm run test             # Vitest regression tests
+pnpm run test -- providers/hooks/use-provider-query.test.ts providers/ysu/emap-fetcher.test.ts providers/ysu/relogin.test.ts
+
 
 npx cap sync             # Sync dist/ to Capacitor android/
 npx cap open android     # Open Android Studio
 
 pnpm run release          # Full release: build + zip + APK + GitHub release + website deploy
 ```
+
+`pnpm run start` serves the static production build from `dist/`; run `pnpm run build` first because `next.config.mjs` sets `distDir: 'dist'`.
 
 Release script (`scripts/release.sh`) builds the static export, creates `dist.zip`, builds the Android release APK, computes `version.json` for OTA updates, publishes a GitHub release with all artifacts, and deploys the website to EdgeOne Pages.
 
@@ -61,6 +66,18 @@ Both use module-level `SimpleCookieJar` instances (`casJar`, `jwxtJar`). Cookie 
 3. After successful provider calls, `persistJWXTSession()` / `persistMobileSession()` serialize jars back to auth-store
 4. Logout → active provider `reset()` / `logout()` clears jars, auth-store state, caches, and native notification state
 
+
+**Expired-login model**:
+- `lib/stores/auth.ts` intentionally distinguishes `isAuthenticated` from `sessionExpired`.
+- Expired CAS/JWXT sessions should keep `isAuthenticated=true` so cached dashboard data remains readable, while `sessionExpired=true` drives the visible warning UI.
+- `providers/hooks/use-provider-query.ts` is the central cached data path. On `AUTH_SESSION_EXPIRED`, it may return cached data and set `authExpired=true` / auth-store `sessionExpired=true`; do not convert this into a hard redirect.
+- `components/sdk-provider.tsx` performs startup CAS status checks and writes `sessionExpired`; it must not logout or redirect for confirmed expiry.
+- `app/dashboard/layout.tsx` owns the global expired-login banner and the dashboard auth gate.
+
+**YSU relogin paths**:
+- `providers/ysu/relogin.ts` handles remembered-credential relogin and must verify CAS before returning success.
+- `providers/ysu/protocol/cas.ts` contains CAS login/MFA/authorization primitives; avoid treating a non-login URL as successful auth without checking `isAuthenticated()` because CAS may land on reAuth/MFA pages.
+- `providers/ysu/emap-fetcher.ts` maps JWXT/CAS protocol errors into `ProviderError`; CAS `NotAuthenticatedError` from JWXT reauthorization should remain `AUTH_SESSION_EXPIRED`.
 ### Layer Overview
 
 | Layer | File | Responsibility |
@@ -75,6 +92,23 @@ Both use module-level `SimpleCookieJar` instances (`casJar`, `jwxtJar`). Cookie 
 | State stores | `lib/stores/` | Zustand stores: auth, settings, refresh, update, MFA modal, mobile header |
 
 UI code consumes `providers/` (`AcademicProvider`, hooks, provider context/service); do not reintroduce `lib/api.ts`, `lib/types.ts`, or `lib/use-cached-data.ts`. Keep school-specific parsing/session logic under provider implementations such as `providers/ysu/`.
+
+When debugging provider data loading, start from `providers/hooks/use-provider-query.ts` for cache/error semantics, then `providers/ysu/emap-fetcher.ts` for JWXT error mapping, then `providers/ysu/protocol/jwxt.ts` / `providers/ysu/protocol/cas.ts` for wire protocol behavior. Avoid repeated broad searches for these paths.
+
+### Testing Notes
+
+- Vitest is configured in `vitest.config.ts` with `environment: "node"` and includes `providers/**/*.test.ts`.
+- Existing provider regression tests cover cached auth-expiry fallback, YSU academic error mapping, and CAS-verified relogin:
+  - `providers/hooks/use-provider-query.test.ts`
+  - `providers/ysu/emap-fetcher.test.ts`
+  - `providers/ysu/relogin.test.ts`
+- Tests use explicit imports from `vitest`, not globals.
+
+### Storage / WebView Gotchas
+
+- Auth Zustand persistence uses `secureStorage` from `lib/storage/secure.ts`; the web fallback stores data under Capacitor-style keys such as `capacitor-storage_academic-client-auth`, not plain `academic-client-auth`.
+- Provider persistent cache keys are built by `providerCacheKey()` in `providers/hooks/use-provider-query.ts` and stored under `academic-client-cache:` / legacy `ysu-cache:` prefixes.
+- `CapacitorHttp.enabled` is required for real university requests; browser dev may show CORS failures that do not reproduce in Android WebView.
 
 ### Website
 
