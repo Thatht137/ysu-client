@@ -1,11 +1,11 @@
-package com.youwenqwq.ysuclient.widget
+package com.thatht137.fightingclub.widget
 
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.widget.RemoteViews
-import com.youwenqwq.ysuclient.R
-import com.youwenqwq.ysuclient.cache.UnifiedCache
+import com.thatht137.fightingclub.R
+import com.thatht137.fightingclub.cache.UnifiedCache
 import org.json.JSONArray
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
@@ -151,7 +151,7 @@ class ExamWidgetHelper(private val context: Context) {
             val daysRemaining = computeDaysRemaining(nearestExam)
             val examDisplayName = nearestExam.name
 
-            val shortName = if (examDisplayName.length > 9) examDisplayName.take(8) + "â€¦" else examDisplayName
+            val shortName = if (examDisplayName.length > 9) examDisplayName.take(8) + "â€? else examDisplayName
             views.setTextViewText(R.id.exam_countdown_prefix, shortName)
             val daysText2x2 = if (daysRemaining == 0L) {
                 context.getString(R.string.widget_exam_today)

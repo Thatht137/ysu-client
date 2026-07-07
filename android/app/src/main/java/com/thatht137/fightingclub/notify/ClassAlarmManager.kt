@@ -1,11 +1,11 @@
-package com.youwenqwq.ysuclient.notify
+package com.thatht137.fightingclub.notify
 
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.youwenqwq.ysuclient.cache.UnifiedCache
+import com.thatht137.fightingclub.cache.UnifiedCache
 import org.json.JSONArray
 
 object ClassAlarmManager {

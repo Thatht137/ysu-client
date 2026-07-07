@@ -1,4 +1,4 @@
-package com.youwenqwq.ysuclient.widget
+package com.thatht137.fightingclub.widget
 
 import android.app.PendingIntent
 import android.content.Context

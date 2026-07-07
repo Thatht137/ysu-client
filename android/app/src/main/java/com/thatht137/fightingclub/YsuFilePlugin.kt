@@ -1,4 +1,4 @@
-package com.youwenqwq.ysuclient
+package com.thatht137.fightingclub
 
 import android.content.Intent
 import androidx.core.content.FileProvider
@@ -37,12 +37,12 @@ class YsuFilePlugin : Plugin() {
             return
         }
 
-        // 清理旧 APK 文件
+        // 清理�?APK 文件
         dir.listFiles()?.filter { it.extension == "apk" }?.forEach { it.delete() }
 
         val dest = File(dir, fileName)
 
-        // 在后台线程执行下载
+        // 在后台线程执行下�?
         Thread {
             var conn: HttpURLConnection? = null
             try {
@@ -83,7 +83,7 @@ class YsuFilePlugin : Plugin() {
                 val result = JSObject().put("path", dest.absolutePath)
                 call.resolve(result)
             } catch (e: Exception) {
-                dest.delete() // 清理部分下载的文件
+                dest.delete() // 清理部分下载的文�?
                 call.reject("Download failed: ${e.message}", e)
             } finally {
                 conn?.disconnect()

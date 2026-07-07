@@ -1,8 +1,8 @@
-package com.youwenqwq.ysuclient.notify
+package com.thatht137.fightingclub.notify
 
 import android.content.Context
 import android.util.Log
-import com.youwenqwq.ysuclient.cache.UnifiedCache
+import com.thatht137.fightingclub.cache.UnifiedCache
 
 /**
  * Native provider boundary for background notification checks.

@@ -5,6 +5,12 @@
  * fetchWithJar: 标准 fetch + jar 读写 + 手动 redirect 跟随。
  */
 
+// 学校教务系统屏蔽 HttpURLConnection 默认 UA (EMPTY_RESPONSE)，
+// 这里统一注入一个标准桌面 Chrome UA，所有 capacitorHttpSend 请求都会带上。
+// 调用方在 req.headers 里显式设置 'User-Agent' 时会覆盖此默认值。
+const DEFAULT_HTTP_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
 // ─── CookieEntry ──────────────────────────────────────────────────────── //
 
 export interface CookieEntry {
@@ -398,6 +404,9 @@ async function capacitorHttpSend(
   }
 
   const headers: Record<string, string> = { ...(req.headers ?? {}) };
+  if (!headers['User-Agent']) {
+    headers['User-Agent'] = DEFAULT_HTTP_UA;
+  }
   if (!headers['Accept']) {
     headers['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8';
   }

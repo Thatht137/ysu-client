@@ -38,9 +38,9 @@ interface UpdateCandidate extends VersionManifestEntry {
   normalizedVersion: string;
 }
 
-const OFFICIAL_BASE = "https://ysu.welain.com/updates/";
+const OFFICIAL_BASE = "https://github.com/Thatht137/ysu-client/releases/latest/download/";
 const GITHUB_RELEASE_BASE =
-  "https://github.com/Youwenqwq/ysu-client/releases/latest/download";
+  "https://github.com/Thatht137/ysu-client/releases/latest/download";
 const ASSET_NAME = "dist.zip";
 const VERSION_JSON_NAME = "version.json";
 const APK_NAME = "app-release.apk";
@@ -51,7 +51,6 @@ export const OTA_CLEANUP_FLAG = STORAGE_KEYS.otaCleanup;
 export const LEGACY_OTA_CLEANUP_FLAG = STORAGE_KEYS.legacyOtaCleanup;
 
 export const UPDATE_MIRRORS: readonly UpdateMirror[] = [
-  { label: "官方源", value: OFFICIAL_BASE },
   { label: "GitHub 直连", value: "" },
 ];
 

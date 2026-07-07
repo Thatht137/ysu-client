@@ -1,12 +1,12 @@
-package com.youwenqwq.ysuclient;
+package com.thatht137.fightingclub;
 
 import android.os.Bundle;
 
 import androidx.activity.EdgeToEdge;
 
 import com.getcapacitor.BridgeActivity;
-import com.youwenqwq.ysuclient.widget.WidgetBridgePlugin;
-import com.youwenqwq.ysuclient.notify.YsuNotifyPlugin;
+import com.thatht137.fightingclub.widget.WidgetBridgePlugin;
+import com.thatht137.fightingclub.notify.YsuNotifyPlugin;
 
 public class MainActivity extends BridgeActivity {
     @Override

@@ -1,4 +1,4 @@
-package com.youwenqwq.ysuclient.notify
+package com.thatht137.fightingclub.notify
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -9,9 +9,9 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.youwenqwq.ysuclient.MainActivity
-import com.youwenqwq.ysuclient.R
-import com.youwenqwq.ysuclient.cache.UnifiedCache
+import com.thatht137.fightingclub.MainActivity
+import com.thatht137.fightingclub.R
+import com.thatht137.fightingclub.cache.UnifiedCache
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar

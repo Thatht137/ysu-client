@@ -4,8 +4,8 @@ export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? '0.0.0';
 export const APP_BUILD = process.env.NEXT_PUBLIC_APP_BUILD ?? 'dev';
 export const APP_COPYRIGHT = `© ${new Date().getFullYear()} Youwenqwq`;
 export const APP_LICENSE = 'GPL-3.0';
-export const APP_REPO = 'https://github.com/Youwenqwq/ysu-client';
-export const APP_WEBSITE = 'https://ysu.welain.com/';
+export const APP_REPO = 'https://github.com/Thatht137/ysu-client';
+export const APP_WEBSITE = 'https://github.com/Thatht137/ysu-client';
 
 export const APP_OPEN_SOURCE: readonly { name: string; url: string }[] = [
   { name: 'Next.js', url: 'https://nextjs.org' },

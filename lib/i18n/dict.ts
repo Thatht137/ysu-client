@@ -1,6 +1,6 @@
 export const zh = {
   app: {
-    name: "燕大终端",
+    name: "Fighting Club",
     nav: "导航",
     overview: "总览",
     studentInfo: "学生信息",
@@ -207,7 +207,7 @@ export const zh = {
     noContent: "暂无公告内容",
   },
   login: {
-    title: "燕大终端",
+    title: "Fighting Club",
     schoolLabel: "学校",
     usernameLabel: "学号",
     usernamePlaceholder: "请输入学号",
@@ -630,7 +630,7 @@ export const zh = {
 
 export const en = {
   app: {
-    name: "YSU Terminal",
+    name: "Fighting Club",
     nav: "Navigation",
     overview: "Overview",
     studentInfo: "Student Info",
@@ -837,7 +837,7 @@ export const en = {
     noContent: "No announcement content",
   },
   login: {
-    title: "YSU Terminal",
+    title: "Fighting Club",
     schoolLabel: "School",
     usernameLabel: "Student ID",
     usernamePlaceholder: "Enter student ID",

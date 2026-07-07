@@ -24,13 +24,13 @@ const fontMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "燕大终端",
-    template: "%s · 燕大终端",
+    default: "Fighting Club",
+    template: "%s · Fighting Club",
   },
-  description: "YSU Terminal — a third-party shadcn/ui client for the Yanshan University academic system.",
-  applicationName: "燕大终端",
+  description: "Fighting Club — a third-party client for the Yanshan University academic system.",
+  applicationName: "Fighting Club",
   authors: [{ name: "ysu-client contributors" }],
-  keywords: ["燕大终端", "YSU Terminal", "燕山大学", "YSU", "教务系统"],
+  keywords: ["Fighting Club", "燕大终端", "YSU Terminal", "燕山大学", "YSU", "教务系统"],
 }
 
 export const viewport: Viewport = {

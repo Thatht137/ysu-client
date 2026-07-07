@@ -1,12 +1,12 @@
-package com.youwenqwq.ysuclient.widget
+package com.thatht137.fightingclub.widget
 
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.graphics.Paint
 import android.widget.RemoteViews
-import com.youwenqwq.ysuclient.R
-import com.youwenqwq.ysuclient.cache.UnifiedCache
+import com.thatht137.fightingclub.R
+import com.thatht137.fightingclub.cache.UnifiedCache
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar

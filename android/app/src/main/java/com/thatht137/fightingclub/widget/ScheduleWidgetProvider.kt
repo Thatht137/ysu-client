@@ -1,17 +1,17 @@
-package com.youwenqwq.ysuclient.widget
+package com.thatht137.fightingclub.widget
 
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 
-class ExamWidgetProvider : AppWidgetProvider() {
+class ScheduleWidgetProvider : AppWidgetProvider() {
 
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        val helper = ExamWidgetHelper(context)
+        val helper = ScheduleWidgetHelper(context)
         for (appWidgetId in appWidgetIds) {
             helper.updateWidget(appWidgetId, appWidgetManager)
         }
@@ -23,7 +23,7 @@ class ExamWidgetProvider : AppWidgetProvider() {
         appWidgetId: Int,
         newOptions: android.os.Bundle?
     ) {
-        val helper = ExamWidgetHelper(context)
+        val helper = ScheduleWidgetHelper(context)
         helper.updateWidget(appWidgetId, appWidgetManager)
     }
 }

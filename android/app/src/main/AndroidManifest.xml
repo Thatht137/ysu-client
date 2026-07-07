@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -36,46 +35,30 @@
             </intent-filter>
         </activity>
 
-        <receiver
-            android:name=".widget.ScheduleWidgetProvider"
-            android:exported="true">
+        <receiver android:name=".widget.ScheduleWidgetProvider" android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/schedule_widget_info" />
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/schedule_widget_info" />
         </receiver>
 
-        <receiver
-            android:name=".widget.ExamWidgetProvider"
-            android:exported="true">
+        <receiver android:name=".widget.ExamWidgetProvider" android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/exam_widget_info" />
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/exam_widget_info" />
         </receiver>
 
-        <receiver
-            android:name=".widget.ExamWidget2x2Provider"
-            android:exported="true">
+        <receiver android:name=".widget.ExamWidget2x2Provider" android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/exam_widget_2x2_info" />
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/exam_widget_2x2_info" />
         </receiver>
 
-        <receiver
-            android:name=".notify.ClassAlarmReceiver"
-            android:exported="false" />
+        <receiver android:name=".notify.ClassAlarmReceiver" android:exported="false" />
 
-        <receiver
-            android:name=".notify.BootReceiver"
-            android:exported="false">
+        <receiver android:name=".notify.BootReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>

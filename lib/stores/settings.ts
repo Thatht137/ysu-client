@@ -87,7 +87,7 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
-      updateMirror: "https://ysu.welain.com/updates/",
+      updateMirror: "",
       updateChannel: "stable",
       backgroundImage: "",
       backgroundOverlayOpacity: 75,

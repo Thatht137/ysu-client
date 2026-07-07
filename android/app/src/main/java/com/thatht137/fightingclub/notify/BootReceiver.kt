@@ -1,10 +1,10 @@
-package com.youwenqwq.ysuclient.notify
+package com.thatht137.fightingclub.notify
 
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.youwenqwq.ysuclient.cache.UnifiedCache
+import com.thatht137.fightingclub.cache.UnifiedCache
 
 /**
  * Reschedule class alarms after device reboot.

@@ -38,8 +38,8 @@
 -keepclassmembers class ee.forgr.** { *; }
 
 # === App-specific plugins ===
--keep class com.youwenqwq.ysuclient.** { *; }
--keepclassmembers class com.youwenqwq.ysuclient.** { *; }
+-keep class com.thatht137.fightingclub.** { *; }
+-keepclassmembers class com.thatht137.fightingclub.** { *; }
 
 # === Kotlin ===
 -keepattributes RuntimeVisibleAnnotations,RuntimeInvisibleAnnotations

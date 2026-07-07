@@ -1,11 +1,11 @@
-package com.youwenqwq.ysuclient.widget
+package com.thatht137.fightingclub.widget
 
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
-import com.youwenqwq.ysuclient.cache.UnifiedCache
+import com.thatht137.fightingclub.cache.UnifiedCache
 import org.json.JSONArray
 
 @CapacitorPlugin(name = "WidgetBridge")
