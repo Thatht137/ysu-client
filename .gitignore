@@ -95,3 +95,6 @@ website/.edgeone/
 /Failed
 /Toolchain
 
+
+# Local secrets
+.secrets/

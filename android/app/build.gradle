@@ -11,7 +11,7 @@ android {
         applicationId "com.thatht137.fightingclub"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionName "1.4.1"
+        versionName "1.0.0"
         def versionMatcher = versionName =~ /^(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta|rc)\.(\d+))?$/
         if (!versionMatcher.matches()) {
             throw new GradleException("Invalid versionName: ${versionName}")
@@ -55,9 +55,9 @@ android {
         release {
             storeFile file('release.keystore')
             storeType 'PKCS12'
-            storePassword project.findProperty('KEYSTORE_PASSWORD') ?: ''
-            keyAlias "ysu-client"
-            keyPassword project.findProperty('KEY_PASSWORD') ?: ''
+            storePassword project.findProperty('KEYSTORE_PASSWORD') ?: System.getenv('KEYSTORE_PASSWORD') ?: ''
+            keyAlias project.findProperty('KEY_ALIAS') ?: System.getenv('KEY_ALIAS') ?: 'fighting-club'
+            keyPassword project.findProperty('KEY_PASSWORD') ?: System.getenv('KEY_PASSWORD') ?: ''
         }
     }
     buildTypes {
