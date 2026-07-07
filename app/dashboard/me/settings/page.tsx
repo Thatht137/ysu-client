@@ -50,7 +50,6 @@ import {
   AlarmClock,
   Battery,
   ShieldCheck,
-  BarChart3,
   WifiOff,
 } from "lucide-react";
 
@@ -86,8 +85,6 @@ export default function SettingsPage() {
   const setClassReminderMinutes = useSettingsStore((s) => s.setClassReminderMinutes);
   const classReminderDays = useSettingsStore((s) => s.classReminderDays);
   const setClassReminderDays = useSettingsStore((s) => s.setClassReminderDays);
-  const analyticsConsent = useSettingsStore((s) => s.analyticsConsent);
-  const setAnalyticsConsent = useSettingsStore((s) => s.setAnalyticsConsent);
   const [batteryIgnored, setBatteryIgnored] = useState<boolean | null>(null);
   const [autoStartDialogOpen, setAutoStartDialogOpen] = useState(false);
 
@@ -471,24 +468,6 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </Section>
-
-      <div className="flex flex-col gap-2">
-        <Card>
-          <CardContent className="flex flex-col py-1">
-            <div className="flex items-center gap-3 py-3">
-              <BarChart3 className="size-5 shrink-0 text-muted-foreground" />
-              <div className="flex flex-1 flex-col">
-                <span className="text-sm">{t("settings.analyticsEnabled")}</span>
-                <span className="text-xs text-muted-foreground">{t("settings.analyticsDesc")}</span>
-              </div>
-              <Switch
-                checked={analyticsConsent}
-                onCheckedChange={setAnalyticsConsent}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       <Section title={t("about.title")}>
         <Card>

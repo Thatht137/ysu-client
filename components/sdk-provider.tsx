@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { mutate } from "swr";
 import { toast } from "sonner";
 import { initializeActiveProvider, setActiveProviderSchool } from "@/providers/provider-service";
@@ -11,10 +11,7 @@ import { useUpdateStore } from "@/lib/stores/update";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { isCapacitor } from "@/lib/native/platform";
 import { initSafeArea } from "@/lib/native/webview-compat";
-import { trackAppLaunch } from "@/lib/analytics";
 import { syncFeedbackReplies } from "@/lib/feedback-check";
-import { AnalyticsPrompt } from "@/components/analytics-prompt";
-import { APP_VERSION } from "@/lib/version";
 import { useAnnouncementStore } from "@/lib/stores/announcement";
 import { checkAnnouncement } from "@/lib/announcement";
 import { AnnouncementDialog } from "@/components/announcement-dialog";
@@ -38,7 +35,6 @@ export function SDKProvider({ children }: { children: React.ReactNode }) {
   } = useProviderContext();
   const didNotifyAppReady = useRef(false);
   const didRunStartupSideEffects = useRef(false);
-  const [showAnalyticsPrompt, setShowAnalyticsPrompt] = useState(false);
 
   const performUpdateCheck = useCallback(async () => {
     if (!isCapacitor()) return;
@@ -108,16 +104,8 @@ export function SDKProvider({ children }: { children: React.ReactNode }) {
         if (didRunStartupSideEffects.current) return;
         didRunStartupSideEffects.current = true;
 
-        // Show analytics consent prompt if user hasn't made a choice yet
-        const analyticsPromptVersion = useSettingsStore.getState().analyticsPromptVersion;
-        if (!analyticsPromptVersion) {
-          setShowAnalyticsPrompt(true);
-        } else {
-          // User already made a choice: check announcements then updates
-          checkAnnouncementsThenUpdates();
-          // Fire-and-forget: anonymous usage stats
-          trackAppLaunch().catch(() => {});
-        }
+        // Check announcements then updates on startup
+        checkAnnouncementsThenUpdates();
 
         // Check feedback replies once on startup
         syncFeedbackReplies().catch(() => {});
@@ -193,17 +181,6 @@ export function SDKProvider({ children }: { children: React.ReactNode }) {
   return (
     <>
       {children}
-      <AnalyticsPrompt
-        open={showAnalyticsPrompt}
-        onClose={() => {
-          setShowAnalyticsPrompt(false);
-          useSettingsStore.getState().setAnalyticsPromptVersion(APP_VERSION);
-          // Check announcements then updates after privacy prompt is closed
-          checkAnnouncementsThenUpdates();
-          // Try to track launch if user agreed
-          trackAppLaunch().catch(() => {});
-        }}
-      />
       <AnnouncementDialog onDismissed={performUpdateCheck} />
     </>
   );
