@@ -151,7 +151,7 @@ class ExamWidgetHelper(private val context: Context) {
             val daysRemaining = computeDaysRemaining(nearestExam)
             val examDisplayName = nearestExam.name
 
-            val shortName = if (examDisplayName.length > 9) examDisplayName.take(8) + "â€? else examDisplayName
+            val shortName = if (examDisplayName.length > 9) examDisplayName.take(8) + "â€¦" else examDisplayName
             views.setTextViewText(R.id.exam_countdown_prefix, shortName)
             val daysText2x2 = if (daysRemaining == 0L) {
                 context.getString(R.string.widget_exam_today)
