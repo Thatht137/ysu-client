@@ -163,7 +163,7 @@ export default function DashboardLayout({
       >
         <SidebarHeader>
           <div className="flex items-center gap-2 px-2 py-3">
-            <GraduationCap className="size-6 shrink-0 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]" />
+            <GraduationCap className="size-6 shrink-0" />
             <span className="font-semibold">{t("app.name")}</span>
           </div>
         </SidebarHeader>
@@ -178,7 +178,7 @@ export default function DashboardLayout({
                       asChild
                       isActive={pathname === item.url}
                       tooltip={item.title}
-                      className="py-3 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:translate-x-1 active:scale-[0.98] data-[active=true]:shadow-sm [&_svg]:transition-transform [&_svg]:duration-300 hover:[&_svg]:scale-110 data-[active=true]:[&_svg]:scale-110"
+                      className="py-3 transition-colors duration-150 hover:bg-accent hover:text-accent-foreground data-[active=true]:bg-accent data-[active=true]:text-accent-foreground"
                     >
                       <Link href={item.url}>
                         <item.icon />
@@ -199,7 +199,7 @@ export default function DashboardLayout({
                     asChild
                     isActive={pathname === "/dashboard/me" || pathname.startsWith("/dashboard/me/")}
                     tooltip={t("app.me")}
-                    className="py-3 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:translate-x-1 active:scale-[0.98] data-[active=true]:shadow-sm [&_svg]:transition-transform [&_svg]:duration-300 hover:[&_svg]:scale-110 data-[active=true]:[&_svg]:scale-110"
+                    className="py-3 transition-colors duration-150 hover:bg-accent hover:text-accent-foreground data-[active=true]:bg-accent data-[active=true]:text-accent-foreground"
                   >
                     <Link href="/dashboard/me">
                       <User />
@@ -225,7 +225,7 @@ export default function DashboardLayout({
         <MobileTopBar title={pageTitle} showBack={showBack} />
         <header className="hidden items-center justify-between gap-4 border-b px-6 py-4 md:flex">
           <div className="flex items-center gap-3">
-            <h1 className="text-lg font-semibold animate-in fade-in slide-in-from-left-2 duration-300">
+            <h1 className="text-xl font-semibold tracking-tight">
               {pageTitle}
             </h1>
             <RefreshIndicator />

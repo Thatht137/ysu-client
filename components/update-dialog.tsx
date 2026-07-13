@@ -111,10 +111,10 @@ export function UpdateDialog() {
   const markdownComponents = useMemo(
     () => ({
       h1: ({ children }: { children?: React.ReactNode }) => (
-        <h1 className="text-lg font-semibold mt-3 mb-1">{children}</h1>
+        <h1 className="text-xl font-semibold tracking-tight mt-3 mb-1">{children}</h1>
       ),
       h2: ({ children }: { children?: React.ReactNode }) => (
-        <h2 className="text-base font-medium mt-3 mb-1">{children}</h2>
+        <h2 className="text-base font-semibold mt-3 mb-1">{children}</h2>
       ),
       h3: ({ children }: { children?: React.ReactNode }) => (
         <h3 className="text-sm font-medium mt-2 mb-1">{children}</h3>

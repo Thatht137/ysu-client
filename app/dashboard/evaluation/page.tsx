@@ -703,7 +703,7 @@ export default function EvaluationPage() {
                       key={task.wid}
                       className={
                         status.active
-                          ? "cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                          ? "cursor-pointer transition-shadow duration-150 hover:shadow-sm"
                           : "opacity-60"
                       }
                       onClick={() => handleOpenTask(task)}
