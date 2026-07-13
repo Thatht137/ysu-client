@@ -74,50 +74,103 @@ jobs:
           KEY_ALIAS: fighting-club
         run: ./gradlew assembleRelease --no-daemon
 
+      - name: Compute release metadata
+        env:
+          TAG_NAME: ${{ github.ref_name || github.event.inputs.tag }}
+        run: |
+          {
+            node <<'NODE'
+            const semver = require('semver');
+            const pkg = require('./package.json');
+            const tag = (process.env.TAG_NAME || '').replace(/^v/, '');
+            const version = tag || pkg.version;
+            const v = semver.parse(version);
+            if (!v) throw new Error('Invalid version: ' + version);
+            const pre = v.prerelease;
+            let stageCode, channel;
+            if (!pre || pre.length === 0) {
+              stageCode = 99; channel = 'stable';
+            } else if (pre[0] === 'alpha') {
+              stageCode = pre[1]; channel = 'prerelease';
+            } else if (pre[0] === 'beta') {
+              stageCode = 20 + pre[1]; channel = 'prerelease';
+            } else if (pre[0] === 'rc') {
+              stageCode = 50 + pre[1]; channel = 'prerelease';
+            } else {
+              stageCode = 99; channel = 'stable';
+            }
+            const versionCode = v.major * 1000000 + v.minor * 10000 + v.patch * 100 + stageCode;
+            const isPrerelease = channel === 'prerelease' ? 'true' : 'false';
+            const releaseName = 'v' + version;
+            process.stdout.write(`PKG_VERSION=${pkg.version}\n`);
+            process.stdout.write(`RELEASE_VERSION=${version}\n`);
+            process.stdout.write(`RELEASE_NAME=${releaseName}\n`);
+            process.stdout.write(`VERSION_CODE=${versionCode}\n`);
+            process.stdout.write(`CHANNEL=${channel}\n`);
+            process.stdout.write(`IS_PRERELEASE=${isPrerelease}\n`);
+            NODE
+          } >> "$GITHUB_ENV"
+
       - name: Prepare release assets
+        env:
+          RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
+          RELEASE_NAME: ${{ env.RELEASE_NAME }}
+          VERSION_CODE: ${{ env.VERSION_CODE }}
+          CHANNEL: ${{ env.CHANNEL }}
         run: |
           mkdir -p release-assets
           # APK
-          cp android/app/build/outputs/apk/release/app-release.apk release-assets/FightingClub-${{ github.ref_name || github.event.inputs.tag }}.apk
+          cp android/app/build/outputs/apk/release/app-release.apk "release-assets/FightingClub-${RELEASE_NAME}.apk"
           # dist.zip (OTA web bundle)
           (cd dist && zip -r ../release-assets/dist.zip .)
-          # version.json (OTA manifest)
-          cat > release-assets/version.json <<EOF
-          {
-            "webVersion": "1.0.0",
-            "webDownloadUrl": "https://github.com/Thatht137/ysu-client/releases/latest/download/dist.zip",
-            "apkVersionCode": 1000099,
-            "apkDownloadUrl": "https://github.com/Thatht137/ysu-client/releases/latest/download/FightingClub-${{ github.ref_name || github.event.inputs.tag }}.apk",
-            "body": "Fighting Club 1.0.0",
-            "channels": {
-              "stable": {
-                "webVersion": "1.0.0",
-                "webDownloadUrl": "https://github.com/Thatht137/ysu-client/releases/latest/download/dist.zip",
-                "apkVersionCode": 1000099,
-                "apkDownloadUrl": "https://github.com/Thatht137/ysu-client/releases/latest/download/FightingClub-${{ github.ref_name || github.event.inputs.tag }}.apk",
-                "body": "Fighting Club 1.0.0 stable"
-              }
-            }
-          }
-          EOF
+          # version.json (OTA manifest) — generated from package.json + tag
+          node <<'NODE'
+          const fs = require('fs');
+          const pkg = require('./package.json');
+          const {
+            RELEASE_VERSION, RELEASE_NAME, VERSION_CODE, CHANNEL,
+          } = process.env;
+          const GITHUB_LATEST = 'https://github.com/Thatht137/ysu-client/releases/latest/download';
+          const apkUrl = `${GITHUB_LATEST}/FightingClub-${RELEASE_NAME}.apk`;
+          const distUrl = `${GITHUB_LATEST}/dist.zip`;
+          const body = `Fighting Club ${RELEASE_VERSION}`;
+          const entry = {
+            webVersion: RELEASE_VERSION,
+            webDownloadUrl: distUrl,
+            apkVersionCode: Number(VERSION_CODE),
+            apkDownloadUrl: apkUrl,
+            body,
+          };
+          const manifest = {
+            ...entry,
+            channels: CHANNEL === 'stable'
+              ? { stable: { ...entry, body: `${body} stable` } }
+              : { prerelease: { ...entry, body: `${body} prerelease` } },
+          };
+          fs.writeFileSync('release-assets/version.json', JSON.stringify(manifest, null, 2) + '\n');
+          console.log('version.json:');
+          console.log(JSON.stringify(manifest, null, 2));
+          NODE
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name || github.event.inputs.tag }}
-          name: ${{ github.ref_name || github.event.inputs.tag }}
-          prerelease: ${{ github.event.inputs.prerelease == true }}
+          tag_name: ${{ env.RELEASE_NAME }}
+          name: ${{ env.RELEASE_NAME }}
+          prerelease: ${{ env.IS_PRERELEASE == 'true' }}
           body: |
-            ## Fighting Club ${{ github.ref_name || github.event.inputs.tag }}
+            ## Fighting Club ${{ env.RELEASE_NAME }}
 
             本 Release 包含三个产物：
 
-            - **FightingClub-*.apk** — Android 安装包，直接装到手机
+            - **FightingClub-${{ env.RELEASE_NAME }}.apk** — Android 安装包，直接装到手机
             - **dist.zip** — OTA 热更新包，App 内检查更新会下载此文件
             - **version.json** — OTA 元数据，App 内检查更新会拉取此文件
 
             **安装方法**：下载 APK，允许"安装未知来源应用"后点击安装。
             **OTA 升级**：已安装旧版本的用户，在 App 设置里"检查更新"即可收到新版。
+
+            Channel: `${{ env.CHANNEL }}` (versionCode `${{ env.VERSION_CODE }}`)
           files: |
             release-assets/*.apk
             release-assets/dist.zip
