@@ -186,3 +186,50 @@ The release script (`scripts/release.sh`) auto-extracts `^\s*[-*]\s+` lines into
 
 - Provider refactor validation: `pnpm run build` passed; Android cover-install from pre-refactor while preserving YSU login state kept core features working; provider switching remains untested.
 - `docs/` directory is used to store local reference docs, **needn't be included in git**
+
+## Agent Skills
+
+This project ships an Agent Skill under `.agents/skills/kill-ai-slop/`. Supporting agents (opencode, Claude Code, Cline, etc.) auto-discover it.
+
+- **Skill**: `kill-ai-slop` (from `yetone/kill-ai-slop`)
+- **Purpose**: detect and strip AI-generated UI "slop" — the templated, machine-default visual and copy tics of vibe-coded products.
+- **When to invoke**: when editing UI/copy in `app/`, `components/`, `website/` — run the scanner first, triage hits against the rules below, fix only confirmed slop.
+- **Scanner** (read-only, dependency-free):
+  ```
+  node .agents/skills/kill-ai-slop/scripts/scan.mjs <root>          # human-readable
+  node .agents/skills/kill-ai-slop/scripts/scan.mjs <root> --json   # machine-readable
+  ```
+- **References**: `references/taxonomy.md` (32 tells), `references/detection.md` (patterns + false positives), `references/fixes.md` (before→after).
+
+## UI / Copy De-slop Rules
+
+The following AI-slop tells have been confirmed in this codebase and **must not be reintroduced**. New UI must follow these rules.
+
+### Motion
+
+- **No springy hover.** Never use `cubic-bezier(0.34,1.56,0.64,1)` or any overshoot easing on hover/active. No `hover:-translate-y-*`, `hover:translate-x-*`, `active:scale-*`, `hover:[&_svg]:scale-110`. Cards/nav items use `transition-colors duration-150` (or `transition-shadow` for cards that need a shadow lift). Standard ease only.
+- **No bounce entrance animations** on headings (no `animate-in slide-in-from-*` on page titles).
+
+### Color
+
+- **No semantic-state color boxes.** Status/info/error banners use `bg-muted text-foreground`; only `critical`/destructive states may use `bg-destructive/10 text-destructive`. Do not add `bg-blue-100`/`bg-amber-100`/`bg-red-100`/`bg-green-500/10` callout boxes.
+- **No pastel icon tiles.** Don't wrap icons in `bg-primary/10 p-3 text-primary` tinted squares. Icons inherit text color.
+
+### Type
+
+- **Page-level h1 = `text-xl font-semibold tracking-tight`** (not `text-lg`). h2 = `text-base font-semibold`. Markdown renderers in `announcement-dialog.tsx` / `update-dialog.tsx` must match.
+- Keep `font-mono` only for real code/IDs (debug page values, `<code>`/`<pre>`, version strings).
+
+### Copy
+
+- **No emoji or kaomoji in product copy.** Feedback / toast / empty-state messages must be plain text. (Don't reintroduce `(´,,•ω•,,)♡` etc.)
+
+### Allowed (intentional, do not flag)
+
+These are deliberate features, not slop — keep them:
+- `backdrop-blur` on `mobile-top-bar.tsx` / `mobile-bottom-nav.tsx` — tied to user-chosen background image; falls back to solid `bg-background/95` without one.
+- `cardStyle === "glass"` branch in `components/background-image.tsx` — explicit user-selectable "glass" card style.
+- `Section` component's `uppercase tracking-wide` h2 in `app/dashboard/me/*/page.tsx` — settings-list group label (iOS-style pattern), not a "kicker above heading".
+- shadcn/ui primitives under `components/ui/*` — library defaults (`rounded-full` on avatar/switch/radio is functional).
+- `font-mono` on the debug/diagnostics page (`app/dashboard/me/debug/page.tsx`).
+- `questionType === "01"/"02"/"07"` codes in `providers/ysu/protocol/jwxt.ts` and `app/dashboard/evaluation/page.tsx` — real YSU JWXT API codes, not 01/02/03 section markers.

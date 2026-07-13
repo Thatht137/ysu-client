@@ -20,9 +20,9 @@ interface AnnouncementDialogProps {
 }
 
 const levelBadgeClass: Record<AnnouncementLevel, string> = {
-  info: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 hover:bg-blue-100",
-  warning: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 hover:bg-amber-100",
-  critical: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 hover:bg-red-100",
+  info: "bg-muted text-foreground",
+  warning: "bg-muted text-foreground",
+  critical: "bg-destructive/10 text-destructive",
 };
 
 const levelLabelKey: Record<AnnouncementLevel, string> = {
@@ -52,10 +52,10 @@ export function AnnouncementDialog({ onDismissed }: AnnouncementDialogProps) {
   const markdownComponents = useMemo(
     () => ({
       h1: ({ children }: { children?: React.ReactNode }) => (
-        <h1 className="text-lg font-semibold mt-3 mb-1">{children}</h1>
+        <h1 className="text-xl font-semibold tracking-tight mt-3 mb-1">{children}</h1>
       ),
       h2: ({ children }: { children?: React.ReactNode }) => (
-        <h2 className="text-base font-medium mt-3 mb-1">{children}</h2>
+        <h2 className="text-base font-semibold mt-3 mb-1">{children}</h2>
       ),
       h3: ({ children }: { children?: React.ReactNode }) => (
         <h3 className="text-sm font-medium mt-2 mb-1">{children}</h3>

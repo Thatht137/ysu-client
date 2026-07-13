@@ -396,7 +396,7 @@ export default function DebugPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold flex items-center gap-2">
+        <h1 className="text-xl font-semibold tracking-tight flex items-center gap-2">
           <Bug className="size-5" />
           Debug
         </h1>

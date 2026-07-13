@@ -231,7 +231,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md" onClick={() => setShowGPA((v) => !v)}>
+        <Card className="cursor-pointer transition-shadow duration-150 hover:shadow-sm" onClick={() => setShowGPA((v) => !v)}>
           <CardHeader className="flex flex-row items-center gap-3 pb-2">
             <BarChart3 className="size-6 text-primary shrink-0" />
             <div>
@@ -249,7 +249,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md" onClick={() => router.push("/dashboard/evaluation")}>
+        <Card className="cursor-pointer transition-shadow duration-150 hover:shadow-sm" onClick={() => router.push("/dashboard/evaluation")}>
           <CardHeader className="flex flex-row items-center gap-3 pb-2">
             <Clock className="size-6 text-primary shrink-0" />
             <div>
