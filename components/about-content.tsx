@@ -134,6 +134,8 @@ export function AboutContent() {
       const message = (err as Error).message;
       if (message === "RATE_LIMIT") {
         setErrorMsg(t("update.errorRateLimit"));
+      } else if (message === "NO_RELEASE") {
+        setErrorMsg(t("update.errorNoRelease"));
       } else {
         setErrorMsg(t("update.errorNetwork"));
       }

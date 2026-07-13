@@ -14,9 +14,10 @@ if (!RELEASE_VERSION || !RELEASE_NAME || !VERSION_CODE || !CHANNEL) {
   process.exit(1);
 }
 
-const GITHUB_LATEST = "https://github.com/Thatht137/ysu-client/releases/latest/download";
-const apkUrl = `${GITHUB_LATEST}/FightingClub-${RELEASE_NAME}.apk`;
-const distUrl = `${GITHUB_LATEST}/dist.zip`;
+const REPO_RELEASES_BASE = "https://github.com/Thatht137/ysu-client/releases";
+const tagUrl = `${REPO_RELEASES_BASE}/download/${RELEASE_NAME}`;
+const apkUrl = `${tagUrl}/FightingClub-${RELEASE_NAME}.apk`;
+const distUrl = `${tagUrl}/dist.zip`;
 const body = `Fighting Club ${RELEASE_VERSION}`;
 
 const entry = {

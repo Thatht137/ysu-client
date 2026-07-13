@@ -38,12 +38,10 @@ interface UpdateCandidate extends VersionManifestEntry {
   normalizedVersion: string;
 }
 
-const OFFICIAL_BASE = "https://github.com/Thatht137/ysu-client/releases/latest/download/";
-const GITHUB_RELEASE_BASE =
-  "https://github.com/Thatht137/ysu-client/releases/latest/download";
-const ASSET_NAME = "dist.zip";
+const REPO_API_BASE = "https://api.github.com/repos/Thatht137/ysu-client";
+const REPO_RELEASES_BASE = "https://github.com/Thatht137/ysu-client/releases";
+const DIST_ZIP_NAME = "dist.zip";
 const VERSION_JSON_NAME = "version.json";
-const APK_NAME = "app-release.apk";
 const LAST_CHECK_KEY = STORAGE_KEYS.lastUpdateCheck;
 const LEGACY_LAST_CHECK_KEY = STORAGE_KEYS.legacyLastUpdateCheck;
 const CHECK_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
@@ -85,50 +83,56 @@ const EMPTY_RESULT: UpdateInfo = {
   apkDownloadUrl: "",
 };
 
-function isOfficialSource(prefix: string): boolean {
-  return prefix === OFFICIAL_BASE;
+function applyMirror(url: string, mirrorPrefix: string): string {
+  if (!mirrorPrefix || !url.startsWith("https://github.com/")) {
+    return url;
+  }
+  return `${mirrorPrefix}${url}`;
 }
 
-function getVersionJsonUrl(mirrorPrefix: string): string {
-  if (isOfficialSource(mirrorPrefix)) {
-    return `${OFFICIAL_BASE}${VERSION_JSON_NAME}`;
-  }
-  if (!mirrorPrefix) {
-    return `${GITHUB_RELEASE_BASE}/${VERSION_JSON_NAME}`;
-  }
-  return `${mirrorPrefix}${GITHUB_RELEASE_BASE}/${VERSION_JSON_NAME}`;
+function getVersionJsonUrl(tag: string, mirrorPrefix: string): string {
+  return applyMirror(
+    `${REPO_RELEASES_BASE}/download/${tag}/${VERSION_JSON_NAME}`,
+    mirrorPrefix,
+  );
 }
 
-function getDistZipUrl(mirrorPrefix: string): string {
-  if (isOfficialSource(mirrorPrefix)) {
-    return `${OFFICIAL_BASE}${ASSET_NAME}`;
-  }
-  if (!mirrorPrefix) {
-    return `${GITHUB_RELEASE_BASE}/${ASSET_NAME}`;
-  }
-  return `${mirrorPrefix}${GITHUB_RELEASE_BASE}/${ASSET_NAME}`;
+function getDistZipUrl(tag: string, mirrorPrefix: string): string {
+  return applyMirror(
+    `${REPO_RELEASES_BASE}/download/${tag}/${DIST_ZIP_NAME}`,
+    mirrorPrefix,
+  );
 }
 
-function getWebDownloadUrl(
-  mirrorPrefix: string,
-  webDownloadUrl: string | undefined,
-  fallbackUrl: string,
-): string {
-  if (!webDownloadUrl) return fallbackUrl;
-  if (mirrorPrefix && !isOfficialSource(mirrorPrefix) && webDownloadUrl.startsWith("https://github.com/")) {
-    return `${mirrorPrefix}${webDownloadUrl}`;
-  }
-  return webDownloadUrl;
+interface ReleaseInfo {
+  tag_name: string;
+  prerelease: boolean;
+  draft: boolean;
 }
 
-function getApkUrl(mirrorPrefix: string, apkDownloadUrl: string): string {
-  if (isOfficialSource(mirrorPrefix) && apkDownloadUrl.startsWith("https://github.com/")) {
-    return `${OFFICIAL_BASE}${APK_NAME}`;
+/**
+ * Discover the latest release tag for the given channel via the GitHub API.
+ * Returns null when no release exists for the channel (e.g. no stable yet).
+ * Throws on network/HTTP errors (RATE_LIMIT, HTTP xxx) so callers can surface them.
+ */
+async function discoverLatestReleaseTag(
+  channel: UpdateChannel,
+): Promise<string | null> {
+  const headers = { Accept: "application/vnd.github+json" };
+  if (channel === "stable") {
+    const res = await fetch(`${REPO_API_BASE}/releases/latest`, { headers });
+    if (res.status === 404) return null;
+    if (res.status === 403) throw new Error("RATE_LIMIT");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as ReleaseInfo;
+    return data.tag_name;
   }
-  if (!mirrorPrefix || !apkDownloadUrl.startsWith("https://github.com/")) {
-    return apkDownloadUrl;
-  }
-  return `${mirrorPrefix}${apkDownloadUrl}`;
+  const res = await fetch(`${REPO_API_BASE}/releases?per_page=10`, { headers });
+  if (res.status === 403) throw new Error("RATE_LIMIT");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = (await res.json()) as ReleaseInfo[];
+  const filtered = data.filter((r) => !r.draft);
+  return filtered[0]?.tag_name ?? null;
 }
 
 function toTopLevelEntry(data: VersionManifest): VersionManifestEntry {
@@ -188,7 +192,7 @@ async function getApkUpdateCandidate(
 /** Check for a newer version. Respects 30-min cooldown when `auto` is true. */
 export async function checkForUpdate(
   auto = false,
-  mirrorPrefix = OFFICIAL_BASE,
+  mirrorPrefix = "",
   channel: UpdateChannel = "stable",
 ): Promise<UpdateInfo> {
   if (auto) {
@@ -201,14 +205,26 @@ export async function checkForUpdate(
     }
   }
 
-  const versionJsonUrl = getVersionJsonUrl(mirrorPrefix);
-  const distZipUrl = getDistZipUrl(mirrorPrefix);
-
   try {
+    const tag = await discoverLatestReleaseTag(channel);
+
+    if (auto) {
+      localStorage.setItem(`${LAST_CHECK_KEY}:${channel}`, String(Date.now()));
+    }
+
+    if (!tag) {
+      // No release exists for this channel yet (e.g. no stable published).
+      return EMPTY_RESULT;
+    }
+
+    const versionJsonUrl = getVersionJsonUrl(tag, mirrorPrefix);
     const res = await fetch(versionJsonUrl);
 
     if (res.status === 403) {
       throw new Error("RATE_LIMIT");
+    }
+    if (res.status === 404) {
+      throw new Error("NO_RELEASE");
     }
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
@@ -218,10 +234,6 @@ export async function checkForUpdate(
     const candidates = getChannelCandidates(data, channel);
     if (!candidates.length) {
       return EMPTY_RESULT;
-    }
-
-    if (auto) {
-      localStorage.setItem(`${LAST_CHECK_KEY}:${channel}`, String(Date.now()));
     }
 
     const webUpdateCandidate = getHighestVersionCandidate(
@@ -234,14 +246,16 @@ export async function checkForUpdate(
       return EMPTY_RESULT;
     }
 
+    const fallbackDistZipUrl = displayCandidate.webDownloadUrl
+      ? ""
+      : getDistZipUrl(tag, mirrorPrefix);
+
     const result: UpdateInfo = {
       available: Boolean(webUpdateCandidate),
       version: displayCandidate.webVersion,
-      downloadUrl: getWebDownloadUrl(
-        mirrorPrefix,
-        displayCandidate.webDownloadUrl,
-        distZipUrl,
-      ),
+      downloadUrl: displayCandidate.webDownloadUrl
+        ? applyMirror(displayCandidate.webDownloadUrl, mirrorPrefix)
+        : fallbackDistZipUrl,
       body: displayCandidate.body ?? "",
       apkUpdateAvailable: false,
       apkDownloadUrl: "",
@@ -253,7 +267,7 @@ export async function checkForUpdate(
       result.body = apkUpdateCandidate.body ?? "";
       result.apkUpdateAvailable = true;
       result.apkDownloadUrl = apkUpdateCandidate.apkDownloadUrl
-        ? getApkUrl(mirrorPrefix, apkUpdateCandidate.apkDownloadUrl)
+        ? applyMirror(apkUpdateCandidate.apkDownloadUrl, mirrorPrefix)
         : "";
       // If APK needs update, web update is moot — force APK-only flow
       if (result.available) {
