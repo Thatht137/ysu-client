@@ -506,6 +506,42 @@ export default function GradesPage() {
                 </ToggleGroup>
               </div>
             )}
+            {selectedGrade && (
+              <section className="flex flex-col gap-2">
+                <h3 className="text-sm font-semibold">{t("grades.detail.title")}</h3>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {[
+                    [t("grades.detail.total"), selectedGrade.score],
+                    [t("grades.detail.usual"), selectedGrade.usualScore],
+                    [t("grades.detail.midterm"), selectedGrade.midtermScore],
+                    [t("grades.detail.final"), selectedGrade.finalScore],
+                    [t("grades.detail.experiment"), selectedGrade.experimentScore],
+                    [t("grades.detail.actual"), selectedGrade.actualScore],
+                    [t("grades.table.gradePoint"), selectedGrade.gradePoint],
+                    [t("grades.table.credit"), selectedGrade.credit],
+                  ]
+                    .filter((item) => item[1])
+                    .map(([label, value]) => (
+                      <div key={label} className="flex flex-col gap-1 rounded-md border p-2.5">
+                        <span className="text-[10px] text-muted-foreground">{label}</span>
+                        <span className="text-base font-semibold tabular-nums">{value}</span>
+                      </div>
+                    ))}
+                  {selectedGrade.otherScores?.map((value, index) => (
+                    <div
+                      key={`${index}-${value}`}
+                      className="flex flex-col gap-1 rounded-md border p-2.5"
+                    >
+                      <span className="text-[10px] text-muted-foreground">
+                        {t("grades.detail.other", { index: index + 1 })}
+                      </span>
+                      <span className="text-base font-semibold tabular-nums">{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+            <Separator />
             {statsError ? (
               <p className="rounded-md border p-4 text-center text-sm text-muted-foreground">
                 {statsError}

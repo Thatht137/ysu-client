@@ -25,6 +25,7 @@ export interface AcademicCapabilities {
   currentWeek: boolean;
   classPeriods: boolean;
   termCalendar: boolean;
+  publicSchedule: boolean;
   mobileSignin: boolean;
 }
 
@@ -198,6 +199,12 @@ export interface Grade {
   specialReason?: string;
   isDegreeCourse: boolean;
   projectName?: string;
+  usualScore?: string;
+  midtermScore?: string;
+  finalScore?: string;
+  experimentScore?: string;
+  actualScore?: string;
+  otherScores?: string[];
   metadata?: Record<string, unknown>;
 }
 
@@ -315,6 +322,58 @@ export interface CurrentWeek {
   weekEndDate?: string;
   weekDates?: string[];
   raw?: Record<string, unknown>;
+}
+
+export interface Classroom {
+  id: string;
+  name: string;
+  building?: string;
+  campus?: string;
+  capacity?: number;
+  roomType?: string;
+  isSchedulable: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export interface TeachingClass {
+  id: string;
+  name: string;
+  grade?: string;
+  department?: string;
+  major?: string;
+  studentCount?: number;
+  isScheduled: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PublicScheduleEntry {
+  courseName: string;
+  courseCode?: string;
+  teacher?: string;
+  classroom?: string;
+  classroomId?: string;
+  className?: string;
+  classId?: string;
+  weekday: number;
+  startSection: number;
+  endSection: number;
+  weeks?: string;
+  weekList?: number[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface PublicScheduleListOptions {
+  semester?: string;
+  search?: string;
+  pageSize?: number;
+  pageNumber?: number;
+}
+
+export interface PublicScheduleQueryOptions {
+  semester?: string;
+  week?: number;
+  classroomId?: string;
+  classId?: string;
 }
 
 /** An exam arrangement entry. */
@@ -575,6 +634,10 @@ export interface ProviderAcademics {
   getTermCalendar(options?: TermCalendarQueryOptions): Promise<TermCalendar>;
   getCurrentWeek(options?: CurrentWeekQueryOptions): Promise<CurrentWeek>;
   getCurrentWeekNumber(options?: CurrentWeekQueryOptions): Promise<number>;
+  getClassrooms(options?: PublicScheduleListOptions): Promise<Classroom[]>;
+  getTeachingClasses(options?: PublicScheduleListOptions): Promise<TeachingClass[]>;
+  getClassroomSchedule(options?: PublicScheduleQueryOptions): Promise<PublicScheduleEntry[]>;
+  getTeachingClassSchedule(options?: PublicScheduleQueryOptions): Promise<PublicScheduleEntry[]>;
   getExams(options?: ExamQueryOptions): Promise<Exam[]>;
   getTrainingPlan(options?: PageQueryOptions): Promise<TrainingPlan[]>;
   getAcademicCompletion(): Promise<AcademicCompletion>;

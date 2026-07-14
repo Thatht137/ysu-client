@@ -23,6 +23,9 @@ import type {
   ClassPeriod as JWXTClassPeriod,
   TermCalendar as JWXTTermCalendar,
   CurrentWeek as JWXTCurrentWeek,
+  Classroom as JWXTClassroom,
+  TeachingClass as JWXTTeachingClass,
+  PublicScheduleEntry as JWXTPublicScheduleEntry,
   Exam as JWXTExam,
   TrainingPlan as JWXTTrainingPlan,
   AcademicCompletion as JWXTAcademicCompletion,
@@ -45,6 +48,10 @@ import {
   queryClassPeriods as _queryClassPeriods,
   queryTermCalendar as _queryTermCalendar,
   queryCurrentWeek as _queryCurrentWeek,
+  queryClassrooms as _queryClassrooms,
+  queryTeachingClasses as _queryTeachingClasses,
+  queryClassroomSchedule as _queryClassroomSchedule,
+  queryTeachingClassSchedule as _queryTeachingClassSchedule,
   queryExams as _queryExams,
   queryTrainingPlan as _queryTrainingPlan,
   queryAcademicCompletion as _queryAcademicCompletion,
@@ -164,6 +171,38 @@ export async function queryCurrentWeek(opts?: {
   date?: string;
 }): Promise<JWXTCurrentWeek> {
   return withJWXT(() => _queryCurrentWeek(opts));
+}
+
+export async function queryClassrooms(opts?: {
+  term?: string;
+  pageSize?: number;
+  pageNumber?: number;
+}): Promise<JWXTClassroom[]> {
+  return withJWXT(() => _queryClassrooms(opts));
+}
+
+export async function queryTeachingClasses(opts?: {
+  term?: string;
+  pageSize?: number;
+  pageNumber?: number;
+}): Promise<JWXTTeachingClass[]> {
+  return withJWXT(() => _queryTeachingClasses(opts));
+}
+
+export async function queryClassroomSchedule(opts?: {
+  term?: string;
+  week?: number;
+  classroomId?: string;
+}): Promise<JWXTPublicScheduleEntry[]> {
+  return withJWXT(() => _queryClassroomSchedule(opts));
+}
+
+export async function queryTeachingClassSchedule(opts?: {
+  term?: string;
+  week?: number;
+  classId?: string;
+}): Promise<JWXTPublicScheduleEntry[]> {
+  return withJWXT(() => _queryTeachingClassSchedule(opts));
 }
 
 export async function queryExams(opts?: { term?: string }): Promise<JWXTExam[]> {

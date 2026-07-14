@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,7 +25,15 @@ import { useTranslation } from "@/lib/i18n/use-translation";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useMobileHeaderRight } from "@/lib/stores/mobile-header";
 import { useClassPeriods, useCurrentWeek, useSchedule } from "@/providers/hooks";
-import { ChevronDown, ChevronLeft, ChevronRight, Search, Grid3x2, Grid3x3 } from "lucide-react";
+import {
+  Building2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  Grid3x2,
+  Grid3x3,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isCourseActiveInWeek, periodIsInUse } from "./schedule-utils";
 import { ScheduleTablet } from "./schedule-tablet";
@@ -154,6 +163,17 @@ export default function SchedulePage() {
       <Button
         variant="ghost"
         size="icon-sm"
+        asChild
+        className="h-8 w-8"
+        aria-label={t("app.classrooms")}
+      >
+        <Link href="/dashboard/classrooms">
+          <Building2 className="size-4" />
+        </Link>
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
         onClick={() => setCompactMode(!compactMode)}
         className="h-8 w-8"
         aria-label={t("schedule.compactHint")}
@@ -251,8 +271,18 @@ export default function SchedulePage() {
     <div className={compactMode && isMobile ? "flex flex-1 flex-col min-h-0" : "flex flex-col gap-6"}>
       <Card className="hidden md:block">
         <CardHeader>
-          <CardTitle>{t("schedule.title")}</CardTitle>
-          <CardDescription>{t("schedule.description")}</CardDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle>{t("schedule.title")}</CardTitle>
+              <CardDescription>{t("schedule.description")}</CardDescription>
+            </div>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/dashboard/classrooms">
+                <Building2 />
+                {t("app.classrooms")}
+              </Link>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>{filterControls}</CardContent>
       </Card>

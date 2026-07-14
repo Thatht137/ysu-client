@@ -5,6 +5,8 @@ export type { UseStudentInfoResult } from "./use-student-info";
 export {
   useAcademicCompletion,
   useAcademicWarnings,
+  useClassrooms,
+  useClassroomSchedule,
   useClassPeriods,
   useCurrentWeek,
   useExams,
@@ -14,6 +16,8 @@ export {
   useGradeStatistics,
   useGrades,
   useSchedule,
+  useTeachingClasses,
+  useTeachingClassSchedule,
   useTermCalendar,
   useTrainingPlan,
 } from "./use-academics";

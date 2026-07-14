@@ -87,6 +87,44 @@ export interface CurrentWeek {
   readonly raw: Record<string, unknown>;
 }
 
+export interface Classroom {
+  readonly id: string;
+  readonly name: string;
+  readonly building: string;
+  readonly campus: string;
+  readonly capacity?: number;
+  readonly roomType: string;
+  readonly isSchedulable: boolean;
+  readonly raw: Record<string, unknown>;
+}
+
+export interface TeachingClass {
+  readonly id: string;
+  readonly name: string;
+  readonly grade: string;
+  readonly department: string;
+  readonly major: string;
+  readonly studentCount?: number;
+  readonly isScheduled: boolean;
+  readonly raw: Record<string, unknown>;
+}
+
+export interface PublicScheduleEntry {
+  readonly courseName: string;
+  readonly courseCode: string;
+  readonly teacher: string;
+  readonly classroom: string;
+  readonly classroomId: string;
+  readonly className: string;
+  readonly classId: string;
+  readonly weekday: number;
+  readonly startSection: number;
+  readonly endSection: number;
+  readonly weeks: string;
+  readonly weekList: number[];
+  readonly raw: Record<string, unknown>;
+}
+
 export type ExamStatus = 'upcoming' | 'completed' | 'unknown';
 
 export interface Exam {
@@ -129,6 +167,12 @@ export interface Grade {
   readonly specialReason: string;
   readonly isDegreeCourse: boolean;
   readonly projectName: string;
+  readonly usualScore: string;
+  readonly midtermScore: string;
+  readonly finalScore: string;
+  readonly experimentScore: string;
+  readonly actualScore: string;
+  readonly otherScores: string[];
   readonly raw: Record<string, unknown>;
 }
 
@@ -1335,6 +1379,108 @@ export async function queryCurrentWeek(opts?: {
   });
 }
 
+async function resolvePublicScheduleTerm(term?: string): Promise<string> {
+  if (term) return term;
+  if (cachedCurrentTerm) return cachedCurrentTerm;
+
+  await ensureWeu(_appIds.kcbcx);
+  const datas = await post(_apiPaths.kcbcx_current_term!, {}, _appIds.kcbcx);
+  const rows = extractRows(datas, 'dqxnxq');
+  if (rows.length === 0) {
+    throw new JWXTProtocolError('public schedule term query returned empty result');
+  }
+  const resolved = rawStr(rows[0] as Record<string, unknown>, 'DM', 'XNXQDM');
+  if (!resolved) {
+    throw new JWXTProtocolError('public schedule term query returned empty term');
+  }
+  cachedCurrentTerm = resolved;
+  return resolved;
+}
+
+export async function queryClassrooms(opts?: {
+  term?: string;
+  pageSize?: number;
+  pageNumber?: number;
+}): Promise<Classroom[]> {
+  return runWithReauth(async () => {
+    await ensureWeu(_appIds.kcbcx);
+    const term = await resolvePublicScheduleTerm(opts?.term);
+    const datas = await post(_apiPaths.kcbcx_rooms!, {
+      querySetting: '[]',
+      XNXQDM: term,
+      SFYPK: '1',
+      '*order': '+JXLDM,+JASMC',
+      pageSize: String(opts?.pageSize ?? 9999),
+      pageNumber: String(opts?.pageNumber ?? 1),
+    }, _appIds.kcbcx);
+    return extractRows(datas, 'jscx').map((row) =>
+      parseClassroom(row as Record<string, unknown>),
+    );
+  });
+}
+
+export async function queryTeachingClasses(opts?: {
+  term?: string;
+  pageSize?: number;
+  pageNumber?: number;
+}): Promise<TeachingClass[]> {
+  return runWithReauth(async () => {
+    await ensureWeu(_appIds.kcbcx);
+    const term = await resolvePublicScheduleTerm(opts?.term);
+    const datas = await post(_apiPaths.kcbcx_classes!, {
+      XNXQDM: term,
+      SFSY: '1',
+      SFYPK: '1',
+      '*order': '+NJ,+YXDM,+ZYDM,+BJDM',
+      pageSize: String(opts?.pageSize ?? 9999),
+      pageNumber: String(opts?.pageNumber ?? 1),
+    }, _appIds.kcbcx);
+    return extractRows(datas, 'bjcx').map((row) =>
+      parseTeachingClass(row as Record<string, unknown>),
+    );
+  });
+}
+
+export async function queryClassroomSchedule(opts?: {
+  term?: string;
+  week?: number;
+  classroomId?: string;
+}): Promise<PublicScheduleEntry[]> {
+  return runWithReauth(async () => {
+    await ensureWeu(_appIds.kcbcx);
+    const term = await resolvePublicScheduleTerm(opts?.term);
+    const request: Record<string, unknown> = { XNXQDM: term };
+    if (opts?.week) request.SKZC = opts.week;
+    if (opts?.classroomId) request.JASDM = opts.classroomId;
+    const datas = await post(_apiPaths.kcbcx_room_schedule!, {
+      requestParamStr: JSON.stringify(request),
+    }, _appIds.kcbcx);
+    return extractRows(datas, 'queryjaskb').map((row) =>
+      parsePublicScheduleEntry(row as Record<string, unknown>),
+    );
+  });
+}
+
+export async function queryTeachingClassSchedule(opts?: {
+  term?: string;
+  week?: number;
+  classId?: string;
+}): Promise<PublicScheduleEntry[]> {
+  return runWithReauth(async () => {
+    await ensureWeu(_appIds.kcbcx);
+    const term = await resolvePublicScheduleTerm(opts?.term);
+    const request: Record<string, unknown> = { XNXQDM: term };
+    if (opts?.week) request.SKZC = opts.week;
+    if (opts?.classId) request.BJDM = opts.classId;
+    const datas = await post(_apiPaths.kcbcx_class_schedule!, {
+      requestParamStr: JSON.stringify(request),
+    }, _appIds.kcbcx);
+    return extractRows(datas, 'querybjkb').map((row) =>
+      parsePublicScheduleEntry(row as Record<string, unknown>),
+    );
+  });
+}
+
 // ─── Public: Exams ────────────────────────────────────────────────────── //
 
 export async function queryExams(opts?: { term?: string }): Promise<Exam[]> {
@@ -1580,6 +1726,59 @@ function parseGrade(raw: Record<string, unknown>): Grade {
     specialReason: rawStr(raw, 'TSYYDM_DISPLAY'),
     isDegreeCourse: toBool(raw['SFZGKC']),
     projectName: rawStr(raw, 'TYXMDM_DISPLAY'),
+    usualScore: rawStr(raw, 'PSCJ_DISPLAY', 'PSCJ'),
+    midtermScore: rawStr(raw, 'QZCJ_DISPLAY', 'QZCJ'),
+    finalScore: rawStr(raw, 'QMCJ_DISPLAY', 'QMCJ'),
+    experimentScore: rawStr(raw, 'SYCJ_DISPLAY', 'SYCJ'),
+    actualScore: rawStr(raw, 'SJCJ_DISPLAY', 'SJCJ'),
+    otherScores: Array.from({ length: 10 }, (_, index) =>
+      rawStr(raw, `QTCJ${index + 1}_DISPLAY`, `QTCJ${index + 1}`),
+    ).filter(Boolean),
+    raw,
+  };
+}
+
+function parseClassroom(raw: Record<string, unknown>): Classroom {
+  return {
+    id: rawStr(raw, 'JASDM', 'WID'),
+    name: rawStr(raw, 'JASMC', 'JASDM_DISPLAY'),
+    building: rawStr(raw, 'JXLDM_DISPLAY', 'JXLMC'),
+    campus: rawStr(raw, 'XXXQDM_DISPLAY', 'XXXQDM'),
+    capacity: rawOptionalNum(raw, 'SKZWS', 'KSZWS'),
+    roomType: rawStr(raw, 'JASLXDM_DISPLAY', 'JASLXDM'),
+    isSchedulable: toBool(raw['SFYXPK'] ?? raw['SFYPK']),
+    raw,
+  };
+}
+
+function parseTeachingClass(raw: Record<string, unknown>): TeachingClass {
+  return {
+    id: rawStr(raw, 'BJDM', 'WID'),
+    name: rawStr(raw, 'BJMC', 'BJDM_DISPLAY'),
+    grade: rawStr(raw, 'NJ_DISPLAY', 'NJMC', 'NJ'),
+    department: rawStr(raw, 'YXDM_DISPLAY', 'YXMC'),
+    major: rawStr(raw, 'ZYDM_DISPLAY', 'ZYDM'),
+    studentCount: rawOptionalNum(raw, 'SJRS', 'CSRS'),
+    isScheduled: toBool(raw['SFYPK']),
+    raw,
+  };
+}
+
+function parsePublicScheduleEntry(raw: Record<string, unknown>): PublicScheduleEntry {
+  const weeks = rawStr(raw, 'SKZC', 'ZCMC');
+  return {
+    courseName: rawStr(raw, 'KCM', 'XSKCM'),
+    courseCode: rawStr(raw, 'KCH', 'XSKCH'),
+    teacher: rawStr(raw, 'SKJS', 'JSXM'),
+    classroom: rawStr(raw, 'JASMC', 'JASDM_DISPLAY'),
+    classroomId: rawStr(raw, 'JASDM'),
+    className: rawStr(raw, 'BJMC', 'SKBJ'),
+    classId: rawStr(raw, 'BJDM', 'JXBID'),
+    weekday: rawInt(raw, 'SKXQ', 'XQJ'),
+    startSection: rawInt(raw, 'KSJC'),
+    endSection: rawInt(raw, 'JSJC'),
+    weeks,
+    weekList: parseWeekList(weeks),
     raw,
   };
 }

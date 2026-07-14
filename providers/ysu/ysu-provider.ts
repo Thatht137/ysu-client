@@ -8,6 +8,7 @@ import type {
   AcademicWarning,
   AuthStatus,
   ClassPeriod,
+  Classroom,
   Course,
   Credential,
   CurrentWeek,
@@ -35,12 +36,16 @@ import type {
   MfaRequestInput,
   MfaSubmitInput,
   PageQueryOptions,
+  PublicScheduleEntry,
+  PublicScheduleListOptions,
+  PublicScheduleQueryOptions,
   ProviderMobile,
   ScheduleQueryOptions,
   StudentInfo,
   TermCalendar,
   TermCalendarQueryOptions,
   TermQueryOptions,
+  TeachingClass,
   TrainingPlan,
   UnscheduledCourseQueryOptions,
   WechatMfaContext,
@@ -65,6 +70,8 @@ import {
   queryAcademicCompletion,
   queryAcademicWarnings,
   queryClassPeriods,
+  queryClassrooms,
+  queryClassroomSchedule,
   queryCurrentWeek,
   queryEvaluationDetail,
   queryEvaluationTypes,
@@ -79,6 +86,8 @@ import {
   querySchedule,
   queryStudentInfo,
   queryTermCalendar,
+  queryTeachingClasses,
+  queryTeachingClassSchedule,
   queryTrainingPlan,
   queryUnscheduledCourses,
   submitEvaluation as _submitEvaluation,
@@ -113,6 +122,7 @@ function ysuCapabilities(): AcademicCapabilities {
     currentWeek: true,
     classPeriods: true,
     termCalendar: true,
+    publicSchedule: true,
     mobileSignin: isFeatureAvailable("hasMobile"),
   };
 }
@@ -172,7 +182,33 @@ function mapGrade(row: Awaited<ReturnType<typeof queryGrades>>[number]): Grade {
     specialReason: row.specialReason ?? undefined,
     isDegreeCourse: row.isDegreeCourse ?? false,
     projectName: row.projectName ?? undefined,
+    usualScore: row.usualScore || undefined,
+    midtermScore: row.midtermScore || undefined,
+    finalScore: row.finalScore || undefined,
+    experimentScore: row.experimentScore || undefined,
+    actualScore: row.actualScore || undefined,
+    otherScores: row.otherScores.length > 0 ? row.otherScores : undefined,
     metadata: row.raw ?? undefined,
+  };
+}
+
+function mapPublicScheduleEntry(
+  row: Awaited<ReturnType<typeof queryClassroomSchedule>>[number],
+): PublicScheduleEntry {
+  return {
+    courseName: row.courseName,
+    courseCode: row.courseCode || undefined,
+    teacher: row.teacher || undefined,
+    classroom: row.classroom || undefined,
+    classroomId: row.classroomId || undefined,
+    className: row.className || undefined,
+    classId: row.classId || undefined,
+    weekday: row.weekday,
+    startSection: row.startSection,
+    endSection: row.endSection,
+    weeks: row.weeks || undefined,
+    weekList: row.weekList.length > 0 ? row.weekList : undefined,
+    metadata: row.raw,
   };
 }
 
@@ -560,6 +596,82 @@ export class YSUProvider extends BaseProvider {
   async getCurrentWeekNumber(options?: TermCalendarQueryOptions): Promise<number> {
     const currentWeek = await this.getCurrentWeek(options);
     return currentWeek.week;
+  }
+
+  async getClassrooms(options?: PublicScheduleListOptions): Promise<Classroom[]> {
+    const rows = await queryClassrooms({
+      term: options?.semester,
+      pageSize: options?.pageSize,
+      pageNumber: options?.pageNumber,
+    });
+    const search = options?.search?.trim().toLowerCase();
+    return rows
+      .map((row) => ({
+        id: row.id,
+        name: row.name,
+        building: row.building || undefined,
+        campus: row.campus || undefined,
+        capacity: row.capacity,
+        roomType: row.roomType || undefined,
+        isSchedulable: row.isSchedulable,
+        metadata: row.raw,
+      }))
+      .filter((row) =>
+        search
+          ? [row.name, row.building, row.campus, row.roomType]
+              .filter(Boolean)
+              .some((value) => value!.toLowerCase().includes(search))
+          : true,
+      );
+  }
+
+  async getTeachingClasses(options?: PublicScheduleListOptions): Promise<TeachingClass[]> {
+    const rows = await queryTeachingClasses({
+      term: options?.semester,
+      pageSize: options?.pageSize,
+      pageNumber: options?.pageNumber,
+    });
+    const search = options?.search?.trim().toLowerCase();
+    return rows
+      .map((row) => ({
+        id: row.id,
+        name: row.name,
+        grade: row.grade || undefined,
+        department: row.department || undefined,
+        major: row.major || undefined,
+        studentCount: row.studentCount,
+        isScheduled: row.isScheduled,
+        metadata: row.raw,
+      }))
+      .filter((row) =>
+        search
+          ? [row.name, row.grade, row.department, row.major]
+              .filter(Boolean)
+              .some((value) => value!.toLowerCase().includes(search))
+          : true,
+      );
+  }
+
+  async getClassroomSchedule(
+    options?: PublicScheduleQueryOptions,
+  ): Promise<PublicScheduleEntry[]> {
+    const rows = await queryClassroomSchedule({
+      term: options?.semester,
+      week: options?.week,
+      classroomId: options?.classroomId,
+    });
+    return rows.map(mapPublicScheduleEntry);
+  }
+
+  async getTeachingClassSchedule(
+    options?: PublicScheduleQueryOptions,
+  ): Promise<PublicScheduleEntry[]> {
+    const rows = await queryTeachingClassSchedule({
+      term: options?.semester,
+      week: options?.week,
+      classId: options?.classId,
+    });
+    return rows.map(mapPublicScheduleEntry);
   }
 
   async getExams(options?: ExamQueryOptions): Promise<Exam[]> {

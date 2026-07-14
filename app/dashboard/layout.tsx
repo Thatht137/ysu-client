@@ -33,6 +33,7 @@ import { logoutActiveProvider, reloginActiveProvider } from "@/providers/provide
 import { checkRateLimit, recordLoginAttempt } from "@/lib/rate-limit";
 import {
   BookOpen,
+  Building2,
   Calendar,
   ClipboardCheck,
   FileText,
@@ -70,6 +71,7 @@ export default function DashboardLayout({
     { title: t("app.overview"), url: "/dashboard", icon: LayoutDashboard },
     { title: t("app.grades"), url: "/dashboard/grades", icon: GraduationCap },
     { title: t("app.schedule"), url: "/dashboard/schedule", icon: Calendar },
+    { title: t("app.classrooms"), url: "/dashboard/classrooms", icon: Building2 },
     { title: t("app.exams"), url: "/dashboard/exams", icon: FileText },
     { title: t("app.trainingPlan"), url: "/dashboard/training-plan", icon: BookOpen },
     { title: t("app.evaluation"), url: "/dashboard/evaluation", icon: ClipboardCheck },
@@ -80,6 +82,7 @@ export default function DashboardLayout({
     "/dashboard/grades": t("app.grades"),
     "/dashboard/gpa": t("app.gpa"),
     "/dashboard/schedule": t("app.schedule"),
+    "/dashboard/classrooms": t("app.classrooms"),
     "/dashboard/exams": t("app.exams"),
     "/dashboard/training-plan": t("app.trainingPlan"),
     "/dashboard/evaluation": t("app.evaluation"),

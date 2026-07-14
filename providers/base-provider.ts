@@ -5,6 +5,7 @@ import type {
   AcademicWarning,
   AuthStatus,
   ClassPeriod,
+  Classroom,
   Course,
   Credential,
   CurrentWeek,
@@ -32,6 +33,9 @@ import type {
   MfaRequestInput,
   MfaSubmitInput,
   PageQueryOptions,
+  PublicScheduleEntry,
+  PublicScheduleListOptions,
+  PublicScheduleQueryOptions,
   ProviderDiagnostics,
   ProviderMobile,
   ProviderNativeNotification,
@@ -40,6 +44,7 @@ import type {
   TermCalendar,
   TermCalendarQueryOptions,
   TermQueryOptions,
+  TeachingClass,
   TrainingPlan,
   UnscheduledCourseQueryOptions,
   WechatMfaContext,
@@ -98,6 +103,14 @@ export abstract class BaseProvider implements AcademicProvider {
   abstract getTermCalendar(options?: TermCalendarQueryOptions): Promise<TermCalendar>;
   abstract getCurrentWeek(options?: CurrentWeekQueryOptions): Promise<CurrentWeek>;
   abstract getCurrentWeekNumber(options?: CurrentWeekQueryOptions): Promise<number>;
+  abstract getClassrooms(options?: PublicScheduleListOptions): Promise<Classroom[]>;
+  abstract getTeachingClasses(options?: PublicScheduleListOptions): Promise<TeachingClass[]>;
+  abstract getClassroomSchedule(
+    options?: PublicScheduleQueryOptions,
+  ): Promise<PublicScheduleEntry[]>;
+  abstract getTeachingClassSchedule(
+    options?: PublicScheduleQueryOptions,
+  ): Promise<PublicScheduleEntry[]>;
   abstract getExams(options?: ExamQueryOptions): Promise<Exam[]>;
   abstract getTrainingPlan(options?: PageQueryOptions): Promise<TrainingPlan[]>;
   abstract getAcademicCompletion(): Promise<AcademicCompletion>;

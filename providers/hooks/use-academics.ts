@@ -5,6 +5,7 @@ import type {
   AcademicCompletion,
   AcademicWarning,
   ClassPeriod,
+  Classroom,
   Course,
   CurrentWeek,
   CurrentWeekQueryOptions,
@@ -20,9 +21,13 @@ import type {
   GradeRankingQueryOptions,
   GradeStatistics,
   PageQueryOptions,
+  PublicScheduleEntry,
+  PublicScheduleListOptions,
+  PublicScheduleQueryOptions,
   ScheduleQueryOptions,
   TermCalendar,
   TermCalendarQueryOptions,
+  TeachingClass,
   TrainingPlan,
 } from "../types";
 import { useProviderQuery, type ProviderQueryResult } from "./use-provider-query";
@@ -103,6 +108,54 @@ export function useCurrentWeek(
     "currentWeek",
     "current-week",
     () => provider.getCurrentWeek(options),
+    options,
+  );
+}
+
+export function useClassrooms(
+  options?: PublicScheduleListOptions,
+): ProviderQueryResult<Classroom[]> {
+  const provider = useProvider();
+  return useProviderQuery(
+    "publicSchedule",
+    "public-classrooms",
+    () => provider.getClassrooms(options),
+    options,
+  );
+}
+
+export function useTeachingClasses(
+  options?: PublicScheduleListOptions,
+): ProviderQueryResult<TeachingClass[]> {
+  const provider = useProvider();
+  return useProviderQuery(
+    "publicSchedule",
+    "public-classes",
+    () => provider.getTeachingClasses(options),
+    options,
+  );
+}
+
+export function useClassroomSchedule(
+  options?: PublicScheduleQueryOptions,
+): ProviderQueryResult<PublicScheduleEntry[]> {
+  const provider = useProvider();
+  return useProviderQuery(
+    "publicSchedule",
+    "classroom-schedule",
+    () => provider.getClassroomSchedule(options),
+    options,
+  );
+}
+
+export function useTeachingClassSchedule(
+  options?: PublicScheduleQueryOptions,
+): ProviderQueryResult<PublicScheduleEntry[]> {
+  const provider = useProvider();
+  return useProviderQuery(
+    "publicSchedule",
+    "teaching-class-schedule",
+    () => provider.getTeachingClassSchedule(options),
     options,
   );
 }

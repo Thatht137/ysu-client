@@ -23,6 +23,7 @@ export const ALL_CAPABILITIES: AcademicCapabilities = {
   currentWeek: true,
   classPeriods: true,
   termCalendar: true,
+  publicSchedule: true,
   mobileSignin: true,
 };
 
@@ -44,6 +45,7 @@ export const NO_CAPABILITIES: AcademicCapabilities = {
   currentWeek: false,
   classPeriods: false,
   termCalendar: false,
+  publicSchedule: false,
   mobileSignin: false,
 };
 
