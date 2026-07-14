@@ -659,6 +659,7 @@ export class YSUProvider extends BaseProvider {
       term: options?.semester,
       week: options?.week,
       classroomId: options?.classroomId,
+      classroomIds: options?.classroomIds,
     });
     return rows.map(mapPublicScheduleEntry);
   }

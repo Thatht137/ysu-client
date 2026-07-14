@@ -145,12 +145,7 @@ function EmptyRoomsPanel({
 }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
-  const [building, setBuilding] = useState("__all__");
-  const schedule = useClassroomSchedule({ semester, week });
-
-  useEffect(() => {
-    if (schedule.error) toast.error(schedule.error.message);
-  }, [schedule.error]);
+  const [building, setBuilding] = useState("");
 
   const buildings = useMemo(
     () =>
@@ -159,6 +154,29 @@ function EmptyRoomsPanel({
       ).sort(),
     [classrooms],
   );
+
+  useEffect(() => {
+    if (!building && buildings[0]) setBuilding(buildings[0]);
+  }, [building, buildings]);
+
+  const candidateRooms = useMemo(
+    () =>
+      classrooms.filter(
+        (room) =>
+          room.isSchedulable &&
+          (building === "__all__" || !building || room.building === building),
+      ),
+    [building, classrooms],
+  );
+  const classroomIds = useMemo(
+    () => candidateRooms.map((room) => room.id),
+    [candidateRooms],
+  );
+  const schedule = useClassroomSchedule({ semester, week, classroomIds });
+
+  useEffect(() => {
+    if (schedule.error) toast.error(schedule.error.message);
+  }, [schedule.error]);
 
   const occupiedIds = useMemo(() => {
     const ids = new Set<string>();
@@ -172,10 +190,8 @@ function EmptyRoomsPanel({
 
   const emptyRooms = useMemo(() => {
     const keyword = search.trim().toLowerCase();
-    return classrooms
-      .filter((room) => room.isSchedulable)
+    return candidateRooms
       .filter((room) => !occupiedIds.has(room.id))
-      .filter((room) => building === "__all__" || room.building === building)
       .filter((room) =>
         keyword
           ? [room.name, room.building, room.campus, room.roomType]
@@ -188,7 +204,7 @@ function EmptyRoomsPanel({
           (left.building ?? "").localeCompare(right.building ?? "") ||
           left.name.localeCompare(right.name),
       );
-  }, [building, classrooms, occupiedIds, search]);
+  }, [candidateRooms, occupiedIds, search]);
 
   if (schedule.isLoading && !schedule.data) {
     return <Skeleton className="h-72" />;

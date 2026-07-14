@@ -3,15 +3,15 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v1.0.0)'
+        description: "Release tag (e.g. v1.0.0)"
         required: true
-        default: 'v1.0.0'
+        default: "v1.0.0"
       prerelease:
-        description: 'Mark as prerelease'
+        description: "Mark as prerelease"
         type: boolean
         default: false
 
@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -38,7 +40,7 @@ jobs:
       - name: Install web dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build web assets (Next.js static export)
+      - name: Build web assets
         run: pnpm run build
 
       - name: Setup Java 21
@@ -50,7 +52,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
 
       - name: Decode release keystore
         env:
@@ -63,7 +65,7 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
           echo "Keystore decoded: $(stat -c %s android/app/release.keystore) bytes"
 
-      - name: Sync Capacitor (web → android)
+      - name: Sync Capacitor
         run: npx cap sync android
 
       - name: Build release APK
@@ -76,7 +78,7 @@ jobs:
 
       - name: Compute release metadata
         env:
-          TAG_NAME: ${{ github.ref_name || github.event.inputs.tag }}
+          TAG_NAME: ${{ github.event.inputs.tag || github.ref_name }}
         run: node scripts/release-meta.mjs
 
       - name: Prepare release assets
@@ -87,11 +89,11 @@ jobs:
           CHANNEL: ${{ env.CHANNEL }}
         run: |
           mkdir -p release-assets
-          # APK
+          # Android 安装包
           cp android/app/build/outputs/apk/release/app-release.apk "release-assets/FightingClub-${RELEASE_NAME}.apk"
-          # dist.zip (OTA web bundle)
+          # OTA 网页资源
           (cd dist && zip -r ../release-assets/dist.zip .)
-          # version.json (OTA manifest) — generated from env
+          # OTA 元数据和更新公告
           node scripts/gen-version-json.mjs
 
       - name: Create GitHub Release
@@ -100,19 +102,7 @@ jobs:
           tag_name: ${{ env.RELEASE_NAME }}
           name: ${{ env.RELEASE_NAME }}
           prerelease: ${{ env.IS_PRERELEASE == 'true' }}
-          body: |
-            ## Fighting Club ${{ env.RELEASE_NAME }}
-
-            本 Release 包含三个产物：
-
-            - **FightingClub-${{ env.RELEASE_NAME }}.apk** — Android 安装包，直接装到手机
-            - **dist.zip** — OTA 热更新包，App 内检查更新会下载此文件
-            - **version.json** — OTA 元数据，App 内检查更新会拉取此文件
-
-            **安装方法**：下载 APK，允许"安装未知来源应用"后点击安装。
-            **OTA 升级**：已安装旧版本的用户，在 App 设置里"检查更新"即可收到新版。
-
-            Channel: `${{ env.CHANNEL }}` (versionCode `${{ env.VERSION_CODE }}`)
+          body_path: release-assets/release-notes.md
           files: |
             release-assets/*.apk
             release-assets/dist.zip

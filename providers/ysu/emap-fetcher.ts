@@ -193,6 +193,7 @@ export async function queryClassroomSchedule(opts?: {
   term?: string;
   week?: number;
   classroomId?: string;
+  classroomIds?: string[];
 }): Promise<JWXTPublicScheduleEntry[]> {
   return withJWXT(() => _queryClassroomSchedule(opts));
 }

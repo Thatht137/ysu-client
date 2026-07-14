@@ -1,6 +1,5 @@
-// Generate release-assets/version.json for OTA manifest.
-// Invoked by .github/workflows/release.yml "Prepare release assets" step.
-import { mkdirSync, writeFileSync } from "node:fs";
+// 生成 OTA 元数据和版本公告。
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 const {
   RELEASE_VERSION,
@@ -18,7 +17,15 @@ const REPO_RELEASES_BASE = "https://github.com/Thatht137/ysu-client/releases";
 const tagUrl = `${REPO_RELEASES_BASE}/download/${RELEASE_NAME}`;
 const apkUrl = `${tagUrl}/FightingClub-${RELEASE_NAME}.apk`;
 const distUrl = `${tagUrl}/dist.zip`;
-const body = `Fighting Club ${RELEASE_VERSION}`;
+const changelog = readFileSync("CHANGELOG.md", "utf8");
+const heading = `## ${RELEASE_VERSION}`;
+const sectionStart = changelog.indexOf(heading);
+const contentStart = sectionStart < 0 ? -1 : sectionStart + heading.length;
+const nextSection = contentStart < 0 ? -1 : changelog.indexOf("\n## ", contentStart);
+const body =
+  contentStart < 0
+    ? `Fighting Club ${RELEASE_VERSION}`
+    : changelog.slice(contentStart, nextSection < 0 ? undefined : nextSection).trim();
 
 const entry = {
   webVersion: RELEASE_VERSION,
@@ -32,11 +39,28 @@ const manifest = {
   ...entry,
   channels:
     CHANNEL === "stable"
-      ? { stable: { ...entry, body: `${body} stable` } }
-      : { prerelease: { ...entry, body: `${body} prerelease` } },
+      ? { stable: { ...entry, body } }
+      : { prerelease: { ...entry, body } },
 };
 
 mkdirSync("release-assets", { recursive: true });
 writeFileSync("release-assets/version.json", JSON.stringify(manifest, null, 2) + "\n");
+writeFileSync(
+  "release-assets/release-notes.md",
+  [
+    `## Fighting Club ${RELEASE_VERSION}`,
+    "",
+    body,
+    "",
+    "### 下载说明",
+    "",
+    `- **FightingClub-${RELEASE_NAME}.apk**：Android 安装包`,
+    "- **dist.zip**：应用内 OTA 更新包",
+    "- **version.json**：应用内更新元数据",
+    "",
+    `Channel: \`${CHANNEL}\` · versionCode: \`${VERSION_CODE}\``,
+    "",
+  ].join("\n"),
+);
 console.log("version.json:");
 console.log(JSON.stringify(manifest, null, 2));

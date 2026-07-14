@@ -373,6 +373,7 @@ export interface PublicScheduleQueryOptions {
   semester?: string;
   week?: number;
   classroomId?: string;
+  classroomIds?: string[];
   classId?: string;
 }
 

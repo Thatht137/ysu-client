@@ -547,6 +547,43 @@ function extractRows(datas: unknown, key: string): unknown[] {
   return [];
 }
 
+function isTransientRequestError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return [
+    'unexpected end of stream',
+    'connection reset',
+    'econnreset',
+    'socket closed',
+    'timeout',
+    'timed out',
+  ].some((token) => message.includes(token));
+}
+
+async function wait(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function mapWithConcurrency<T, R>(
+  values: readonly T[],
+  concurrency: number,
+  mapper: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let nextIndex = 0;
+
+  const worker = async (): Promise<void> => {
+    while (nextIndex < values.length) {
+      const index = nextIndex++;
+      results[index] = await mapper(values[index]!);
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, values.length) }, () => worker()),
+  );
+  return results;
+}
+
 function rawStr(raw: Record<string, unknown>, ...keys: readonly string[]): string {
   for (const k of keys) {
     const v = raw[k];
@@ -763,22 +800,30 @@ async function emapPost(
   appId?: string,
 ): Promise<Record<string, unknown>> {
   const doRequest = async (): Promise<Awaited<ReturnType<typeof fetchWithJar>>> => {
-    try {
-      return await fetchWithJar(jwxtJar, {
-        method: 'POST',
-        url,
-        body: new URLSearchParams(data),
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-          'X-Requested-With': 'XMLHttpRequest',
-          Accept: 'application/json, text/javascript, */*; q=0.01',
-        },
-        redirect: 'follow',
-        timeoutMs,
-      });
-    } catch (e) {
-      throw new JWXTProtocolError(`request failed for ${url}: ${(e as Error).message}`);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        return await fetchWithJar(jwxtJar, {
+          method: 'POST',
+          url,
+          body: new URLSearchParams(data),
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest',
+            Accept: 'application/json, text/javascript, */*; q=0.01',
+          },
+          redirect: 'follow',
+          timeoutMs,
+        });
+      } catch (error) {
+        if (attempt === 1 || !isTransientRequestError(error)) {
+          throw new JWXTProtocolError(
+            `request failed for ${url}: ${(error as Error).message}`,
+          );
+        }
+        await wait(350);
+      }
     }
+    throw new JWXTProtocolError(`request failed for ${url}`);
   };
 
   let resp: Awaited<ReturnType<typeof fetchWithJar>>;
@@ -1405,17 +1450,33 @@ export async function queryClassrooms(opts?: {
   return runWithReauth(async () => {
     await ensureWeu(_appIds.kcbcx);
     const term = await resolvePublicScheduleTerm(opts?.term);
-    const datas = await post(_apiPaths.kcbcx_rooms!, {
-      querySetting: '[]',
-      XNXQDM: term,
-      SFYPK: '1',
-      '*order': '+JXLDM,+JASMC',
-      pageSize: String(opts?.pageSize ?? 9999),
-      pageNumber: String(opts?.pageNumber ?? 1),
-    }, _appIds.kcbcx);
-    return extractRows(datas, 'jscx').map((row) =>
-      parseClassroom(row as Record<string, unknown>),
-    );
+    const pageSize = opts?.pageSize ?? 200;
+    const firstPage = opts?.pageNumber ?? 1;
+    const rows: unknown[] = [];
+    const seenIds = new Set<string>();
+
+    for (let pageNumber = firstPage; pageNumber < firstPage + 50; pageNumber += 1) {
+      const datas = await post(_apiPaths.kcbcx_rooms!, {
+        querySetting: '[]',
+        XNXQDM: term,
+        SFYPK: '1',
+        '*order': '+JXLDM,+JASMC',
+        pageSize: String(pageSize),
+        pageNumber: String(pageNumber),
+      }, _appIds.kcbcx);
+      const pageRows = extractRows(datas, 'jscx');
+      let added = 0;
+      for (const row of pageRows) {
+        const id = rawStr(row as Record<string, unknown>, 'JASDM', 'WID');
+        if (!id || seenIds.has(id)) continue;
+        seenIds.add(id);
+        rows.push(row);
+        added += 1;
+      }
+      if (opts?.pageNumber || pageRows.length < pageSize || added === 0) break;
+    }
+
+    return rows.map((row) => parseClassroom(row as Record<string, unknown>));
   });
 }
 
@@ -1445,19 +1506,30 @@ export async function queryClassroomSchedule(opts?: {
   term?: string;
   week?: number;
   classroomId?: string;
+  classroomIds?: string[];
 }): Promise<PublicScheduleEntry[]> {
   return runWithReauth(async () => {
     await ensureWeu(_appIds.kcbcx);
     const term = await resolvePublicScheduleTerm(opts?.term);
-    const request: Record<string, unknown> = { XNXQDM: term };
-    if (opts?.week) request.SKZC = opts.week;
-    if (opts?.classroomId) request.JASDM = opts.classroomId;
-    const datas = await post(_apiPaths.kcbcx_room_schedule!, {
-      requestParamStr: JSON.stringify(request),
-    }, _appIds.kcbcx);
-    return extractRows(datas, 'queryjaskb').map((row) =>
-      parsePublicScheduleEntry(row as Record<string, unknown>),
-    );
+    const classroomIds = Array.from(
+      new Set([opts?.classroomId, ...(opts?.classroomIds ?? [])].filter(Boolean)),
+    ) as string[];
+    if (classroomIds.length === 0) return [];
+
+    const pages = await mapWithConcurrency(classroomIds, 4, async (classroomId) => {
+      const request: Record<string, unknown> = {
+        XNXQDM: term,
+        JASDM: classroomId,
+      };
+      if (opts?.week) request.SKZC = opts.week;
+      const datas = await post(_apiPaths.kcbcx_room_schedule!, {
+        requestParamStr: JSON.stringify(request),
+      }, _appIds.kcbcx);
+      return extractRows(datas, 'queryjaskb').map((row) =>
+        parsePublicScheduleEntry(row as Record<string, unknown>),
+      );
+    });
+    return pages.flat();
   });
 }
 
