@@ -24,10 +24,12 @@ import {
   useTeachingClassSchedule,
 } from "@/providers/hooks";
 import type {
+  ClassPeriod,
   Classroom,
   PublicScheduleEntry,
   TeachingClass,
 } from "@/providers/types";
+import { PublicScheduleGrid } from "./public-schedule-grid";
 
 type QueryMode = "empty" | "class" | "room";
 
@@ -72,62 +74,6 @@ function entryMatchesSlot(
   if (entry.weekday !== weekday) return false;
   if (section < entry.startSection || section > entry.endSection) return false;
   return !entry.weekList?.length || entry.weekList.includes(week);
-}
-
-function ScheduleList({ entries }: { entries: PublicScheduleEntry[] }) {
-  const { t } = useTranslation();
-  const sorted = useMemo(
-    () =>
-      [...entries].sort(
-        (left, right) =>
-          left.weekday - right.weekday ||
-          left.startSection - right.startSection ||
-          left.courseName.localeCompare(right.courseName),
-      ),
-    [entries],
-  );
-
-  if (sorted.length === 0) {
-    return (
-      <p className="rounded-lg border p-6 text-center text-sm text-muted-foreground">
-        {t("classrooms.noSchedule")}
-      </p>
-    );
-  }
-
-  return (
-    <div className="grid gap-2 md:grid-cols-2">
-      {sorted.map((entry, index) => (
-        <div
-          key={`${entry.courseCode}-${entry.weekday}-${entry.startSection}-${index}`}
-          className="rounded-lg border bg-card p-3"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{entry.courseName || "-"}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t("classrooms.weekday", { day: entry.weekday })} ·{" "}
-                {t("classrooms.sectionRange", {
-                  start: entry.startSection,
-                  end: entry.endSection,
-                })}
-              </p>
-            </div>
-            {entry.weeks && (
-              <Badge variant="outline" className="shrink-0 text-[10px]">
-                {entry.weeks}
-              </Badge>
-            )}
-          </div>
-          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            {entry.teacher && <span>{entry.teacher}</span>}
-            {entry.classroom && <span>{entry.classroom}</span>}
-            {entry.className && <span>{entry.className}</span>}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function EmptyRoomsPanel({
@@ -290,10 +236,12 @@ function RoomScheduleResult({
   semester,
   week,
   classroomId,
+  periods,
 }: {
   semester?: string;
   week: number;
   classroomId: string;
+  periods: ClassPeriod[];
 }) {
   const schedule = useClassroomSchedule({ semester, week, classroomId });
 
@@ -311,17 +259,26 @@ function RoomScheduleResult({
       </p>
     );
   }
-  return <ScheduleList entries={schedule.data ?? []} />;
+  return (
+    <PublicScheduleGrid
+      entries={schedule.data ?? []}
+      periods={periods}
+      week={week}
+      secondary="class"
+    />
+  );
 }
 
 function RoomSchedulePanel({
   classrooms,
   semester,
   week,
+  periods,
 }: {
   classrooms: Classroom[];
   semester?: string;
   week: number;
+  periods: ClassPeriod[];
 }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
@@ -364,7 +321,12 @@ function RoomSchedulePanel({
           {t("classrooms.selectRoomHint")}
         </p>
       ) : (
-        <RoomScheduleResult semester={semester} week={week} classroomId={selectedId} />
+        <RoomScheduleResult
+          semester={semester}
+          week={week}
+          classroomId={selectedId}
+          periods={periods}
+        />
       )}
     </div>
   );
@@ -374,10 +336,12 @@ function TeachingClassScheduleResult({
   semester,
   week,
   classId,
+  periods,
 }: {
   semester?: string;
   week: number;
   classId: string;
+  periods: ClassPeriod[];
 }) {
   const schedule = useTeachingClassSchedule({ semester, week, classId });
 
@@ -395,10 +359,25 @@ function TeachingClassScheduleResult({
       </p>
     );
   }
-  return <ScheduleList entries={schedule.data ?? []} />;
+  return (
+    <PublicScheduleGrid
+      entries={schedule.data ?? []}
+      periods={periods}
+      week={week}
+      secondary="room"
+    />
+  );
 }
 
-function ClassSchedulePanel({ semester, week }: { semester?: string; week: number }) {
+function ClassSchedulePanel({
+  semester,
+  week,
+  periods,
+}: {
+  semester?: string;
+  week: number;
+  periods: ClassPeriod[];
+}) {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState("");
@@ -445,7 +424,12 @@ function ClassSchedulePanel({ semester, week }: { semester?: string; week: numbe
           {t("classrooms.selectClassHint")}
         </p>
       ) : (
-        <TeachingClassScheduleResult semester={semester} week={week} classId={selectedId} />
+        <TeachingClassScheduleResult
+          semester={semester}
+          week={week}
+          classId={selectedId}
+          periods={periods}
+        />
       )}
     </div>
   );
@@ -564,12 +548,13 @@ export default function ClassroomsPage() {
           section={section || 1}
         />
       ) : mode === "class" ? (
-        <ClassSchedulePanel semester={semester} week={week} />
+        <ClassSchedulePanel semester={semester} week={week} periods={availablePeriods} />
       ) : (
         <RoomSchedulePanel
           classrooms={classrooms.data ?? []}
           semester={semester}
           week={week}
+          periods={availablePeriods}
         />
       )}
     </div>

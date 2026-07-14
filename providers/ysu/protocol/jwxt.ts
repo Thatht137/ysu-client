@@ -752,8 +752,14 @@ function rawInt(raw: Record<string, unknown>, ...keys: readonly string[]): numbe
 function parseWeekList(weeksStr: string): number[] {
   const result = new Set<number>();
   if (!weeksStr) return [];
-  const cleaned = weeksStr.replace(/[周第\s]/g, '');
-  const parts = cleaned.split(/[,，]/);
+  const trimmed = weeksStr.trim();
+  if (/^[01]{4,}$/.test(trimmed)) {
+    return Array.from(trimmed)
+      .map((value, index) => (value === '1' ? index + 1 : 0))
+      .filter((week) => week > 0);
+  }
+  const cleaned = trimmed.replace(/[周第\s]/g, '');
+  const parts = cleaned.split(/[,，、]/);
   for (const part of parts) {
     if (part.includes('-')) {
       const [start, end] = part.split('-').map((s) => parseInt(s, 10));
@@ -766,6 +772,24 @@ function parseWeekList(weeksStr: string): number[] {
     }
   }
   return Array.from(result).sort((a, b) => a - b);
+}
+
+function formatWeekList(weeks: readonly number[]): string {
+  if (weeks.length === 0) return '';
+  const ranges: string[] = [];
+  let start = weeks[0]!;
+  let end = start;
+  for (const week of weeks.slice(1)) {
+    if (week === end + 1) {
+      end = week;
+      continue;
+    }
+    ranges.push(start === end ? String(start) : `${start}-${end}`);
+    start = week;
+    end = week;
+  }
+  ranges.push(start === end ? String(start) : `${start}-${end}`);
+  return `${ranges.join('、')}周`;
 }
 
 const TJLX_TO_SCOPE: Readonly<Record<string, string>> = {
@@ -1837,12 +1861,14 @@ function parseTeachingClass(raw: Record<string, unknown>): TeachingClass {
 }
 
 function parsePublicScheduleEntry(raw: Record<string, unknown>): PublicScheduleEntry {
-  const weeks = rawStr(raw, 'SKZC', 'ZCMC');
+  const encodedWeeks = rawStr(raw, 'SKZC');
+  const weekList = parseWeekList(encodedWeeks || rawStr(raw, 'ZCMC'));
+  const weeks = rawStr(raw, 'ZCMC') || formatWeekList(weekList);
   return {
     courseName: rawStr(raw, 'KCM', 'XSKCM'),
     courseCode: rawStr(raw, 'KCH', 'XSKCH'),
     teacher: rawStr(raw, 'SKJS', 'JSXM'),
-    classroom: rawStr(raw, 'JASMC', 'JASDM_DISPLAY'),
+    classroom: rawStr(raw, 'JASMC'),
     classroomId: rawStr(raw, 'JASDM'),
     className: rawStr(raw, 'BJMC', 'SKBJ'),
     classId: rawStr(raw, 'BJDM', 'JXBID'),
@@ -1850,7 +1876,7 @@ function parsePublicScheduleEntry(raw: Record<string, unknown>): PublicScheduleE
     startSection: rawInt(raw, 'KSJC'),
     endSection: rawInt(raw, 'JSJC'),
     weeks,
-    weekList: parseWeekList(weeks),
+    weekList,
     raw,
   };
 }
