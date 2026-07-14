@@ -28,7 +28,7 @@ interface Props {
   entries: PublicScheduleEntry[];
   periods: ClassPeriod[];
   week: number;
-  secondary: "class" | "room";
+  variant: "class" | "room";
 }
 
 interface PublicCourse extends Course {
@@ -36,11 +36,11 @@ interface PublicCourse extends Course {
   weeksText?: string;
 }
 
-export function PublicScheduleGrid({ entries, periods, week, secondary }: Props) {
+export function PublicScheduleGrid({ entries, periods, week, variant }: Props) {
   const { t } = useTranslation();
   const courses = useMemo<PublicCourse[]>(
-    () =>
-      entries
+    () => {
+      const activeEntries = entries
         .filter((entry) => !entry.weekList?.length || entry.weekList.includes(week))
         .filter(
           (entry) =>
@@ -48,12 +48,31 @@ export function PublicScheduleGrid({ entries, periods, week, secondary }: Props)
             entry.weekday <= 7 &&
             entry.startSection > 0 &&
             entry.endSection >= entry.startSection,
-        )
+        );
+      const visibleEntries =
+        variant === "room"
+          ? Array.from(
+              new Map(
+                activeEntries.map((entry) => [
+                  [
+                    entry.courseCode || entry.courseName,
+                    entry.teacher,
+                    entry.weekday,
+                    entry.startSection,
+                    entry.endSection,
+                    entry.weekList?.join(","),
+                  ].join("|"),
+                  entry,
+                ]),
+              ).values(),
+            )
+          : activeEntries;
+      return visibleEntries
         .map((entry) => ({
           name: entry.courseName || "-",
           code: entry.courseCode,
           teacher: entry.teacher,
-          classroom: secondary === "room" ? entry.classroom : entry.className,
+          classroom: variant === "class" ? entry.classroom : undefined,
           weekDay: entry.weekday,
           startSection: entry.startSection,
           endSection: entry.endSection,
@@ -61,10 +80,11 @@ export function PublicScheduleGrid({ entries, periods, week, secondary }: Props)
           weekList: entry.weekList,
           classId: entry.classId,
           raw: entry.metadata,
-          secondaryText: secondary === "room" ? entry.classroom : entry.className,
+          secondaryText: variant === "class" ? entry.classroom : undefined,
           weeksText: entry.weeks,
-        })),
-    [entries, secondary, week],
+        }));
+    },
+    [entries, variant, week],
   );
 
   const activePeriods = useMemo(

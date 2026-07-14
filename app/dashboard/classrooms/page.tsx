@@ -264,7 +264,7 @@ function RoomScheduleResult({
       entries={schedule.data ?? []}
       periods={periods}
       week={week}
-      secondary="class"
+      variant="room"
     />
   );
 }
@@ -364,7 +364,7 @@ function TeachingClassScheduleResult({
       entries={schedule.data ?? []}
       periods={periods}
       week={week}
-      secondary="room"
+      variant="class"
     />
   );
 }

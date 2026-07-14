@@ -11,7 +11,7 @@ android {
         applicationId "com.thatht137.fightingclub"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionName "1.1.0-rc.3"
+        versionName "1.1.0-rc.4"
         def versionMatcher = versionName =~ /^(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta|rc)\.(\d+))?$/
         if (!versionMatcher.matches()) {
             throw new GradleException("Invalid versionName: ${versionName}")

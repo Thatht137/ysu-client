@@ -1545,7 +1545,6 @@ export async function queryClassroomSchedule(opts?: {
         XNXQDM: term,
         JASDM: classroomId,
       };
-      if (opts?.week) request.SKZC = opts.week;
       const datas = await post(_apiPaths.kcbcx_room_schedule!, {
         requestParamStr: JSON.stringify(request),
       }, _appIds.kcbcx);
