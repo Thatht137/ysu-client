@@ -1,11 +1,11 @@
-"use client";
+"use client"
 
-import { useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
-import Link from "next/link";
-import { useAuthStore } from "@/lib/stores/auth";
-import { useSettingsStore } from "@/lib/stores/settings";
-import { useTranslation } from "@/lib/i18n/use-translation";
+import { useEffect } from "react"
+import { useRouter, usePathname } from "next/navigation"
+import Link from "next/link"
+import { useAuthStore } from "@/lib/stores/auth"
+import { useSettingsStore } from "@/lib/stores/settings"
+import { useTranslation } from "@/lib/i18n/use-translation"
 import {
   Sidebar,
   SidebarContent,
@@ -19,71 +19,109 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarSeparator,
-} from "@/components/ui/sidebar";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+} from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { toast } from "sonner";
-import { logoutActiveProvider, reloginActiveProvider } from "@/providers/provider-service";
-import { checkRateLimit, recordLoginAttempt } from "@/lib/rate-limit";
+} from "@/components/ui/dropdown-menu"
+import { toast } from "sonner"
 import {
+  logoutActiveProvider,
+  reloginActiveProvider,
+} from "@/providers/provider-service"
+import { checkRateLimit, recordLoginAttempt } from "@/lib/rate-limit"
+import {
+  AirVent,
   BookOpen,
-  Building2,
+  CalendarDays,
   Calendar,
   ClipboardCheck,
+  FilePenLine,
   FileText,
+  Gauge,
   GraduationCap,
+  Hammer,
   Info,
   LayoutDashboard,
+  Lightbulb,
   LogIn,
   LogOut,
   Settings,
   User,
-} from "lucide-react";
-import { MobileBottomNav } from "@/components/mobile-bottom-nav";
-import { MobileTopBar } from "@/components/mobile-top-bar";
-import { RefreshIndicator } from "@/components/refresh-indicator";
-import { StaleIndicator } from "@/components/stale-indicator";
-import { UpdateDialog } from "@/components/update-dialog";
-import { APP_VERSION, APP_BUILD } from "@/lib/version";
+} from "lucide-react"
+import { MobileBottomNav } from "@/components/mobile-bottom-nav"
+import { MobileTopBar } from "@/components/mobile-top-bar"
+import { RefreshIndicator } from "@/components/refresh-indicator"
+import { StaleIndicator } from "@/components/stale-indicator"
+import { UpdateDialog } from "@/components/update-dialog"
+import { APP_VERSION, APP_BUILD } from "@/lib/version"
 
 export default function DashboardLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode
 }) {
-  const router = useRouter();
-  const rawPathname = usePathname();
-  const pathname = rawPathname.replace(/\/$/, "");
-  const { isAuthenticated, hasHydrated, username } = useAuthStore();
-  const { t } = useTranslation();
+  const router = useRouter()
+  const rawPathname = usePathname()
+  const pathname = rawPathname.replace(/\/$/, "")
+  const { isAuthenticated, hasHydrated, username } = useAuthStore()
+  const { t } = useTranslation()
 
-  const backgroundImage = useSettingsStore((s) => s.backgroundImage);
-  const avatarImage = useSettingsStore((s) => s.avatarImage);
-  const hasBackground = !!backgroundImage;
+  const backgroundImage = useSettingsStore((s) => s.backgroundImage)
+  const avatarImage = useSettingsStore((s) => s.avatarImage)
+  const hasBackground = !!backgroundImage
 
   const navItems = [
     { title: t("app.overview"), url: "/dashboard", icon: LayoutDashboard },
     { title: t("app.grades"), url: "/dashboard/grades", icon: GraduationCap },
     { title: t("app.schedule"), url: "/dashboard/schedule", icon: Calendar },
-    { title: t("app.classrooms"), url: "/dashboard/classrooms", icon: Building2 },
     { title: t("app.exams"), url: "/dashboard/exams", icon: FileText },
-    { title: t("app.trainingPlan"), url: "/dashboard/training-plan", icon: BookOpen },
-    { title: t("app.evaluation"), url: "/dashboard/evaluation", icon: ClipboardCheck },
-  ];
+    {
+      title: t("app.makeupExams"),
+      url: "/dashboard/makeup-exams",
+      icon: FilePenLine,
+    },
+    {
+      title: t("app.schoolSchedule"),
+      url: "/dashboard/school-schedule",
+      icon: CalendarDays,
+    },
+    { title: t("app.labor"), url: "/dashboard/labor", icon: Hammer },
+    { title: t("app.credits"), url: "/dashboard/credits", icon: Lightbulb },
+    {
+      title: t("app.comprehensive"),
+      url: "/dashboard/comprehensive",
+      icon: Gauge,
+    },
+    { title: t("meter.nav"), url: "/dashboard/meter", icon: AirVent },
+    {
+      title: t("app.trainingPlan"),
+      url: "/dashboard/training-plan",
+      icon: BookOpen,
+    },
+    {
+      title: t("app.evaluation"),
+      url: "/dashboard/evaluation",
+      icon: ClipboardCheck,
+    },
+  ]
 
   const titleByPath: Record<string, string> = {
     "/dashboard": t("app.overview"),
     "/dashboard/grades": t("app.grades"),
     "/dashboard/gpa": t("app.gpa"),
     "/dashboard/schedule": t("app.schedule"),
-    "/dashboard/classrooms": t("app.classrooms"),
     "/dashboard/exams": t("app.exams"),
+    "/dashboard/makeup-exams": t("app.makeupExams"),
+    "/dashboard/school-schedule": t("app.schoolSchedule"),
+    "/dashboard/labor": t("app.labor"),
+    "/dashboard/credits": t("app.credits"),
+    "/dashboard/comprehensive": t("app.comprehensive"),
+    "/dashboard/meter": t("meter.title"),
     "/dashboard/training-plan": t("app.trainingPlan"),
     "/dashboard/evaluation": t("app.evaluation"),
     "/dashboard/me": t("app.me"),
@@ -93,68 +131,81 @@ export default function DashboardLayout({
     "/dashboard/me/settings": t("settings.title"),
     "/dashboard/me/avatar": t("app.avatarSettings"),
     "/dashboard/me/about": t("about.title"),
-  };
-  const pageTitle = titleByPath[pathname] ?? t("app.name");
+  }
+  const pageTitle = titleByPath[pathname] ?? t("app.name")
 
-  const primaryPaths = new Set(["/dashboard", "/dashboard/schedule", "/dashboard/grades", "/dashboard/evaluation", "/dashboard/me"]);
-  const showBack = !primaryPaths.has(pathname);
+  const primaryPaths = new Set([
+    "/dashboard",
+    "/dashboard/schedule",
+    "/dashboard/grades",
+    "/dashboard/evaluation",
+    "/dashboard/me",
+  ])
+  const showBack = !primaryPaths.has(pathname)
 
   useEffect(() => {
     if (hasHydrated && !isAuthenticated) {
-      router.replace("/login");
+      router.replace("/login")
     }
-  }, [hasHydrated, isAuthenticated, router]);
+  }, [hasHydrated, isAuthenticated, router])
 
   async function handleLogout() {
-    await logoutActiveProvider();
-    toast.success(t("app.logout"));
-    router.replace("/login");
+    await logoutActiveProvider()
+    toast.success(t("app.logout"))
+    router.replace("/login")
   }
 
   async function handleRelogin() {
-    const limit = checkRateLimit();
+    const limit = checkRateLimit()
     if (!limit.allowed) {
-      const totalSeconds = Math.ceil(limit.retryAfterMs / 1000);
-      const minutes = Math.floor(totalSeconds / 60);
-      const seconds = totalSeconds % 60;
+      const totalSeconds = Math.ceil(limit.retryAfterMs / 1000)
+      const minutes = Math.floor(totalSeconds / 60)
+      const seconds = totalSeconds % 60
       const message =
         limit.reason === "window"
           ? t("autoLogin.errorRateLimitWindow")
               .replace("{minutes}", String(minutes))
               .replace("{seconds}", seconds.toString().padStart(2, "0"))
-          : t("autoLogin.errorRateLimitInterval").replace("{seconds}", String(seconds));
-      toast.error(message);
-      return;
+          : t("autoLogin.errorRateLimitInterval").replace(
+              "{seconds}",
+              String(seconds)
+            )
+      toast.error(message)
+      return
     }
-    recordLoginAttempt();
+    recordLoginAttempt()
 
     try {
-      const success = await reloginActiveProvider();
+      const success = await reloginActiveProvider()
       if (success) {
-        toast.success(t("login.loginSuccess"));
-        return;
+        toast.success(t("login.loginSuccess"))
+        return
       }
     } catch {
-      // fall through
+      // 失败后退出登录
     }
-    await logoutActiveProvider();
-    router.replace("/login");
+    await logoutActiveProvider()
+    router.replace("/login")
   }
 
   if (!hasHydrated) {
     return (
       <div className="flex min-h-svh items-center justify-center">
-        <div className="text-muted-foreground" suppressHydrationWarning>{t("app.updating")}</div>
+        <div className="text-muted-foreground" suppressHydrationWarning>
+          {t("app.updating")}
+        </div>
       </div>
-    );
+    )
   }
 
   if (!isAuthenticated) {
-    return null;
+    return null
   }
 
   return (
-    <SidebarProvider style={{ "--sidebar-width": "18rem" } as React.CSSProperties}>
+    <SidebarProvider
+      style={{ "--sidebar-width": "18rem" } as React.CSSProperties}
+    >
       <UpdateDialog />
       <Sidebar
         className={
@@ -200,7 +251,10 @@ export default function DashboardLayout({
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
-                    isActive={pathname === "/dashboard/me" || pathname.startsWith("/dashboard/me/")}
+                    isActive={
+                      pathname === "/dashboard/me" ||
+                      pathname.startsWith("/dashboard/me/")
+                    }
                     tooltip={t("app.me")}
                     className="py-3 transition-colors duration-150 hover:bg-accent hover:text-accent-foreground data-[active=true]:bg-accent data-[active=true]:text-accent-foreground"
                   >
@@ -220,11 +274,13 @@ export default function DashboardLayout({
             className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           >
             <Info className="size-3.5" />
-            <span>v{APP_VERSION} ({APP_BUILD})</span>
+            <span>
+              v{APP_VERSION} ({APP_BUILD})
+            </span>
           </button>
         </SidebarFooter>
       </Sidebar>
-      <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden pt-[calc(3rem+var(--safe-area-inset-top,env(safe-area-inset-top,0px)))] pb-[calc(4rem+var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)))] md:overflow-auto md:pb-[var(--safe-area-inset-bottom,env(safe-area-inset-bottom))] md:pt-[var(--safe-area-inset-top,env(safe-area-inset-top))]">
+      <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden pt-[calc(3rem+var(--safe-area-inset-top,env(safe-area-inset-top,0px)))] pb-[calc(4rem+var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)))] md:overflow-auto md:pt-[var(--safe-area-inset-top,env(safe-area-inset-top))] md:pb-[var(--safe-area-inset-bottom,env(safe-area-inset-bottom))]">
         <MobileTopBar title={pageTitle} showBack={showBack} />
         <header className="hidden items-center justify-between gap-4 border-b px-6 py-4 md:flex">
           <div className="flex items-center gap-3">
@@ -245,9 +301,14 @@ export default function DashboardLayout({
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative size-8 rounded-full">
+                <Button
+                  variant="ghost"
+                  className="relative size-8 rounded-full"
+                >
                   <Avatar className="size-8">
-                    {avatarImage && <AvatarImage src={avatarImage} alt="avatar" />}
+                    {avatarImage && (
+                      <AvatarImage src={avatarImage} alt="avatar" />
+                    )}
                     <AvatarFallback className="text-xs">
                       {username?.slice(-2) || "U"}
                     </AvatarFallback>
@@ -255,8 +316,13 @@ export default function DashboardLayout({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[10rem]">
-                <DropdownMenuItem disabled className="flex flex-col items-start gap-0.5">
-                  <span className="font-medium text-foreground">{username || t("app.login")}</span>
+                <DropdownMenuItem
+                  disabled
+                  className="flex flex-col items-start gap-0.5"
+                >
+                  <span className="font-medium text-foreground">
+                    {username || t("app.login")}
+                  </span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleRelogin}>
                   <LogIn />
@@ -270,12 +336,14 @@ export default function DashboardLayout({
             </DropdownMenu>
           </div>
         </header>
-        <div key={pathname} className="flex flex-1 flex-col p-4 animate-in fade-in slide-in-from-bottom-2 duration-500 md:p-8">
+        <div
+          key={pathname}
+          className="flex flex-1 animate-in flex-col p-4 duration-500 fade-in slide-in-from-bottom-2 md:p-8"
+        >
           {children}
         </div>
       </main>
       <MobileBottomNav />
-
     </SidebarProvider>
-  );
+  )
 }

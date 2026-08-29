@@ -1,28 +1,52 @@
-export { useProviderQuery, providerQueryKey } from "./use-provider-query";
-export type { ProviderQueryResult } from "./use-provider-query";
-export { useStudentInfo } from "./use-student-info";
-export type { UseStudentInfoResult } from "./use-student-info";
+export { useProviderQuery, providerQueryKey } from "./use-provider-query"
+export type { ProviderQueryResult } from "./use-provider-query"
+export { useStudentInfo } from "./use-student-info"
+export type { UseStudentInfoResult } from "./use-student-info"
 export {
   useAcademicCompletion,
   useAcademicWarnings,
-  useClassrooms,
-  useClassroomSchedule,
   useClassPeriods,
+  useComprehensiveIndicators,
+  useComprehensiveRadar,
+  useComprehensiveReport,
+  useComprehensiveReportYears,
+  useComprehensiveResult,
+  useComprehensiveTerms,
+  useComprehensiveYearScores,
+  useCreditBatches,
+  useSchoolBuildings,
+  useSchoolCampuses,
+  useSchoolClasses,
+  useSchoolClassrooms,
+  useSchoolClassSchedule,
+  useSchoolClassroomSchedule,
+  useSchoolDepartments,
+  useSchoolGradeYears,
+  useSchoolMajors,
+  useCreditCompetitions,
+  useCreditDeclarations,
+  useCreditLibraryActivities,
+  useCreditRecords,
+  useCreditSummary,
   useCurrentWeek,
   useExams,
   useGPAStats,
+  useLaborActivities,
+  useLaborRecords,
+  useLaborSummary,
+  useMakeupExamBatches,
+  useMakeupExamCourses,
   useGradeDistribution,
   useGradeRanking,
   useGradeStatistics,
   useGrades,
   useSchedule,
-  useTeachingClasses,
-  useTeachingClassSchedule,
   useTermCalendar,
   useTrainingPlan,
-} from "./use-academics";
+} from "./use-academics"
 export {
   useEvaluationDetail,
+  useEvaluationTasks,
   useEvaluationTypes,
   usePendingEvaluations,
-} from "./use-evaluation";
+} from "./use-evaluation"

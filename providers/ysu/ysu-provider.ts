@@ -1,15 +1,34 @@
-import { useAuthStore } from "@/lib/stores/auth";
-import { isFeatureAvailable } from "@/lib/server-config";
-import { BaseProvider } from "../base-provider";
-import { ProviderError, ProviderErrorCode } from "../errors";
+import type { AcademicCompletion as ProtocolAcademicCompletion } from "./protocol/jwxt"
+import { useAuthStore } from "@/lib/stores/auth"
+import { getSchoolConfig, isFeatureAvailable } from "@/lib/server-config"
+import { BaseProvider } from "../base-provider"
+import { ProviderError, ProviderErrorCode } from "../errors"
 import type {
   AcademicCapabilities,
   AcademicCompletion,
   AcademicWarning,
   AuthStatus,
   ClassPeriod,
-  Classroom,
+  ClassroomInfo,
+  ClassroomQueryOptions,
+  CodeItem,
+  ComprehensiveIndicatorDetail,
+  ComprehensiveQueryOptions,
+  ComprehensiveRadarItem,
+  ComprehensiveReportPage,
+  ComprehensiveReportYears,
+  ComprehensiveResult,
+  ComprehensiveTerm,
+  ComprehensiveYearScore,
   Course,
+  CatalogPage,
+  CatalogQueryOptions,
+  Competition,
+  CreditBatch,
+  CreditDeclaration,
+  CreditQueryOptions,
+  CreditRecord,
+  CreditSummary,
   Credential,
   CurrentWeek,
   EvaluationAnswer,
@@ -30,27 +49,34 @@ import type {
   GradeRanking,
   GradeRankingQueryOptions,
   GradeStatistics,
+  LaborRecord,
+  LaborSummary,
+  LibraryActivity,
+  EnrollableActivity,
   LoginStep1Input,
   LoginStep1Result,
   MfaChallenge,
   MfaRequestInput,
   MfaSubmitInput,
+  MajorInfo,
+  MakeupExamBatch,
+  MakeupExamCourse,
+  MakeupExamCourseQueryOptions,
+  MakeupExamSignupInput,
   PageQueryOptions,
-  PublicScheduleEntry,
-  PublicScheduleListOptions,
-  PublicScheduleQueryOptions,
   ProviderMobile,
   ScheduleQueryOptions,
+  SchoolClassInfo,
+  SchoolClassQueryOptions,
   StudentInfo,
   TermCalendar,
   TermCalendarQueryOptions,
   TermQueryOptions,
-  TeachingClass,
   TrainingPlan,
   UnscheduledCourseQueryOptions,
   WechatMfaContext,
   WechatQrPollResult,
-} from "../types";
+} from "../types"
 import {
   checkCaptchaNeeded,
   completeWechatMFA,
@@ -64,18 +90,29 @@ import {
   resetLoginSession,
   saveCredential,
   submitMFACode,
-} from "./cas-auth";
+} from "./cas-auth"
 import {
   calculateEvaluationScore as _calculateEvaluationScore,
   queryAcademicCompletion,
+  recalculateAcademicCompletion as recalculateAcademicCompletionImpl,
   queryAcademicWarnings,
   queryClassPeriods,
-  queryClassrooms,
-  queryClassroomSchedule,
   queryCurrentWeek,
   queryEvaluationDetail,
   queryEvaluationTypes,
   queryExams,
+  queryMakeupExamBatches,
+  queryMakeupExamCourses,
+  queryGradeYears,
+  queryDepartments,
+  queryMajors,
+  querySchoolClasses,
+  queryClassSchedule,
+  queryCampuses,
+  queryTeachingBuildings,
+  queryClassrooms,
+  queryClassroomSchedule,
+  signupMakeupExam,
   queryExperimentalSchedule,
   queryGpaStats,
   queryGradeDistribution,
@@ -86,22 +123,44 @@ import {
   querySchedule,
   queryStudentInfo,
   queryTermCalendar,
-  queryTeachingClasses,
-  queryTeachingClassSchedule,
   queryTrainingPlan,
   queryUnscheduledCourses,
   submitEvaluation as _submitEvaluation,
-} from "./emap-fetcher";
+} from "./emap-fetcher"
+import {
+  queryEnrollableActivities,
+  queryLaborRecords,
+  queryLaborSummary,
+} from "./ldxt-fetcher"
+import {
+  queryAllCreditRecords,
+  queryCompetitions,
+  queryCreditBatches,
+  queryCreditDeclarations,
+  queryCreditRecords,
+  queryCreditSummary,
+  queryLibraryActivities,
+} from "./scxt-fetcher"
+import {
+  queryAcademicReport,
+  queryAcademicReportYears,
+  queryEvaluationIndicators,
+  queryEvaluationRadar,
+  queryEvaluationResult,
+  queryEvaluationTerms,
+  queryYearScoreStatics,
+} from "./xgxt-fetcher"
+import type { CreditRecord as ScxtCreditRecord } from "./protocol/scxt"
 import {
   initializeSession,
   resetSession,
   warmupSession,
-} from "./adapters/session-adapter";
-import { YSUMobileAdapter } from "./adapters/mobile-adapter";
-import { ysuDiagnostics } from "./diagnostics";
-import { ysuNativeNotification } from "./native-notification";
-import { reloginYSU } from "./relogin";
-import { getYSUMfaMethods, isYSUMfaMethod } from "./types";
+} from "./adapters/session-adapter"
+import { YSUMobileAdapter } from "./adapters/mobile-adapter"
+import { ysuDiagnostics } from "./diagnostics"
+import { ysuNativeNotification } from "./native-notification"
+import { reloginYSU } from "./relogin"
+import { getYSUMfaMethods, isYSUMfaMethod } from "./types"
 
 function ysuCapabilities(): AcademicCapabilities {
   return {
@@ -114,6 +173,11 @@ function ysuCapabilities(): AcademicCapabilities {
     schedule: true,
     labSchedule: isFeatureAvailable("hasLabSchedule"),
     exams: true,
+    makeupExams: true,
+    laborEducation: getSchoolConfig().ldxt !== undefined,
+    innovationCredits: getSchoolConfig().scxt !== undefined,
+    comprehensiveEval: getSchoolConfig().xgxt !== undefined,
+    schoolSchedule: true,
     gpa: true,
     evaluation: true,
     evaluationScorePreview: true,
@@ -122,17 +186,22 @@ function ysuCapabilities(): AcademicCapabilities {
     currentWeek: true,
     classPeriods: true,
     termCalendar: true,
-    publicSchedule: true,
     mobileSignin: isFeatureAvailable("hasMobile"),
-  };
+  }
 }
 
-function providerTaskId(task: { groupNo?: string; evalType?: string; sequence?: number }): string | undefined {
-  if (!task.groupNo || !task.evalType) return undefined;
-  return `${task.groupNo}|${task.evalType}|${task.sequence ?? 1}`;
+function providerTaskId(task: {
+  groupNo?: string
+  evalType?: string
+  sequence?: number
+}): string | undefined {
+  if (!task.groupNo || !task.evalType) return undefined
+  return `${task.groupNo}|${task.evalType}|${task.sequence ?? 1}`
 }
 
-function mapStudentInfo(info: Awaited<ReturnType<typeof queryStudentInfo>>): StudentInfo {
+function mapStudentInfo(
+  info: Awaited<ReturnType<typeof queryStudentInfo>>
+): StudentInfo {
   return {
     name: info.name ?? "",
     namePinyin: info.namePinyin ?? undefined,
@@ -152,7 +221,7 @@ function mapStudentInfo(info: Awaited<ReturnType<typeof queryStudentInfo>>): Stu
     discipline: info.discipline ?? undefined,
     studyDuration: info.studyDuration ?? undefined,
     foreignLanguage: info.foreignLanguage ?? undefined,
-  };
+  }
 }
 
 function mapGrade(row: Awaited<ReturnType<typeof queryGrades>>[number]): Grade {
@@ -189,30 +258,12 @@ function mapGrade(row: Awaited<ReturnType<typeof queryGrades>>[number]): Grade {
     actualScore: row.actualScore || undefined,
     otherScores: row.otherScores.length > 0 ? row.otherScores : undefined,
     metadata: row.raw ?? undefined,
-  };
+  }
 }
 
-function mapPublicScheduleEntry(
-  row: Awaited<ReturnType<typeof queryClassroomSchedule>>[number],
-): PublicScheduleEntry {
-  return {
-    courseName: row.courseName,
-    courseCode: row.courseCode || undefined,
-    teacher: row.teacher || undefined,
-    classroom: row.classroom || undefined,
-    classroomId: row.classroomId || undefined,
-    className: row.className || undefined,
-    classId: row.classId || undefined,
-    weekday: row.weekday,
-    startSection: row.startSection,
-    endSection: row.endSection,
-    weeks: row.weeks || undefined,
-    weekList: row.weekList.length > 0 ? row.weekList : undefined,
-    metadata: row.raw,
-  };
-}
-
-function mapCourse(row: Awaited<ReturnType<typeof querySchedule>>[number]): Course {
+function mapCourse(
+  row: Awaited<ReturnType<typeof querySchedule>>[number]
+): Course {
   return {
     name: row.name ?? "",
     code: row.code ?? undefined,
@@ -230,10 +281,12 @@ function mapCourse(row: Awaited<ReturnType<typeof querySchedule>>[number]): Cour
     scheduleId: row.scheduleId ?? undefined,
     classType: row.classType ?? undefined,
     raw: row.raw ?? undefined,
-  };
+  }
 }
 
-function mapEvaluationTask(row: Awaited<ReturnType<typeof queryPendingEvaluations>>[number]): EvaluationTask {
+function mapEvaluationTask(
+  row: Awaited<ReturnType<typeof queryPendingEvaluations>>[number]
+): EvaluationTask {
   const task = {
     wid: row.wid ?? "",
     wjid: row.wjid ?? undefined,
@@ -257,8 +310,8 @@ function mapEvaluationTask(row: Awaited<ReturnType<typeof queryPendingEvaluation
     sequence: row.sequence ?? 0,
     className: row.className ?? undefined,
     groupNo: row.groupNo ?? undefined,
-  };
-  return { ...task, providerTaskId: providerTaskId(task) };
+  }
+  return { ...task, providerTaskId: providerTaskId(task) }
 }
 
 function mapEvaluationAnswer(answer: EvaluationAnswer) {
@@ -267,58 +320,90 @@ function mapEvaluationAnswer(answer: EvaluationAnswer) {
     questionType: answer.questionType ?? "",
     optionIds: answer.optionIds ?? [],
     text: answer.text ?? "",
-  };
+  }
+}
+
+function mapCreditRecord(row: ScxtCreditRecord): CreditRecord {
+  return {
+    itemName: row.itemName,
+    year: row.year || undefined,
+    categoryMajor: row.categoryMajor || undefined,
+    categoryMinor: row.categoryMinor || undefined,
+    awardLevel: row.awardLevel || undefined,
+    referenceScore: row.referenceScore ?? undefined,
+    actualScore: row.actualScore ?? undefined,
+    grade: row.grade || undefined,
+    batch: row.batch || undefined,
+    status: row.status || undefined,
+    raw: row.raw,
+  }
+}
+
+function mapCompletion(
+  completion: ProtocolAcademicCompletion
+): AcademicCompletion {
+  return {
+    planName: completion.planName ?? undefined,
+    totalRequired: completion.totalRequired ?? undefined,
+    numericTotalRequired: completion.numericTotalRequired,
+    completed: completion.completed ?? undefined,
+    numericCompleted: completion.numericCompleted,
+    elective: completion.elective ?? undefined,
+    numericElective: completion.numericElective,
+    passed: completion.passed ?? false,
+    lastCalculatedAt: completion.lastCalculatedAt || undefined,
+  }
 }
 
 export class YSUProvider extends BaseProvider {
-  readonly id = "ysu";
-  readonly name = "燕山大学";
-  readonly capabilities = ysuCapabilities();
+  readonly id = "ysu"
+  readonly name = "燕山大学"
+  readonly capabilities = ysuCapabilities()
   readonly mobile?: ProviderMobile = this.capabilities.mobileSignin
     ? new YSUMobileAdapter()
-    : undefined;
-  readonly diagnostics = ysuDiagnostics;
-  readonly nativeNotification = ysuNativeNotification;
+    : undefined
+  readonly diagnostics = ysuDiagnostics
+  readonly nativeNotification = ysuNativeNotification
 
   protected async onInitialize(): Promise<void> {
-    await initializeSession();
+    await initializeSession()
   }
 
   async warmup(): Promise<void> {
-    await warmupSession();
+    await warmupSession()
   }
 
   protected async onReset(): Promise<void> {
-    resetSession();
+    resetSession()
   }
 
   async prepareLogin(): Promise<void> {
-    await prepareLogin();
+    await prepareLogin()
   }
 
   resetLoginSession(): void {
-    resetLoginSession();
+    resetLoginSession()
   }
 
   getCaptchaUrl(): string | null {
-    return getCaptchaUrl();
+    return getCaptchaUrl()
   }
 
   async checkCaptchaNeeded(username: string): Promise<boolean> {
-    return checkCaptchaNeeded(username);
+    return checkCaptchaNeeded(username)
   }
 
   async login(credential: Credential): Promise<void> {
-    await this.prepareLogin();
+    await this.prepareLogin()
 
-    const needsCaptcha = await this.checkCaptchaNeeded(credential.username);
+    const needsCaptcha = await this.checkCaptchaNeeded(credential.username)
     if (needsCaptcha && typeof credential.metadata?.captcha !== "string") {
       throw new ProviderError(
         ProviderErrorCode.AUTH_CAPTCHA_REQUIRED,
         "Captcha required",
         undefined,
-        403,
-      );
+        403
+      )
     }
 
     const result = await this.loginStep1({
@@ -328,11 +413,11 @@ export class YSUProvider extends BaseProvider {
         typeof credential.metadata?.captcha === "string"
           ? credential.metadata.captcha
           : undefined,
-    });
+    })
 
     if (result.authenticated && result.credential) {
-      saveCredential(result.credential, result.username);
-      return;
+      saveCredential(result.credential, result.username)
+      return
     }
 
     if (result.needsMfa) {
@@ -344,16 +429,16 @@ export class YSUProvider extends BaseProvider {
         {
           username: result.username,
           methods: [...getYSUMfaMethods()],
-        },
-      );
+        }
+      )
     }
 
     throw new ProviderError(
       ProviderErrorCode.AUTH_INVALID_CREDENTIAL,
       "Login failed",
       result,
-      401,
-    );
+      401
+    )
   }
 
   async loginStep1(input: LoginStep1Input): Promise<LoginStep1Result> {
@@ -363,12 +448,12 @@ export class YSUProvider extends BaseProvider {
         password: input.password,
         captcha: input.captcha,
       },
-      input.skipRateLimit ?? false,
-    );
+      input.skipRateLimit ?? false
+    )
   }
 
   async requestMfaCode(input: MfaRequestInput): Promise<MfaChallenge> {
-    return requestMFACode(input.username, input.method);
+    return requestMFACode(input.username, input.method)
   }
 
   async submitMfaCode(input: MfaSubmitInput): Promise<string> {
@@ -378,8 +463,8 @@ export class YSUProvider extends BaseProvider {
         `Unsupported YSU MFA method: ${input.challenge.method}`,
         undefined,
         501,
-        { methods: [...getYSUMfaMethods()] },
-      );
+        { methods: [...getYSUMfaMethods()] }
+      )
     }
 
     const credential = await submitMFACode(
@@ -390,45 +475,48 @@ export class YSUProvider extends BaseProvider {
         username: input.challenge.username,
         raw: {},
       },
-      input.code,
-    );
-    saveCredential(credential, input.challenge.username);
-    return credential;
+      input.code
+    )
+    saveCredential(credential, input.challenge.username)
+    return credential
   }
 
   async initiateWechatMfa(): Promise<WechatMfaContext> {
-    return initiateWechatMFA();
+    return initiateWechatMFA()
   }
 
-  async pollWechatMfaQr(uuid: string, lastErrcode?: number): Promise<WechatQrPollResult> {
-    return pollWechatQR(uuid, lastErrcode);
+  async pollWechatMfaQr(
+    uuid: string,
+    lastErrcode?: number
+  ): Promise<WechatQrPollResult> {
+    return pollWechatQR(uuid, lastErrcode)
   }
 
   async completeWechatMfa(code: string, state: string): Promise<string> {
-    const credential = await completeWechatMFA(code, state);
-    saveCredential(credential);
-    return credential;
+    const credential = await completeWechatMFA(code, state)
+    saveCredential(credential)
+    return credential
   }
 
   async checkAuthStatus(): Promise<AuthStatus> {
-    return { authenticated: await checkCASAuthenticated() };
+    return { authenticated: await checkCASAuthenticated() }
   }
 
   async logout(): Promise<void> {
-    await this.reset();
-    useAuthStore.getState().clearCredential();
+    await this.reset()
+    useAuthStore.getState().clearCredential()
   }
 
   isAuthenticated(): boolean {
-    return useAuthStore.getState().isAuthenticated;
+    return useAuthStore.getState().isAuthenticated
   }
 
   async relogin(): Promise<boolean> {
-    return reloginYSU();
+    return reloginYSU()
   }
 
   async getStudentInfo(): Promise<StudentInfo> {
-    return mapStudentInfo(await queryStudentInfo());
+    return mapStudentInfo(await queryStudentInfo())
   }
 
   async getGrades(options?: GradeQueryOptions): Promise<Grade[]> {
@@ -437,12 +525,12 @@ export class YSUProvider extends BaseProvider {
       courseName: options?.courseName,
       pageSize: options?.pageSize,
       pageNumber: options?.pageNumber,
-    });
-    return rows.map(mapGrade);
+    })
+    return rows.map(mapGrade)
   }
 
   async getGPAStats(options?: GPAQueryOptions): Promise<GPAStats> {
-    const stats = await queryGpaStats({ studentId: options?.studentId });
+    const stats = await queryGpaStats({ studentId: options?.studentId })
     return {
       planName: stats.planName ?? undefined,
       studyType: stats.studyType ?? undefined,
@@ -470,15 +558,17 @@ export class YSUProvider extends BaseProvider {
       numericArithmeticAvg: stats.numericArithmeticAvg,
       degreeWeightedAvg: stats.degreeWeightedAvg ?? undefined,
       numericDegreeWeightedAvg: stats.numericDegreeWeightedAvg,
-    };
+    }
   }
 
-  async getGradeStatistics(options?: GradeAnalyticsQueryOptions): Promise<GradeStatistics> {
+  async getGradeStatistics(
+    options?: GradeAnalyticsQueryOptions
+  ): Promise<GradeStatistics> {
     const stats = await queryGradeStatistics({
       term: options?.semester,
       classId: options?.classId,
       courseCode: options?.courseCode,
-    });
+    })
     return {
       scope: stats.scope ?? undefined,
       semester: stats.term ?? undefined,
@@ -488,15 +578,17 @@ export class YSUProvider extends BaseProvider {
       lowestScore: stats.lowestScore ?? 0,
       averageScore: stats.averageScore ?? 0,
       metadata: stats.raw ?? undefined,
-    };
+    }
   }
 
-  async getGradeDistribution(options?: GradeAnalyticsQueryOptions): Promise<GradeDistribution[]> {
+  async getGradeDistribution(
+    options?: GradeAnalyticsQueryOptions
+  ): Promise<GradeDistribution[]> {
     const rows = await queryGradeDistribution({
       term: options?.semester,
       classId: options?.classId,
       courseCode: options?.courseCode,
-    });
+    })
     return rows.map((row) => ({
       scope: row.scope ?? undefined,
       semester: row.term ?? undefined,
@@ -506,16 +598,18 @@ export class YSUProvider extends BaseProvider {
       levelName: row.levelName ?? undefined,
       count: row.count ?? 0,
       metadata: row.raw ?? undefined,
-    }));
+    }))
   }
 
-  async getGradeRanking(options?: GradeRankingQueryOptions): Promise<GradeRanking> {
+  async getGradeRanking(
+    options?: GradeRankingQueryOptions
+  ): Promise<GradeRanking> {
     const ranking = await queryGradeRanking({
       term: options?.semester,
       studentId: options?.studentId,
       classId: options?.classId,
       courseCode: options?.courseCode,
-    });
+    })
     return {
       scope: ranking.scope ?? undefined,
       semester: ranking.term ?? undefined,
@@ -527,34 +621,36 @@ export class YSUProvider extends BaseProvider {
       total: ranking.total ?? 0,
       rankingType: ranking.rankingType ?? undefined,
       metadata: ranking.raw ?? undefined,
-    };
+    }
   }
 
   async getSchedule(options?: ScheduleQueryOptions): Promise<Course[]> {
-    const term = options?.semester;
+    const term = options?.semester
     const includeLab =
       (options?.includeLabSchedule ?? this.capabilities.labSchedule) &&
-      this.capabilities.labSchedule;
+      this.capabilities.labSchedule
     const rows = includeLab
       ? await queryExperimentalSchedule({
           term,
           courseCategory: options?.courseCategory ?? "all",
         })
-      : await querySchedule({ term });
-    return rows.map(mapCourse);
+      : await querySchedule({ term })
+    return rows.map(mapCourse)
   }
 
-  async getUnscheduledCourses(options?: UnscheduledCourseQueryOptions): Promise<Course[]> {
-    if (!this.capabilities.labSchedule) return [];
+  async getUnscheduledCourses(
+    options?: UnscheduledCourseQueryOptions
+  ): Promise<Course[]> {
+    if (!this.capabilities.labSchedule) return []
     const rows = await queryUnscheduledCourses({
       term: options?.semester,
       courseCategory: options?.courseCategory ?? "all",
-    });
-    return rows.map(mapCourse);
+    })
+    return rows.map(mapCourse)
   }
 
   async getClassPeriods(): Promise<ClassPeriod[]> {
-    const rows = await queryClassPeriods();
+    const rows = await queryClassPeriods()
     return rows.map((row) => ({
       name: row.name ?? undefined,
       section: row.section ?? 0,
@@ -564,11 +660,13 @@ export class YSUProvider extends BaseProvider {
       endMinute: row.endMinute,
       isInUse: row.isInUse ?? false,
       raw: row.raw ?? undefined,
-    }));
+    }))
   }
 
-  async getTermCalendar(options?: TermCalendarQueryOptions): Promise<TermCalendar> {
-    const calendar = await queryTermCalendar({ term: options?.semester });
+  async getTermCalendar(
+    options?: TermCalendarQueryOptions
+  ): Promise<TermCalendar> {
+    const calendar = await queryTermCalendar({ term: options?.semester })
     return {
       semester: calendar.term ?? undefined,
       startDate: calendar.startDate ?? undefined,
@@ -576,11 +674,16 @@ export class YSUProvider extends BaseProvider {
       teachingWeeks: calendar.teachingWeeks ?? 0,
       isInUse: calendar.isInUse ?? false,
       raw: calendar.raw ?? undefined,
-    };
+    }
   }
 
-  async getCurrentWeek(options?: import("../types").CurrentWeekQueryOptions): Promise<CurrentWeek> {
-    const week = await queryCurrentWeek({ term: options?.semester, date: options?.date });
+  async getCurrentWeek(
+    options?: import("../types").CurrentWeekQueryOptions
+  ): Promise<CurrentWeek> {
+    const week = await queryCurrentWeek({
+      term: options?.semester,
+      date: options?.date,
+    })
     return {
       week: week.week ?? 0,
       weekday: week.weekday ?? 0,
@@ -590,93 +693,18 @@ export class YSUProvider extends BaseProvider {
       weekEndDate: week.weekEndDate,
       weekDates: week.weekDates ? [...week.weekDates] : undefined,
       raw: week.raw ?? undefined,
-    };
+    }
   }
 
-  async getCurrentWeekNumber(options?: TermCalendarQueryOptions): Promise<number> {
-    const currentWeek = await this.getCurrentWeek(options);
-    return currentWeek.week;
-  }
-
-  async getClassrooms(options?: PublicScheduleListOptions): Promise<Classroom[]> {
-    const rows = await queryClassrooms({
-      term: options?.semester,
-      pageSize: options?.pageSize,
-      pageNumber: options?.pageNumber,
-    });
-    const search = options?.search?.trim().toLowerCase();
-    return rows
-      .map((row) => ({
-        id: row.id,
-        name: row.name,
-        building: row.building || undefined,
-        campus: row.campus || undefined,
-        capacity: row.capacity,
-        roomType: row.roomType || undefined,
-        isSchedulable: row.isSchedulable,
-        metadata: row.raw,
-      }))
-      .filter((row) =>
-        search
-          ? [row.name, row.building, row.campus, row.roomType]
-              .filter(Boolean)
-              .some((value) => value!.toLowerCase().includes(search))
-          : true,
-      );
-  }
-
-  async getTeachingClasses(options?: PublicScheduleListOptions): Promise<TeachingClass[]> {
-    const rows = await queryTeachingClasses({
-      term: options?.semester,
-      pageSize: options?.pageSize,
-      pageNumber: options?.pageNumber,
-    });
-    const search = options?.search?.trim().toLowerCase();
-    return rows
-      .map((row) => ({
-        id: row.id,
-        name: row.name,
-        grade: row.grade || undefined,
-        department: row.department || undefined,
-        major: row.major || undefined,
-        studentCount: row.studentCount,
-        isScheduled: row.isScheduled,
-        metadata: row.raw,
-      }))
-      .filter((row) =>
-        search
-          ? [row.name, row.grade, row.department, row.major]
-              .filter(Boolean)
-              .some((value) => value!.toLowerCase().includes(search))
-          : true,
-      );
-  }
-
-  async getClassroomSchedule(
-    options?: PublicScheduleQueryOptions,
-  ): Promise<PublicScheduleEntry[]> {
-    const rows = await queryClassroomSchedule({
-      term: options?.semester,
-      week: options?.week,
-      classroomId: options?.classroomId,
-      classroomIds: options?.classroomIds,
-    });
-    return rows.map(mapPublicScheduleEntry);
-  }
-
-  async getTeachingClassSchedule(
-    options?: PublicScheduleQueryOptions,
-  ): Promise<PublicScheduleEntry[]> {
-    const rows = await queryTeachingClassSchedule({
-      term: options?.semester,
-      week: options?.week,
-      classId: options?.classId,
-    });
-    return rows.map(mapPublicScheduleEntry);
+  async getCurrentWeekNumber(
+    options?: TermCalendarQueryOptions
+  ): Promise<number> {
+    const currentWeek = await this.getCurrentWeek(options)
+    return currentWeek.week
   }
 
   async getExams(options?: ExamQueryOptions): Promise<Exam[]> {
-    const rows = await queryExams({ term: options?.semester });
+    const rows = await queryExams({ term: options?.semester })
     return rows.map((row) => ({
       name: row.name ?? "",
       examName: row.examName ?? undefined,
@@ -689,41 +717,437 @@ export class YSUProvider extends BaseProvider {
       examLocation: row.examLocation ?? undefined,
       seatNumber: row.seatNumber ?? undefined,
       raw: row.raw ?? undefined,
-    }));
+    }))
   }
 
-  async getEvaluationTypes(options?: TermQueryOptions): Promise<EvaluationType[]> {
-    const rows = await queryEvaluationTypes({ term: options?.semester });
+  async getMakeupExamBatches(
+    options?: ExamQueryOptions
+  ): Promise<MakeupExamBatch[]> {
+    const rows = await queryMakeupExamBatches({ term: options?.semester })
+    return rows.map((row) => ({
+      name: row.name,
+      batchId: row.batchId,
+      term: row.term,
+      signupStart: row.signupStart || undefined,
+      signupEnd: row.signupEnd || undefined,
+      availableCount: row.availableCount,
+      registeredCount: row.registeredCount,
+      raw: row.raw,
+    }))
+  }
+
+  async getMakeupExamCourses(
+    options?: MakeupExamCourseQueryOptions
+  ): Promise<MakeupExamCourse[]> {
+    const rows = await queryMakeupExamCourses({
+      term: options?.semester,
+      batchId: options?.batchId,
+      registered: options?.registered,
+    })
+    return rows.map((row) => ({
+      name: row.name,
+      code: row.code || undefined,
+      credit: row.credit || undefined,
+      hours: row.hours || undefined,
+      examSeq: row.examSeq || undefined,
+      department: row.department || undefined,
+      status: row.status || undefined,
+      isAvailable: row.isAvailable,
+      signupStart: row.signupStart || undefined,
+      signupEnd: row.signupEnd || undefined,
+      batchId: row.batchId || undefined,
+      taskId: row.taskId || undefined,
+      note: row.note || undefined,
+      raw: row.raw,
+    }))
+  }
+
+  async signupMakeupExam(input: MakeupExamSignupInput): Promise<void> {
+    await signupMakeupExam({ taskId: input.taskId, batchId: input.batchId })
+  }
+
+  async getSchoolGradeYears(): Promise<CodeItem[]> {
+    const rows = await queryGradeYears()
+    return rows.map((row) => ({ id: row.id, name: row.name }))
+  }
+
+  async getSchoolDepartments(): Promise<CodeItem[]> {
+    const rows = await queryDepartments()
+    return rows.map((row) => ({ id: row.id, name: row.name }))
+  }
+
+  async getSchoolMajors(department?: string): Promise<MajorInfo[]> {
+    const rows = await queryMajors(department)
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      department: row.department || undefined,
+    }))
+  }
+
+  async getSchoolClasses(
+    options?: SchoolClassQueryOptions
+  ): Promise<SchoolClassInfo[]> {
+    const rows = await querySchoolClasses({
+      term: options?.semester,
+      grade: options?.grade,
+      department: options?.department,
+      major: options?.major,
+    })
+    return rows.map((row) => ({
+      classId: row.classId,
+      className: row.className,
+      grade: row.grade || undefined,
+      gradeDisplay: row.gradeDisplay || undefined,
+      department: row.department || undefined,
+      departmentDisplay: row.departmentDisplay || undefined,
+      major: row.major || undefined,
+      majorDisplay: row.majorDisplay || undefined,
+      isScheduled: row.isScheduled,
+      studentCount: row.studentCount,
+    }))
+  }
+
+  async getSchoolClassSchedule(
+    classId: string,
+    options?: ExamQueryOptions
+  ): Promise<Course[]> {
+    const rows = await queryClassSchedule(classId, { term: options?.semester })
+    return rows.map(mapCourse)
+  }
+
+  async getSchoolCampuses(): Promise<CodeItem[]> {
+    const rows = await queryCampuses()
+    return rows.map((row) => ({ id: row.id, name: row.name }))
+  }
+
+  async getSchoolBuildings(campus?: string): Promise<CodeItem[]> {
+    const rows = await queryTeachingBuildings(campus)
+    return rows.map((row) => ({ id: row.id, name: row.name }))
+  }
+
+  async getSchoolClassrooms(
+    options?: ClassroomQueryOptions
+  ): Promise<ClassroomInfo[]> {
+    const rows = await queryClassrooms({
+      term: options?.semester,
+      name: options?.name,
+      campus: options?.campus,
+      building: options?.building,
+    })
+    return rows.map((row) => ({
+      name: row.name,
+      code: row.code,
+      campusDisplay: row.campusDisplay || undefined,
+      building: row.building || undefined,
+      buildingDisplay: row.buildingDisplay || undefined,
+      examSeats: row.examSeats,
+      classSeats: row.classSeats,
+      typeDisplay: row.typeDisplay || undefined,
+      floor: row.floor,
+      isScheduled: row.isScheduled,
+    }))
+  }
+
+  async getSchoolClassroomSchedule(
+    code: string,
+    options?: ExamQueryOptions
+  ): Promise<Course[]> {
+    const rows = await queryClassroomSchedule(code, { term: options?.semester })
+    return rows.map(mapCourse)
+  }
+
+  async getLaborRecords(): Promise<LaborRecord[]> {
+    const rows = await queryLaborRecords()
+    return rows.map((row) => ({
+      term: row.term,
+      name: row.name,
+      enrollType: row.enrollType || undefined,
+      category: row.category || undefined,
+      department: row.department || undefined,
+      timeStart: row.timeStart || undefined,
+      timeEnd: row.timeEnd || undefined,
+      teacher: row.teacher || undefined,
+      hours: row.hours ?? undefined,
+      status: row.status || undefined,
+      raw: row.raw,
+    }))
+  }
+
+  async getLaborSummary(): Promise<LaborSummary> {
+    const row = await queryLaborSummary()
+    return {
+      studentId: row.studentId || undefined,
+      name: row.name || undefined,
+      department: row.department || undefined,
+      major: row.major || undefined,
+      className: row.className || undefined,
+      grade: row.grade || undefined,
+      schooling: row.schooling || undefined,
+      totalHours: row.totalHours ?? undefined,
+      totalCredits: row.totalCredits ?? undefined,
+      raw: row.raw,
+    }
+  }
+
+  async getLaborActivities(): Promise<EnrollableActivity[]> {
+    const rows = await queryEnrollableActivities()
+    return rows.map((row) => ({
+      name: row.name,
+      category: row.category || undefined,
+      timeStart: row.timeStart || undefined,
+      timeEnd: row.timeEnd || undefined,
+      location: row.location || undefined,
+      hours: row.hours ?? undefined,
+      description: row.description || undefined,
+      department: row.department || undefined,
+      enrollStart: row.enrollStart || undefined,
+      enrollEnd: row.enrollEnd || undefined,
+      isEnrolled: row.isEnrolled,
+      operation: row.operation || undefined,
+      raw: row.raw,
+    }))
+  }
+
+  async getCreditBatches(): Promise<CreditBatch[]> {
+    const rows = await queryCreditBatches()
+    return rows.map((row) => ({ batchId: row.batchId, name: row.name }))
+  }
+
+  async getCreditDeclarations(
+    options?: CreditQueryOptions
+  ): Promise<CreditDeclaration[]> {
+    const rows = await queryCreditDeclarations({
+      batchId: options?.batchId,
+      itemName: options?.itemName,
+    })
+    return rows.map((row) => ({
+      itemName: row.itemName,
+      categoryMajor: row.categoryMajor || undefined,
+      categoryMinor: row.categoryMinor || undefined,
+      awardLevel: row.awardLevel || undefined,
+      score: row.score ?? undefined,
+      batch: row.batch || undefined,
+      status: row.status || undefined,
+      operation: row.operation || undefined,
+      raw: row.raw,
+    }))
+  }
+
+  async getCreditRecords(
+    options?: CreditQueryOptions
+  ): Promise<CreditRecord[]> {
+    const rows = await queryCreditRecords({
+      batchId: options?.batchId,
+      itemName: options?.itemName,
+    })
+    return rows.map(mapCreditRecord)
+  }
+
+  async getAllCreditRecords(): Promise<CreditRecord[]> {
+    const rows = await queryAllCreditRecords()
+    return rows.map(mapCreditRecord)
+  }
+
+  async getCreditSummary(): Promise<CreditSummary> {
+    const row = await queryCreditSummary()
+    return {
+      studentId: row.studentId || undefined,
+      name: row.name || undefined,
+      department: row.department || undefined,
+      major: row.major || undefined,
+      className: row.className || undefined,
+      gradeYear: row.gradeYear || undefined,
+      grade: row.grade || undefined,
+      totalCredits: row.totalCredits ?? undefined,
+      raw: row.raw,
+    }
+  }
+
+  async getCreditCompetitions(
+    options?: CatalogQueryOptions
+  ): Promise<CatalogPage<Competition>> {
+    const page = await queryCompetitions({
+      itemName: options?.keyword,
+      pageIndex: options?.pageIndex,
+    })
+    return {
+      items: page.items.map((row) => ({
+        code: row.code,
+        name: row.name,
+        categoryMajor: row.categoryMajor || undefined,
+        categoryMinor: row.categoryMinor || undefined,
+        isEnabled: row.isEnabled,
+        status: row.status || undefined,
+        raw: row.raw,
+      })),
+      pageIndex: page.pageIndex,
+      totalPages: page.totalPages,
+      totalRecords: page.totalRecords,
+    }
+  }
+
+  async getCreditLibraryActivities(
+    options?: CatalogQueryOptions
+  ): Promise<CatalogPage<LibraryActivity>> {
+    const page = await queryLibraryActivities({
+      name: options?.keyword,
+      pageIndex: options?.pageIndex,
+    })
+    return {
+      items: page.items.map((row) => ({
+        name: row.name,
+        organizer: row.organizer || undefined,
+        category: row.category || undefined,
+        detail: row.detail || undefined,
+        raw: row.raw,
+      })),
+      pageIndex: page.pageIndex,
+      totalPages: page.totalPages,
+      totalRecords: page.totalRecords,
+    }
+  }
+
+  async getComprehensiveTerms(): Promise<ComprehensiveTerm[]> {
+    const rows = await queryEvaluationTerms()
+    return rows.map((row) => ({
+      year: row.year,
+      term: row.term,
+      yearDisplay: row.yearDisplay,
+      termDisplay: row.termDisplay,
+    }))
+  }
+
+  async getComprehensiveResult(
+    options?: ComprehensiveQueryOptions
+  ): Promise<ComprehensiveResult> {
+    const row = await queryEvaluationResult(options?.year, options?.term)
+    return {
+      totalScore: row.totalScore,
+      classRank: row.classRank,
+      classSize: row.classSize,
+      gradeRank: row.gradeRank,
+      gradeSize: row.gradeSize,
+      year: row.year,
+      term: row.term,
+      yearDisplay: row.yearDisplay || undefined,
+      termDisplay: row.termDisplay || undefined,
+      indicators: row.indicators.map((ind) => ({
+        name: ind.name,
+        score: ind.score,
+        rank: ind.rank,
+        maxScore: ind.maxScore || undefined,
+      })),
+    }
+  }
+
+  async getComprehensiveIndicators(
+    options?: ComprehensiveQueryOptions
+  ): Promise<ComprehensiveIndicatorDetail[]> {
+    const rows = await queryEvaluationIndicators(options?.year, options?.term)
+    return rows.map((row) => ({
+      name: row.name,
+      score: row.score,
+      maxScore: row.maxScore || undefined,
+      rangeText: row.rangeText || undefined,
+      proportion: row.proportion || undefined,
+      categoryDisplay: row.categoryDisplay || undefined,
+      description: row.description || undefined,
+    }))
+  }
+
+  async getComprehensiveRadar(
+    options?: ComprehensiveQueryOptions
+  ): Promise<ComprehensiveRadarItem[]> {
+    const rows = await queryEvaluationRadar(options?.year, options?.term)
+    return rows.map((row) => ({
+      name: row.name,
+      personal: row.personal,
+      average: row.average,
+      maxScore: row.maxScore,
+    }))
+  }
+
+  async getComprehensiveYearScores(): Promise<ComprehensiveYearScore[]> {
+    const rows = await queryYearScoreStatics()
+    return rows.map((row) => ({
+      year: row.year,
+      term: row.term,
+      yearDisplay: row.yearDisplay || undefined,
+      termDisplay: row.termDisplay || undefined,
+      score: row.score,
+    }))
+  }
+
+  async getComprehensiveReportYears(): Promise<ComprehensiveReportYears> {
+    const data = await queryAcademicReportYears()
+    return {
+      years: data.years.map((y) => ({
+        year: y.year,
+        yearDisplay: y.yearDisplay,
+      })),
+      defaultYear: data.defaultYear,
+    }
+  }
+
+  async getComprehensiveReport(options?: {
+    year?: string
+  }): Promise<ComprehensiveReportPage> {
+    const page = await queryAcademicReport(options?.year)
+    return {
+      entries: page.entries.map((entry) => ({
+        courseName: entry.courseName,
+        score: entry.score,
+        credit: entry.credit || undefined,
+        year: entry.year || undefined,
+        term: entry.term || undefined,
+      })),
+      totalSize: page.totalSize,
+      pageNumber: page.pageNumber,
+      pageSize: page.pageSize,
+    }
+  }
+
+  async getEvaluationTypes(
+    options?: TermQueryOptions
+  ): Promise<EvaluationType[]> {
+    const rows = await queryEvaluationTypes({ term: options?.semester })
     return rows.map((row) => ({
       name: row.name ?? "",
       code: row.code ?? undefined,
       count: row.count ?? 0,
-    }));
+    }))
   }
 
   async getPendingEvaluations(
     evalType: string,
-    options?: TermQueryOptions,
+    options?: TermQueryOptions
   ): Promise<EvaluationTask[]> {
-    const rows = await queryPendingEvaluations(evalType, { term: options?.semester });
-    return rows.map(mapEvaluationTask);
+    const rows = await queryPendingEvaluations(evalType, {
+      term: options?.semester,
+    })
+    return rows.map(mapEvaluationTask)
   }
 
-  async getEvaluationTasks(options?: TermQueryOptions): Promise<EvaluationTask[]> {
-    const types = await this.getEvaluationTypes(options);
+  async getEvaluationTasks(
+    options?: TermQueryOptions
+  ): Promise<EvaluationTask[]> {
+    const types = await this.getEvaluationTypes(options)
     const typeCodes = types
       .map((type) => type.code)
-      .filter((code): code is string => !!code);
+      .filter((code): code is string => !!code)
     const taskGroups = await Promise.all(
-      typeCodes.map((code) => this.getPendingEvaluations(code, options)),
-    );
-    return taskGroups.flat();
+      typeCodes.map((code) => this.getPendingEvaluations(code, options))
+    )
+    return taskGroups.flat()
   }
 
-  async getEvaluationDetail(query: EvaluationDetailQuery): Promise<EvaluationDetail> {
+  async getEvaluationDetail(
+    query: EvaluationDetailQuery
+  ): Promise<EvaluationDetail> {
     const detail = await queryEvaluationDetail(query.groupNo, query.evalType, {
       sequence: query.sequence,
-    });
+    })
     return {
       wjid: detail.wjid ?? undefined,
       name: detail.name ?? undefined,
@@ -746,10 +1170,12 @@ export class YSUProvider extends BaseProvider {
             })) ?? [],
         })) ?? [],
       teachers: detail.teachers as Record<string, unknown>[] | undefined,
-    };
+    }
   }
 
-  async calculateEvaluationScore(input: EvaluationScoreInput): Promise<Record<string, unknown>> {
+  async calculateEvaluationScore(
+    input: EvaluationScoreInput
+  ): Promise<Record<string, unknown>> {
     return _calculateEvaluationScore(
       input.groupNo,
       input.wjid,
@@ -760,8 +1186,8 @@ export class YSUProvider extends BaseProvider {
         courseName: input.courseName,
         teacherName: input.teacherName,
         sequence: input.sequence,
-      },
-    );
+      }
+    )
   }
 
   async submitEvaluation(input: EvaluationSubmitInput): Promise<void> {
@@ -775,15 +1201,15 @@ export class YSUProvider extends BaseProvider {
         courseName: input.courseName,
         teacherName: input.teacherName,
         sequence: input.sequence,
-      },
-    );
+      }
+    )
   }
 
   async getTrainingPlan(options?: PageQueryOptions): Promise<TrainingPlan[]> {
     const rows = await queryTrainingPlan({
       pageSize: options?.pageSize,
       pageNumber: options?.pageNumber,
-    });
+    })
     return rows.map((row) => ({
       courseName: row.courseName ?? "",
       courseCode: row.courseCode ?? undefined,
@@ -792,30 +1218,26 @@ export class YSUProvider extends BaseProvider {
       required: row.required ?? false,
       term: row.term ?? undefined,
       courseGroup: row.courseGroup ?? undefined,
-    }));
+    }))
   }
 
   async getAcademicCompletion(): Promise<AcademicCompletion> {
-    const completion = await queryAcademicCompletion();
-    return {
-      planName: completion.planName ?? undefined,
-      totalRequired: completion.totalRequired ?? undefined,
-      numericTotalRequired: completion.numericTotalRequired,
-      completed: completion.completed ?? undefined,
-      numericCompleted: completion.numericCompleted,
-      elective: completion.elective ?? undefined,
-      numericElective: completion.numericElective,
-      passed: completion.passed ?? false,
-    };
+    const completion = await queryAcademicCompletion()
+    return mapCompletion(completion)
+  }
+
+  async recalculateAcademicCompletion(): Promise<AcademicCompletion> {
+    const completion = await recalculateAcademicCompletionImpl()
+    return mapCompletion(completion)
   }
 
   async getAcademicWarnings(): Promise<AcademicWarning[]> {
-    const rows = await queryAcademicWarnings();
+    const rows = await queryAcademicWarnings()
     return rows.map((row) => ({
       warningType: row.warningType ?? "",
       warningLevel: row.warningLevel ?? undefined,
       description: row.description ?? undefined,
       term: row.term ?? undefined,
-    }));
+    }))
   }
 }

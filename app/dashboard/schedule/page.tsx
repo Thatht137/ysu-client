@@ -1,30 +1,37 @@
-"use client";
+"use client"
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
-import { toast } from "sonner";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
+import { useEffect, useMemo, useRef, useState } from "react"
+import Link from "next/link"
+import { toast } from "sonner"
 import {
-  Field,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Spinner } from "@/components/ui/spinner"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import {
   Drawer,
   DrawerContent,
   DrawerDescription,
   DrawerHeader,
   DrawerTitle,
-} from "@/components/ui/drawer";
-import { useTranslation } from "@/lib/i18n/use-translation";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { useMobileHeaderRight } from "@/lib/stores/mobile-header";
-import { useClassPeriods, useCurrentWeek, useSchedule, useTermCalendar } from "@/providers/hooks";
+} from "@/components/ui/drawer"
+import { useTranslation } from "@/lib/i18n/use-translation"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { useMobileHeaderRight } from "@/lib/stores/mobile-header"
+import {
+  useClassPeriods,
+  useCurrentWeek,
+  useSchedule,
+  useTermCalendar,
+} from "@/providers/hooks"
 import {
   Building2,
   ChevronDown,
@@ -33,36 +40,40 @@ import {
   Search,
   Grid3x2,
   Grid3x3,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { isCourseActiveInWeek, periodIsInUse } from "./schedule-utils";
-import { ScheduleTablet } from "./schedule-tablet";
-import { ScheduleMobile } from "./schedule-mobile";
-import { syncScheduleToWidget } from "@/lib/native/widget-bridge";
-import { syncClassAlarmsToNative } from "@/lib/native/notify";
-import { useSettingsStore } from "@/lib/stores/settings";
+} from "lucide-react"
+import { cn } from "@/lib/utils"
+import { isCourseActiveInWeek, periodIsInUse } from "./schedule-utils"
+import { ScheduleTablet } from "./schedule-tablet"
+import { ScheduleMobile } from "./schedule-mobile"
+import { syncScheduleToWidget } from "@/lib/native/widget-bridge"
+import { syncClassAlarmsToNative } from "@/lib/native/notify"
+import { useSettingsStore } from "@/lib/stores/settings"
 
 export default function SchedulePage() {
-  const { t } = useTranslation();
-  const isMobile = useIsMobile();
-  const compactMode = useSettingsStore((s) => s.scheduleCompactMode);
-  const setCompactMode = useSettingsStore((s) => s.setScheduleCompactMode);
-  const [selectedWeek, setSelectedWeek] = useState<number>(0);
-  const [term, setTerm] = useState("");
-  const [queriedTerm, setQueriedTerm] = useState("");
-  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+  const { t } = useTranslation()
+  const isMobile = useIsMobile()
+  const compactMode = useSettingsStore((s) => s.scheduleCompactMode)
+  const setCompactMode = useSettingsStore((s) => s.setScheduleCompactMode)
+  const [selectedWeek, setSelectedWeek] = useState<number>(0)
+  const [term, setTerm] = useState("")
+  const [queriedTerm, setQueriedTerm] = useState("")
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
 
   const scheduleQuery = useSchedule({
     semester: queriedTerm || undefined,
     courseCategory: "all",
     includeLabSchedule: true,
-  });
-  const currentWeekQuery = useCurrentWeek({ semester: queriedTerm || undefined });
-  const termCalendarQuery = useTermCalendar({ semester: queriedTerm || undefined });
-  const periodsQuery = useClassPeriods();
+  })
+  const currentWeekQuery = useCurrentWeek({
+    semester: queriedTerm || undefined,
+  })
+  const termCalendarQuery = useTermCalendar({
+    semester: queriedTerm || undefined,
+  })
+  const periodsQuery = useClassPeriods()
 
-  const courses = useMemo(() => scheduleQuery.data ?? [], [scheduleQuery.data]);
-  const currentWeek = currentWeekQuery.data ?? null;
+  const courses = useMemo(() => scheduleQuery.data ?? [], [scheduleQuery.data])
+  const currentWeek = currentWeekQuery.data ?? null
   const loading =
     scheduleQuery.isLoading ||
     scheduleQuery.isValidating ||
@@ -71,97 +82,116 @@ export default function SchedulePage() {
     termCalendarQuery.isLoading ||
     termCalendarQuery.isValidating ||
     periodsQuery.isLoading ||
-    periodsQuery.isValidating;
+    periodsQuery.isValidating
 
   // In compact mode, adjust <main> padding-bottom to match the actual nav bar height,
   // so the content area ends exactly at the nav top edge.
   useEffect(() => {
-    if (!compactMode) return;
-    const main = document.querySelector("main");
-    const nav = document.querySelector('nav[aria-label="Primary"]');
-    if (!main || !nav) return;
+    if (!compactMode) return
+    const main = document.querySelector("main")
+    const nav = document.querySelector('nav[aria-label="Primary"]')
+    if (!main || !nav) return
     const adjust = () => {
-      main.style.paddingBottom = `${nav.getBoundingClientRect().height}px`;
-    };
-    adjust();
-    const observer = new ResizeObserver(adjust);
-    observer.observe(nav);
+      main.style.paddingBottom = `${nav.getBoundingClientRect().height}px`
+    }
+    adjust()
+    const observer = new ResizeObserver(adjust)
+    observer.observe(nav)
     return () => {
-      observer.disconnect();
-      main.style.paddingBottom = "";
-    };
-  }, [compactMode]);
+      observer.disconnect()
+      main.style.paddingBottom = ""
+    }
+  }, [compactMode])
 
   const periods = useMemo(() => {
-    if (!periodsQuery.data) return [];
-    return periodsQuery.data.filter(periodIsInUse).sort((a, b) => a.section - b.section);
-  }, [periodsQuery.data]);
+    if (!periodsQuery.data) return []
+    return periodsQuery.data
+      .filter(periodIsInUse)
+      .sort((a, b) => a.section - b.section)
+  }, [periodsQuery.data])
 
   const [nowMinutes, setNowMinutes] = useState(() => {
-    const now = new Date();
-    return now.getHours() * 60 + now.getMinutes();
-  });
+    const now = new Date()
+    return now.getHours() * 60 + now.getMinutes()
+  })
 
   useEffect(() => {
     const id = setInterval(() => {
-      const now = new Date();
-      setNowMinutes(now.getHours() * 60 + now.getMinutes());
-    }, 60_000);
-    return () => clearInterval(id);
-  }, []);
+      const now = new Date()
+      setNowMinutes(now.getHours() * 60 + now.getMinutes())
+    }, 60_000)
+    return () => clearInterval(id)
+  }, [])
 
   function shiftWeek(delta: number) {
-    setSelectedWeek((w) => Math.max(1, (w || 1) + delta));
+    setSelectedWeek((w) => Math.max(1, (w || 1) + delta))
   }
 
   // 用 ref 持有最新的 periods 数据，避免 periods 变化触发 effect 重新执行
-  const periodsRef = useRef(periods);
+  const periodsRef = useRef(periods)
   useEffect(() => {
-    periodsRef.current = periods;
-  });
+    periodsRef.current = periods
+  })
 
   useEffect(() => {
-    if (!currentWeek || !Number.isFinite(currentWeek.week)) return;
-    setSelectedWeek((curr) => (curr === 0 ? Math.max(1, currentWeek.week) : curr));
-  }, [currentWeek]);
+    if (!currentWeek || !Number.isFinite(currentWeek.week)) return
+    setSelectedWeek((curr) =>
+      curr === 0 ? Math.max(1, currentWeek.week) : curr
+    )
+  }, [currentWeek])
 
   useEffect(() => {
-    const errors = [scheduleQuery.error, currentWeekQuery.error, termCalendarQuery.error, periodsQuery.error].filter(
-      Boolean,
-    );
-    if (errors.length === 0) return;
-    toast.error(errors[0]?.message || t("app.updating"));
-  }, [scheduleQuery.error, currentWeekQuery.error, termCalendarQuery.error, periodsQuery.error, t]);
+    const errors = [
+      scheduleQuery.error,
+      currentWeekQuery.error,
+      termCalendarQuery.error,
+      periodsQuery.error,
+    ].filter(Boolean)
+    if (errors.length === 0) return
+    toast.error(errors[0]?.message || t("app.updating"))
+  }, [
+    scheduleQuery.error,
+    currentWeekQuery.error,
+    termCalendarQuery.error,
+    periodsQuery.error,
+    t,
+  ])
 
   useEffect(() => {
-    if (!scheduleQuery.data || !currentWeek) return;
+    if (!scheduleQuery.data || !currentWeek) return
     const activeCourses = currentWeek.week
-      ? scheduleQuery.data.filter((course) => isCourseActiveInWeek(course, currentWeek.week))
-      : scheduleQuery.data;
+      ? scheduleQuery.data.filter((course) =>
+          isCourseActiveInWeek(course, currentWeek.week)
+        )
+      : scheduleQuery.data
     syncScheduleToWidget(
       activeCourses,
       currentWeek,
       periodsRef.current,
       useSettingsStore.getState().widgetSyncReminderHours,
-      useSettingsStore.getState().widgetShowNextDaySchedule,
-    ).catch(() => {});
-    syncClassAlarmsToNative(activeCourses, currentWeek, periodsRef.current).catch(() => {});
-  }, [scheduleQuery.data, currentWeek]);
+      useSettingsStore.getState().widgetShowNextDaySchedule
+    ).catch(() => {})
+    syncClassAlarmsToNative(
+      activeCourses,
+      currentWeek,
+      periodsRef.current
+    ).catch(() => {})
+  }, [scheduleQuery.data, currentWeek])
 
   async function handleQuery() {
-    const nextTerm = term.trim();
+    const nextTerm = term.trim()
     if (nextTerm === queriedTerm) {
       await Promise.all([
         scheduleQuery.mutate(),
         currentWeekQuery.mutate(),
         termCalendarQuery.mutate(),
         periodsQuery.mutate(),
-      ]);
+      ])
     } else {
-      setQueriedTerm(nextTerm);
-      setSelectedWeek(0);
+      setQueriedTerm(nextTerm)
+      setSelectedWeek(0)
     }
-    setFilterDrawerOpen(false);
+    setFilterDrawerOpen(false)
   }
 
   useMobileHeaderRight(
@@ -171,9 +201,9 @@ export default function SchedulePage() {
         size="icon-sm"
         asChild
         className="h-8 w-8"
-        aria-label={t("app.classrooms")}
+        aria-label={t("app.schoolSchedule")}
       >
-        <Link href="/dashboard/classrooms">
+        <Link href="/dashboard/school-schedule">
           <Building2 className="size-4" />
         </Link>
       </Button>
@@ -184,7 +214,11 @@ export default function SchedulePage() {
         className="h-8 w-8"
         aria-label={t("schedule.compactHint")}
       >
-        {compactMode ? <Grid3x3 className="size-4" /> : <Grid3x2 className="size-4" />}
+        {compactMode ? (
+          <Grid3x3 className="size-4" />
+        ) : (
+          <Grid3x2 className="size-4" />
+        )}
       </Button>
       <Button
         variant="ghost"
@@ -192,19 +226,21 @@ export default function SchedulePage() {
         onClick={() => setFilterDrawerOpen(true)}
         className="h-8 px-2 text-sm"
       >
-        {selectedWeek ? t("schedule.weekShort", { week: selectedWeek }) : t("schedule.weekLabel")}
+        {selectedWeek
+          ? t("schedule.weekShort", { week: selectedWeek })
+          : t("schedule.weekLabel")}
         <ChevronDown className="ml-0.5 size-3.5" />
       </Button>
     </div>,
-    [selectedWeek, t, compactMode, setCompactMode],
-  );
+    [selectedWeek, t, compactMode, setCompactMode]
+  )
 
   const filteredCourses = useMemo(() => {
-    if (selectedWeek <= 0) return courses;
-    return courses.filter((c) => isCourseActiveInWeek(c, selectedWeek));
-  }, [courses, selectedWeek]);
+    if (selectedWeek <= 0) return courses
+    return courses.filter((c) => isCourseActiveInWeek(c, selectedWeek))
+  }, [courses, selectedWeek])
 
-  const currentWeekday = currentWeek?.weekday ?? 0;
+  const currentWeekday = currentWeek?.weekday ?? 0
 
   if (loading && courses.length === 0) {
     return (
@@ -212,13 +248,15 @@ export default function SchedulePage() {
         <Skeleton className="h-12" />
         <Skeleton className="h-96" />
       </div>
-    );
+    )
   }
 
   const filterControls = (
     <FieldGroup className="flex flex-row flex-wrap items-end gap-3">
       <Field className="w-48">
-        <FieldLabel htmlFor="schedule-term">{t("schedule.termLabel")}</FieldLabel>
+        <FieldLabel htmlFor="schedule-term">
+          {t("schedule.termLabel")}
+        </FieldLabel>
         <Input
           id="schedule-term"
           value={term}
@@ -227,7 +265,9 @@ export default function SchedulePage() {
         />
       </Field>
       <Field className="min-w-[16rem]">
-        <FieldLabel htmlFor="schedule-week">{t("schedule.weekLabel")}</FieldLabel>
+        <FieldLabel htmlFor="schedule-week">
+          {t("schedule.weekLabel")}
+        </FieldLabel>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1">
             <Button
@@ -243,7 +283,9 @@ export default function SchedulePage() {
               id="schedule-week"
               type="number"
               value={selectedWeek || ""}
-              onChange={(e) => setSelectedWeek(parseInt(e.target.value, 10) || 0)}
+              onChange={(e) =>
+                setSelectedWeek(parseInt(e.target.value, 10) || 0)
+              }
               placeholder={t("schedule.weeks")}
               className="w-20 text-center"
             />
@@ -258,7 +300,9 @@ export default function SchedulePage() {
             </Button>
           </div>
           {currentWeek?.week && (
-            <Badge variant="secondary">{t("schedule.currentWeekBadge", { week: currentWeek.week })}</Badge>
+            <Badge variant="secondary">
+              {t("schedule.currentWeekBadge", { week: currentWeek.week })}
+            </Badge>
           )}
         </div>
       </Field>
@@ -271,10 +315,16 @@ export default function SchedulePage() {
         {t("schedule.query")}
       </Button>
     </FieldGroup>
-  );
+  )
 
   return (
-    <div className={compactMode && isMobile ? "flex flex-1 flex-col min-h-0" : "flex flex-col gap-6"}>
+    <div
+      className={
+        compactMode && isMobile
+          ? "flex min-h-0 flex-1 flex-col"
+          : "flex flex-col gap-6"
+      }
+    >
       <Card className="hidden md:block">
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
@@ -283,9 +333,9 @@ export default function SchedulePage() {
               <CardDescription>{t("schedule.description")}</CardDescription>
             </div>
             <Button variant="outline" size="sm" asChild>
-              <Link href="/dashboard/classrooms">
+              <Link href="/dashboard/school-schedule">
                 <Building2 />
-                {t("app.classrooms")}
+                {t("app.schoolSchedule")}
               </Link>
             </Button>
           </div>
@@ -296,10 +346,12 @@ export default function SchedulePage() {
       {isMobile ? (
         <div
           className={cn(
-            "flex flex-col -mx-4 -mt-4 -mb-4 md:m-0",
-            compactMode && "flex-1 min-h-0 overflow-hidden",
+            "-mx-4 -mt-4 -mb-4 flex flex-col md:m-0",
+            compactMode && "min-h-0 flex-1 overflow-hidden"
           )}
-          style={compactMode ? undefined : { minHeight: "calc(100dvh - 102px)" }}
+          style={
+            compactMode ? undefined : { minHeight: "calc(100dvh - 102px)" }
+          }
         >
           <ScheduleMobile
             courses={filteredCourses}
@@ -340,5 +392,5 @@ export default function SchedulePage() {
         </DrawerContent>
       </Drawer>
     </div>
-  );
+  )
 }

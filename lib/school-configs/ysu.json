@@ -1,3 +1,4 @@
+
 {
   "id": "ysu",
   "name": "燕山大学",
@@ -31,7 +32,8 @@
       "studentWdksapApp": "b5f84a8ed330481ca1efd1753d95a504",
       "xyyj": "4855b7a54e50498580017c61a1dc94c8",
       "kcbcx": "74506a67ea1c4bf3bb54eefa6e196779",
-      "pjapp": "5db54fd366204007af34267396897b24"
+      "pjapp": "5db54fd366204007af34267396897b24",
+      "bkbl": "d4145d3276744d9da8bf609da4702ae8"
     },
     "apiPaths": {
       "cjcx": "cjcx/modules/cjcx/xscjcx.do",
@@ -48,13 +50,10 @@
       "dqzc": "wdkb/modules/jshkcb/dqzc.do",
       "cxxljc": "wdkb/modules/xskcb/cxxljc.do",
       "kcbcx": "kcbcx/KbcxController/querybjkb.do",
-      "kcbcx_current_term": "kcbcx/modules/bjkcb/dqxnxq.do",
-      "kcbcx_classes": "kcbcx/modules/bjkcb/bjcx.do",
-      "kcbcx_class_schedule": "kcbcx/KbcxController/querybjkb.do",
-      "kcbcx_rooms": "kcbcx/modules/jskcb/jscx.do",
-      "kcbcx_room_schedule": "kcbcx/KbcxController/queryjaskb.do",
       "xsjbxx": "xsjbxxgl/modules/xsjbxx/cxxsjbxxlb.do",
       "xywc": "xywccx/modules/xywccx/cxxsscfa.do",
+      "xywc_recalc": "xywccx/modules/xywccx/bysc.do",
+      "xywc_recalc_progress": "xywccx/modules/xywccx/byscjd.do",
       "pyfa": "xsfacx/modules/pyfacxepg/grpyfacx.do",
       "pyfa_courses": "jwpubapp/modules/pyfa/kzkccx.do",
       "xyyj": "xyyj/modules/xsxyyjjg/cxxsyjpcjg.do",
@@ -64,8 +63,30 @@
       "dpwj": "pjapp/api/wdpj/getDpwj.do",
       "wjtxxx": "pjapp/api/wdpj/getWjtxxx.do",
       "calculate_score": "pjapp/api/wdpj/calculateQuestionnaireAnswerScore.do",
-      "commit_answer": "pjapp/api/wdpj/commitQuestionnaireAnswer.do"
+      "commit_answer": "pjapp/api/wdpj/commitQuestionnaireAnswer.do",
+      "bkxtcs": "bkbl/modules/bkbm/cxxtcs.do",
+      "bkkspc": "bkbl/modules/bkbm/cxbkkspc.do",
+      "bkbmmx": "bkbl/modules/bkbm/cxbkbmmx.do",
+      "xgksrwxs": "bkbl/modules/bkbm/xgksrwxs.do",
+      "bjcx": "kcbcx/modules/bjkcb/bjcx.do",
+      "jscx": "kcbcx/modules/jskcb/jscx.do",
+      "jaskb": "kcbcx/KbcxController/queryjaskb.do",
+      "code_nj": "/jwapp/code/c1e19f4d-94e0-464f-bb7b-d70d0517150c.do",
+      "code_yxdm": "/jwapp/code/49a86828-aef9-4a48-b26f-01149dac72d7.do",
+      "code_zydm": "/jwapp/code/87a9226a-6e44-44cc-9743-c081a8f9cb9b.do",
+      "code_xxxq": "/jwapp/code/83a986fc-e677-400e-99a4-c7bb39c2ca35.do",
+      "code_jxldm": "/jwapp/code/82101c45-a7d3-414d-988b-24744db9f5ea.do"
     }
+  },
+  "ldxt": {
+    "baseUrl": "https://ldxt.ysu.edu.cn"
+  },
+  "scxt": {
+    "baseUrl": "http://202.206.247.49/ysu_xf",
+    "ptBaseUrl": "http://202.206.247.49/ysu_pt"
+  },
+  "xgxt": {
+    "baseUrl": "https://xgxt.ysu.edu.cn"
   },
   "features": {
     "hasMobile": true,

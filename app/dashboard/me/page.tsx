@@ -1,54 +1,63 @@
-"use client";
+"use client"
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { toast } from "sonner";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { toast } from "sonner"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
+  AirVent,
   BookOpen,
+  CalendarDays,
   ChevronRight,
+  FilePenLine,
   FileText,
+  Gauge,
   GraduationCap,
+  Hammer,
+  Lightbulb,
   LogIn,
   Settings,
   Sun,
   Moon,
   User,
-} from "lucide-react";
-import { useAuthStore } from "@/lib/stores/auth";
-import { useSettingsStore } from "@/lib/stores/settings";
-import { useTranslation } from "@/lib/i18n/use-translation";
-import { useMobileHeaderRight } from "@/lib/stores/mobile-header";
-import { logoutActiveProvider, reloginActiveProvider } from "@/providers/provider-service";
-import { useStudentInfo } from "@/providers/hooks";
-import { checkRateLimit, recordLoginAttempt } from "@/lib/rate-limit";
-import { useTheme } from "next-themes";
-import { APP_VERSION, APP_BUILD } from "@/lib/version";
+} from "lucide-react"
+import { useAuthStore } from "@/lib/stores/auth"
+import { useSettingsStore } from "@/lib/stores/settings"
+import { useTranslation } from "@/lib/i18n/use-translation"
+import { useMobileHeaderRight } from "@/lib/stores/mobile-header"
+import {
+  logoutActiveProvider,
+  reloginActiveProvider,
+} from "@/providers/provider-service"
+import { useStudentInfo } from "@/providers/hooks"
+import { checkRateLimit, recordLoginAttempt } from "@/lib/rate-limit"
+import { useTheme } from "next-themes"
+import { APP_VERSION, APP_BUILD } from "@/lib/version"
 
 export default function MePage() {
-  const router = useRouter();
-  const username = useAuthStore((s) => s.username);
-  const { t } = useTranslation();
-  const { theme, setTheme, systemTheme } = useTheme();
+  const router = useRouter()
+  const username = useAuthStore((s) => s.username)
+  const { t } = useTranslation()
+  const { theme, setTheme, systemTheme } = useTheme()
 
-  const [mounted, setMounted] = useState(false);
+  const [mounted, setMounted] = useState(false)
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => setMounted(true), [])
 
-  const student = useStudentInfo();
+  const student = useStudentInfo()
 
-  const isSystem = theme === "system";
-  const effectiveTheme = isSystem ? systemTheme : theme;
+  const isSystem = theme === "system"
+  const effectiveTheme = isSystem ? systemTheme : theme
 
   function handleThemeToggle() {
     if (isSystem) {
-      setTheme("light");
+      setTheme("light")
     } else {
-      setTheme(theme === "light" ? "dark" : "light");
+      setTheme(theme === "light" ? "dark" : "light")
     }
   }
 
@@ -68,49 +77,98 @@ export default function MePage() {
       </Button>
     ) : null,
     [mounted, effectiveTheme, t]
-  );
+  )
 
   async function handleRelogin() {
-    const limit = checkRateLimit();
+    const limit = checkRateLimit()
     if (!limit.allowed) {
-      const totalSeconds = Math.ceil(limit.retryAfterMs / 1000);
-      const minutes = Math.floor(totalSeconds / 60);
-      const seconds = totalSeconds % 60;
+      const totalSeconds = Math.ceil(limit.retryAfterMs / 1000)
+      const minutes = Math.floor(totalSeconds / 60)
+      const seconds = totalSeconds % 60
       const message =
         limit.reason === "window"
           ? t("autoLogin.errorRateLimitWindow")
               .replace("{minutes}", String(minutes))
               .replace("{seconds}", seconds.toString().padStart(2, "0"))
-          : t("autoLogin.errorRateLimitInterval").replace("{seconds}", String(seconds));
-      toast.error(message);
-      return;
+          : t("autoLogin.errorRateLimitInterval").replace(
+              "{seconds}",
+              String(seconds)
+            )
+      toast.error(message)
+      return
     }
-    recordLoginAttempt();
+    recordLoginAttempt()
 
     try {
-      const success = await reloginActiveProvider();
+      const success = await reloginActiveProvider()
       if (success) {
-        toast.success(t("login.loginSuccess"));
-        return;
+        toast.success(t("login.loginSuccess"))
+        return
       }
     } catch {
-      // fall through
+      // 失败后退出登录
     }
-    await logoutActiveProvider();
-    router.replace("/login");
+    await logoutActiveProvider()
+    router.replace("/login")
   }
 
   const academicLinks = [
     { href: "/dashboard/me/student", label: t("app.studentInfo"), icon: User },
     { href: "/dashboard/me/gpa", label: t("app.gpa"), icon: GraduationCap },
-    { href: "/dashboard/exams", label: t("app.exams"), icon: FileText, mobileOnly: true },
-    { href: "/dashboard/training-plan", label: t("app.trainingPlan"), icon: BookOpen, mobileOnly: true },
-  ];
+    {
+      href: "/dashboard/exams",
+      label: t("app.exams"),
+      icon: FileText,
+      mobileOnly: true,
+    },
+    {
+      href: "/dashboard/makeup-exams",
+      label: t("app.makeupExams"),
+      icon: FilePenLine,
+      mobileOnly: true,
+    },
+    {
+      href: "/dashboard/school-schedule",
+      label: t("app.schoolSchedule"),
+      icon: CalendarDays,
+      mobileOnly: true,
+    },
+    {
+      href: "/dashboard/labor",
+      label: t("app.labor"),
+      icon: Hammer,
+      mobileOnly: true,
+    },
+    {
+      href: "/dashboard/credits",
+      label: t("app.credits"),
+      icon: Lightbulb,
+      mobileOnly: true,
+    },
+    {
+      href: "/dashboard/comprehensive",
+      label: t("app.comprehensive"),
+      icon: Gauge,
+      mobileOnly: true,
+    },
+    {
+      href: "/dashboard/meter",
+      label: t("meter.nav"),
+      icon: AirVent,
+      mobileOnly: true,
+    },
+    {
+      href: "/dashboard/training-plan",
+      label: t("app.trainingPlan"),
+      icon: BookOpen,
+      mobileOnly: true,
+    },
+  ]
 
-  const avatarImage = useSettingsStore((s) => s.avatarImage);
+  const avatarImage = useSettingsStore((s) => s.avatarImage)
 
-  const displayName = student.data?.name || username || t("me.profileFallback");
-  const initials = (student.data?.name || username || "U").slice(-2);
+  const displayName = student.data?.name || username || t("me.profileFallback")
+  const initials = (student.data?.name || username || "U").slice(-2)
 
   return (
     <div className="flex flex-col gap-4">
@@ -128,7 +186,9 @@ export default function MePage() {
               </>
             ) : (
               <>
-                <span className="truncate text-base font-semibold">{displayName}</span>
+                <span className="truncate text-base font-semibold">
+                  {displayName}
+                </span>
                 {student.data?.studentId && (
                   <span className="truncate text-sm text-muted-foreground">
                     {student.data.studentId}
@@ -141,7 +201,9 @@ export default function MePage() {
                 )}
                 {(student.data?.department || student.data?.major) && (
                   <span className="hidden truncate text-xs text-muted-foreground md:inline">
-                    {[student.data.department, student.data.major].filter(Boolean).join(" · ")}
+                    {[student.data.department, student.data.major]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </span>
                 )}
               </>
@@ -175,7 +237,10 @@ export default function MePage() {
                   key={item.href}
                   href={item.href}
                   className={`flex items-center gap-3 py-3 transition-colors active:bg-muted/60 md:hidden ${
-                    idx > 0 || academicLinks.filter((i) => !i.mobileOnly).length > 0 ? "border-t border-border" : ""
+                    idx > 0 ||
+                    academicLinks.filter((i) => !i.mobileOnly).length > 0
+                      ? "border-t border-border"
+                      : ""
                   }`}
                 >
                   <item.icon className="size-5 shrink-0 text-muted-foreground" />
@@ -211,7 +276,9 @@ export default function MePage() {
               className="flex items-center gap-3 py-3 transition-colors active:bg-muted/60"
             >
               <LogIn className="size-5 shrink-0 text-muted-foreground" />
-              <span className="flex-1 text-left text-sm">{t("app.relogin")}</span>
+              <span className="flex-1 text-left text-sm">
+                {t("app.relogin")}
+              </span>
               <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
             </button>
           </CardContent>
@@ -232,16 +299,22 @@ export default function MePage() {
         </div>
       </div>
     </div>
-  );
+  )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string
+  children: React.ReactNode
+}) {
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <h2 className="px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
         {title}
       </h2>
       {children}
     </section>
-  );
+  )
 }
