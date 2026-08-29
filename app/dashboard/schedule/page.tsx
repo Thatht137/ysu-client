@@ -24,7 +24,7 @@ import {
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useMobileHeaderRight } from "@/lib/stores/mobile-header";
-import { useClassPeriods, useCurrentWeek, useSchedule } from "@/providers/hooks";
+import { useClassPeriods, useCurrentWeek, useSchedule, useTermCalendar } from "@/providers/hooks";
 import {
   Building2,
   ChevronDown,
@@ -58,6 +58,7 @@ export default function SchedulePage() {
     includeLabSchedule: true,
   });
   const currentWeekQuery = useCurrentWeek({ semester: queriedTerm || undefined });
+  const termCalendarQuery = useTermCalendar({ semester: queriedTerm || undefined });
   const periodsQuery = useClassPeriods();
 
   const courses = useMemo(() => scheduleQuery.data ?? [], [scheduleQuery.data]);
@@ -67,6 +68,8 @@ export default function SchedulePage() {
     scheduleQuery.isValidating ||
     currentWeekQuery.isLoading ||
     currentWeekQuery.isValidating ||
+    termCalendarQuery.isLoading ||
+    termCalendarQuery.isValidating ||
     periodsQuery.isLoading ||
     periodsQuery.isValidating;
 
@@ -123,10 +126,12 @@ export default function SchedulePage() {
   }, [currentWeek]);
 
   useEffect(() => {
-    const errors = [scheduleQuery.error, currentWeekQuery.error, periodsQuery.error].filter(Boolean);
+    const errors = [scheduleQuery.error, currentWeekQuery.error, termCalendarQuery.error, periodsQuery.error].filter(
+      Boolean,
+    );
     if (errors.length === 0) return;
     toast.error(errors[0]?.message || t("app.updating"));
-  }, [scheduleQuery.error, currentWeekQuery.error, periodsQuery.error, t]);
+  }, [scheduleQuery.error, currentWeekQuery.error, termCalendarQuery.error, periodsQuery.error, t]);
 
   useEffect(() => {
     if (!scheduleQuery.data || !currentWeek) return;
@@ -149,6 +154,7 @@ export default function SchedulePage() {
       await Promise.all([
         scheduleQuery.mutate(),
         currentWeekQuery.mutate(),
+        termCalendarQuery.mutate(),
         periodsQuery.mutate(),
       ]);
     } else {
@@ -301,6 +307,7 @@ export default function SchedulePage() {
             currentWeekday={currentWeekday}
             currentWeek={currentWeek}
             selectedWeek={selectedWeek}
+            semesterStartDate={termCalendarQuery.data?.startDate}
             nowMinutes={nowMinutes}
             compact={compactMode}
             onPrevWeek={() => shiftWeek(-1)}
@@ -316,6 +323,7 @@ export default function SchedulePage() {
               currentWeekday={currentWeekday}
               currentWeek={currentWeek}
               selectedWeek={selectedWeek}
+              semesterStartDate={termCalendarQuery.data?.startDate}
               nowMinutes={nowMinutes}
             />
           </CardContent>

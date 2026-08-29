@@ -57,7 +57,35 @@ function formatShortDate(value: string | undefined): string | null {
   return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
-export function computeWeekDateLabels(currentWeek: CurrentWeek | null, selectedWeek: number): (string | null)[] {
+function parseLocalDate(value: string | undefined): Date | null {
+  if (!value) return null;
+  const parts = value.split("-").map(Number);
+  if (parts.length === 3 && parts.every(Number.isFinite)) {
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function buildWeekDateLabels(monday: Date): string[] {
+  return Array.from({ length: 7 }, (_, idx) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + idx);
+    return `${date.getMonth() + 1}/${date.getDate()}`;
+  });
+}
+
+export function computeWeekDateLabels(
+  currentWeek: CurrentWeek | null,
+  selectedWeek: number,
+  semesterStartDate?: string,
+): (string | null)[] {
+  const semesterStart = parseLocalDate(semesterStartDate);
+  if (semesterStart && selectedWeek >= 1) {
+    semesterStart.setDate(semesterStart.getDate() + (selectedWeek - 1) * 7);
+    return buildWeekDateLabels(semesterStart);
+  }
+
   if (!currentWeek || !Number.isFinite(currentWeek.week)) return Array(7).fill(null);
 
   if (Array.isArray(currentWeek.weekDates) && currentWeek.weekDates.length === 7) {
@@ -66,30 +94,22 @@ export function computeWeekDateLabels(currentWeek: CurrentWeek | null, selectedW
     }
     const start = currentWeek.weekStartDate ?? currentWeek.weekDates[0];
     if (start) {
-      const base = new Date(start);
-      if (!Number.isNaN(base.getTime())) {
+      const base = parseLocalDate(start);
+      if (base) {
         base.setDate(base.getDate() + (selectedWeek - currentWeek.week) * 7);
-        return Array.from({ length: 7 }, (_, idx) => {
-          const dt = new Date(base);
-          dt.setDate(base.getDate() + idx);
-          return `${dt.getMonth() + 1}/${dt.getDate()}`;
-        });
+        return buildWeekDateLabels(base);
       }
     }
   }
 
   if (!currentWeek.date || !currentWeek.weekday) return Array(7).fill(null);
-  const base = new Date(currentWeek.date);
-  if (Number.isNaN(base.getTime())) return Array(7).fill(null);
+  const base = parseLocalDate(currentWeek.date);
+  if (!base) return Array(7).fill(null);
   const mondayOffset = currentWeek.weekday - 1;
   const weekDelta = selectedWeek - currentWeek.week;
   const monday = new Date(base);
   monday.setDate(base.getDate() - mondayOffset + weekDelta * 7);
-  return Array.from({ length: 7 }, (_, idx) => {
-    const dt = new Date(monday);
-    dt.setDate(monday.getDate() + idx);
-    return `${dt.getMonth() + 1}/${dt.getDate()}`;
-  });
+  return buildWeekDateLabels(monday);
 }
 
 export function isCoursePast(
