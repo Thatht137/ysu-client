@@ -118,8 +118,8 @@ export default function SchedulePage() {
   });
 
   useEffect(() => {
-    if (!currentWeek?.week) return;
-    setSelectedWeek((curr) => (curr === 0 ? currentWeek.week : curr));
+    if (!currentWeek || !Number.isFinite(currentWeek.week)) return;
+    setSelectedWeek((curr) => (curr === 0 ? Math.max(1, currentWeek.week) : curr));
   }, [currentWeek]);
 
   useEffect(() => {

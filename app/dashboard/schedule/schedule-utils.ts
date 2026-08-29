@@ -58,7 +58,7 @@ function formatShortDate(value: string | undefined): string | null {
 }
 
 export function computeWeekDateLabels(currentWeek: CurrentWeek | null, selectedWeek: number): (string | null)[] {
-  if (!currentWeek?.week) return Array(7).fill(null);
+  if (!currentWeek || !Number.isFinite(currentWeek.week)) return Array(7).fill(null);
 
   if (Array.isArray(currentWeek.weekDates) && currentWeek.weekDates.length === 7) {
     if (selectedWeek === currentWeek.week) {
