@@ -1,7 +1,13 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
 import {
   Card,
@@ -10,6 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -17,35 +24,65 @@ import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer"
+  FilterDrawer,
+  FilterTrigger,
+} from "@/components/academic/filter-drawer"
 import { useTranslation } from "@/lib/i18n/use-translation"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { useMobileHeaderRight } from "@/lib/stores/mobile-header"
+import { useBackHandler } from "@/hooks/use-back-handler"
+import { useAcademicTime } from "@/hooks/use-academic-time"
+import {
+  useMobileHeaderLayout,
+  useMobileHeaderRight,
+} from "@/lib/stores/mobile-header"
+import { useEffectiveSchedule } from "@/providers/hooks/use-effective-schedule"
+import {
+  schedulePatchAffectsWeek,
+  scheduleWeek,
+  type ScheduleDrop,
+  type SchedulePatch,
+  type ScheduleSelection,
+} from "@/lib/academic/schedule-patches"
 import {
   useClassPeriods,
   useCurrentWeek,
+  useExams,
   useSchedule,
   useTermCalendar,
 } from "@/providers/hooks"
 import {
-  Building2,
-  ChevronDown,
+  CalendarDays,
+  CalendarSearch,
   ChevronLeft,
   ChevronRight,
   Search,
   Grid3x2,
   Grid3x3,
+  Check,
+  History,
+  Pencil,
+  Undo2,
+  TriangleAlert,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { isCourseActiveInWeek, periodIsInUse } from "./schedule-utils"
+import {
+  isCourseActiveInWeek,
+  parseTimeToMinutes,
+  periodIsInUse,
+} from "./schedule-utils"
+import { computeExamBlocks } from "./exam-blocks"
+import { buildCourseColorMap } from "./course-color"
 import { ScheduleTablet } from "./schedule-tablet"
 import { ScheduleMobile } from "./schedule-mobile"
-import { syncScheduleToWidget } from "@/lib/native/widget-bridge"
+import { ScheduleDragProvider } from "./schedule-drag"
+import {
+  ScheduleAdjustmentDialog,
+  ScheduleAdjustmentsDialog,
+} from "./schedule-editor-dialogs"
+import {
+  syncExamsToWidget,
+  syncScheduleToWidget,
+} from "@/lib/native/widget-bridge"
 import { syncClassAlarmsToNative } from "@/lib/native/notify"
 import { useSettingsStore } from "@/lib/stores/settings"
 
@@ -54,10 +91,29 @@ export default function SchedulePage() {
   const isMobile = useIsMobile()
   const compactMode = useSettingsStore((s) => s.scheduleCompactMode)
   const setCompactMode = useSettingsStore((s) => s.setScheduleCompactMode)
-  const [selectedWeek, setSelectedWeek] = useState<number>(0)
+  const widgetSyncReminderHours = useSettingsStore(
+    (s) => s.widgetSyncReminderHours
+  )
+  const [weekOverride, setWeekOverride] = useState<number | null>(null)
   const [term, setTerm] = useState("")
   const [queriedTerm, setQueriedTerm] = useState("")
+  const isDefaultTerm = queriedTerm === ""
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
+  const [editScope, setEditScope] = useState<string | null>(null)
+  const [pending, setPending] = useState<{
+    scope: string
+    drop: ScheduleDrop
+  } | null>(null)
+  const [manager, setManager] = useState<{
+    scope: string
+    id: string | null
+  } | null>(null)
+  const [showOriginal, setShowOriginal] = useState(false)
+  const [undo, setUndo] = useState<{
+    scope: string
+    id: string
+    remove: boolean
+  } | null>(null)
 
   const scheduleQuery = useSchedule({
     semester: queriedTerm || undefined,
@@ -71,9 +127,169 @@ export default function SchedulePage() {
     semester: queriedTerm || undefined,
   })
   const periodsQuery = useClassPeriods()
+  const examsQuery = useExams({ semester: queriedTerm || undefined })
 
-  const courses = useMemo(() => scheduleQuery.data ?? [], [scheduleQuery.data])
-  const currentWeek = currentWeekQuery.data ?? null
+  const rawCourses = useMemo(
+    () => scheduleQuery.data ?? [],
+    [scheduleQuery.data]
+  )
+  const snapshot = currentWeekQuery.data ?? null
+  const rawCalendar = termCalendarQuery.data
+  const semester = queriedTerm || snapshot?.semester
+  const termCalendar =
+    semester && rawCalendar?.semester && rawCalendar.semester !== semester
+      ? undefined
+      : rawCalendar
+  const weekAnchor =
+    queriedTerm && snapshot?.semester && snapshot.semester !== queriedTerm
+      ? null
+      : snapshot
+  const { currentWeek, weekday, nowMinutes } = useAcademicTime(
+    snapshot,
+    rawCalendar,
+    queriedTerm
+  )
+  const selectedWeek = weekOverride ?? currentWeek?.week ?? 1
+  const effective = useEffectiveSchedule(
+    scheduleQuery.data,
+    termCalendar,
+    snapshot,
+    queriedTerm
+  )
+  const canEdit = effective.ready && !!periodsQuery.data?.some(periodIsInUse)
+  const editing =
+    effective.ready &&
+    editScope !== null &&
+    editScope === effective.scope &&
+    !showOriginal
+  const mobileFullscreen = isMobile && (editing || showOriginal)
+  const courses =
+    effective.ready && !showOriginal ? effective.courses : rawCourses
+  const activePending = pending?.scope === effective.scope ? pending : null
+  const activeManager = manager?.scope === effective.scope ? manager : null
+  const undoPatch =
+    undo?.scope === effective.scope
+      ? effective.patches.find((patch) => patch.id === undo.id)
+      : undefined
+  const lastAdjustment = effective.patches
+    .filter((patch) => patch.enabled)
+    .at(-1)
+  const weekAdjustments = useMemo(
+    () =>
+      effective.patches.filter((patch) =>
+        schedulePatchAffectsWeek(patch, effective.termStartDate, selectedWeek)
+      ),
+    [effective.patches, effective.termStartDate, selectedWeek]
+  )
+  const weekIssues = useMemo(() => {
+    const ids = new Set(weekAdjustments.map((patch) => patch.id))
+    return effective.issues.filter((issue) => ids.has(issue.patchId))
+  }, [weekAdjustments, effective.issues])
+  const weekAdjustmentCount = weekAdjustments.length
+  const reviewCount = new Set(weekIssues.map((issue) => issue.patchId)).size
+  const adjustmentsView = useMemo(
+    () =>
+      undoPatch && undo
+        ? {
+            kind: "confirmation" as const,
+            patch: undoPatch,
+            remove: undo.remove,
+          }
+        : activeManager
+          ? { kind: "manager" as const, selectedPatchId: activeManager.id }
+          : null,
+    [undoPatch, undo, activeManager]
+  )
+  const titleHint =
+    effective.ready &&
+    !showOriginal &&
+    (weekAdjustmentCount > 0 || reviewCount > 0)
+      ? [
+          t("scheduleEditor.weekAdjustments", { count: weekAdjustmentCount }),
+          ...(reviewCount > 0
+            ? [t("scheduleEditor.reviewCount", { count: reviewCount })]
+            : []),
+        ].join(" · ")
+      : null
+  useMobileHeaderLayout(
+    isMobile
+      ? showOriginal
+        ? t("scheduleEditor.originalTitle")
+        : editing
+          ? t("scheduleEditor.title")
+          : null
+      : null,
+    mobileFullscreen,
+    isMobile ? titleHint : null
+  )
+
+  function finishEditing() {
+    setEditScope(null)
+    setPending(null)
+  }
+
+  useBackHandler(finishEditing, editing)
+  useBackHandler(() => setShowOriginal(false), showOriginal)
+
+  function enterEditor() {
+    if (!canEdit) return
+    setWeekOverride(Math.min(effective.totalWeeks, Math.max(1, selectedWeek)))
+    setShowOriginal(false)
+    setFilterDrawerOpen(false)
+    setEditScope(effective.scope)
+  }
+
+  function openManager(id: string | null = null) {
+    if (effective.scope) setManager({ scope: effective.scope, id })
+  }
+
+  function openAdjustment(drop: ScheduleDrop) {
+    if (editing && effective.scope) setPending({ scope: effective.scope, drop })
+  }
+
+  function selectAdjustment(selection: ScheduleSelection) {
+    openAdjustment({
+      selection,
+      targetDate: selection.date,
+      targetStartSection: selection.courses[0]?.startSection ?? 1,
+    })
+  }
+
+  function saveAdjustment(
+    draft: Omit<SchedulePatch, "id" | "createdAt" | "enabled">
+  ) {
+    const id = effective.addPatch(draft)
+    setPending(null)
+    toast.success(t("scheduleEditor.saved"), {
+      action: {
+        label: t("scheduleEditor.undo"),
+        onClick: () => requestUndo(id),
+      },
+    })
+  }
+
+  function requestUndo(id: string, remove = true) {
+    if (effective.scope) setUndo({ scope: effective.scope, id, remove })
+  }
+
+  function confirmUndo() {
+    if (!undoPatch || !undo) return
+    try {
+      if (undo.remove) effective.removePatch(undoPatch.id)
+      else effective.setPatchEnabled(undoPatch.id, false)
+      setUndo(null)
+      toast.success(t("scheduleEditor.undone"))
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message.startsWith("scheduleEditor.")
+            ? t(error.message)
+            : error.message
+          : t("scheduleEditor.saveFailed")
+      )
+    }
+  }
+
   const loading =
     scheduleQuery.isLoading ||
     scheduleQuery.isValidating ||
@@ -82,12 +298,12 @@ export default function SchedulePage() {
     termCalendarQuery.isLoading ||
     termCalendarQuery.isValidating ||
     periodsQuery.isLoading ||
-    periodsQuery.isValidating
+    periodsQuery.isValidating ||
+    examsQuery.isLoading ||
+    examsQuery.isValidating
 
-  // In compact mode, adjust <main> padding-bottom to match the actual nav bar height,
-  // so the content area ends exactly at the nav top edge.
   useEffect(() => {
-    if (!compactMode) return
+    if (!compactMode || mobileFullscreen) return
     const main = document.querySelector("main")
     const nav = document.querySelector('nav[aria-label="Primary"]')
     if (!main || !nav) return
@@ -101,7 +317,7 @@ export default function SchedulePage() {
       observer.disconnect()
       main.style.paddingBottom = ""
     }
-  }, [compactMode])
+  }, [compactMode, mobileFullscreen])
 
   const periods = useMemo(() => {
     if (!periodsQuery.data) return []
@@ -110,35 +326,21 @@ export default function SchedulePage() {
       .sort((a, b) => a.section - b.section)
   }, [periodsQuery.data])
 
-  const [nowMinutes, setNowMinutes] = useState(() => {
-    const now = new Date()
-    return now.getHours() * 60 + now.getMinutes()
-  })
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      const now = new Date()
-      setNowMinutes(now.getHours() * 60 + now.getMinutes())
-    }, 60_000)
-    return () => clearInterval(id)
-  }, [])
-
-  function shiftWeek(delta: number) {
-    setSelectedWeek((w) => Math.max(1, (w || 1) + delta))
+  function selectWeek(week: number) {
+    const nextWeek = Math.max(1, week)
+    setWeekOverride(
+      !editing && nextWeek === currentWeek?.week ? null : nextWeek
+    )
   }
 
-  // 用 ref 持有最新的 periods 数据，避免 periods 变化触发 effect 重新执行
-  const periodsRef = useRef(periods)
-  useEffect(() => {
-    periodsRef.current = periods
-  })
-
-  useEffect(() => {
-    if (!currentWeek || !Number.isFinite(currentWeek.week)) return
-    setSelectedWeek((curr) =>
-      curr === 0 ? Math.max(1, currentWeek.week) : curr
+  function shiftWeek(delta: number) {
+    selectWeek(
+      Math.min(
+        effective.totalWeeks || Infinity,
+        Math.max(1, selectedWeek + delta)
+      )
     )
-  }, [currentWeek])
+  }
 
   useEffect(() => {
     const errors = [
@@ -146,6 +348,7 @@ export default function SchedulePage() {
       currentWeekQuery.error,
       termCalendarQuery.error,
       periodsQuery.error,
+      examsQuery.error,
     ].filter(Boolean)
     if (errors.length === 0) return
     toast.error(errors[0]?.message || t("app.updating"))
@@ -154,29 +357,50 @@ export default function SchedulePage() {
     currentWeekQuery.error,
     termCalendarQuery.error,
     periodsQuery.error,
+    examsQuery.error,
     t,
   ])
 
   useEffect(() => {
-    if (!scheduleQuery.data || !currentWeek) return
-    const activeCourses = currentWeek.week
-      ? scheduleQuery.data.filter((course) =>
-          isCourseActiveInWeek(course, currentWeek.week)
-        )
-      : scheduleQuery.data
+    if (!isDefaultTerm || (!effective.ready && currentWeek)) return
     syncScheduleToWidget(
-      activeCourses,
+      effective.courses,
       currentWeek,
-      periodsRef.current,
+      periods,
       useSettingsStore.getState().widgetSyncReminderHours,
-      useSettingsStore.getState().widgetShowNextDaySchedule
+      useSettingsStore.getState().widgetShowNextDaySchedule,
+      termCalendar
     ).catch(() => {})
-    syncClassAlarmsToNative(
-      activeCourses,
+  }, [
+    isDefaultTerm,
+    effective.ready,
+    effective.courses,
+    currentWeek,
+    periods,
+    termCalendar,
+  ])
+
+  useEffect(() => {
+    if (!isDefaultTerm || (!effective.ready && currentWeek)) return
+    void syncClassAlarmsToNative(
+      effective.courses,
       currentWeek,
-      periodsRef.current
+      periods,
+      termCalendar
     ).catch(() => {})
-  }, [scheduleQuery.data, currentWeek])
+  }, [
+    isDefaultTerm,
+    effective.ready,
+    effective.courses,
+    currentWeek,
+    periods,
+    termCalendar,
+  ])
+
+  useEffect(() => {
+    if (!isDefaultTerm || !examsQuery.data) return
+    syncExamsToWidget(examsQuery.data, widgetSyncReminderHours).catch(() => {})
+  }, [isDefaultTerm, examsQuery.data, widgetSyncReminderHours])
 
   async function handleQuery() {
     const nextTerm = term.trim()
@@ -186,61 +410,167 @@ export default function SchedulePage() {
         currentWeekQuery.mutate(),
         termCalendarQuery.mutate(),
         periodsQuery.mutate(),
+        examsQuery.mutate(),
       ])
     } else {
       setQueriedTerm(nextTerm)
-      setSelectedWeek(0)
+      setWeekOverride(null)
     }
     setFilterDrawerOpen(false)
   }
 
+  const headerWeekday = weekday
+  const currentSection = useMemo(() => {
+    if (headerWeekday <= 0) return null
+    for (const p of periods) {
+      const start = parseTimeToMinutes(p.startTime)
+      const end = parseTimeToMinutes(p.endTime)
+      if (start === null || end === null) continue
+      if (nowMinutes >= start && nowMinutes < end) return p.section
+    }
+    const upcoming = periods.find((p) => {
+      const start = parseTimeToMinutes(p.startTime)
+      return start !== null && start > nowMinutes
+    })
+    return upcoming?.section ?? null
+  }, [periods, nowMinutes, headerWeekday])
+  const freeRoomHref = useMemo(() => {
+    const params = new URLSearchParams({
+      tab: "room",
+      week: String(selectedWeek || currentWeek?.week || 1),
+    })
+    if (headerWeekday >= 1) params.set("day", String(headerWeekday))
+    if (currentSection) params.set("section", String(currentSection))
+    return `/dashboard/school-schedule?${params.toString()}`
+  }, [selectedWeek, currentWeek?.week, headerWeekday, currentSection])
+
+  const editorActions = (
+    <div className="flex items-center gap-1">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        disabled={!lastAdjustment}
+        onClick={() => {
+          if (lastAdjustment) requestUndo(lastAdjustment.id)
+        }}
+        aria-label={t("scheduleEditor.undoLast")}
+      >
+        <Undo2 />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        onClick={() => openManager()}
+        aria-label={t("scheduleEditor.manage")}
+      >
+        <History />
+      </Button>
+      <Button size="sm" onClick={finishEditing}>
+        <Check data-icon="inline-start" />
+        {t("scheduleEditor.done")}
+      </Button>
+    </div>
+  )
+
   useMobileHeaderRight(
-    <div className="flex items-center gap-0.5">
+    showOriginal ? (
       <Button
-        variant="ghost"
-        size="icon-sm"
-        asChild
-        className="h-8 w-8"
-        aria-label={t("app.schoolSchedule")}
-      >
-        <Link href="/dashboard/school-schedule">
-          <Building2 className="size-4" />
-        </Link>
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        onClick={() => setCompactMode(!compactMode)}
-        className="h-8 w-8"
-        aria-label={t("schedule.compactHint")}
-      >
-        {compactMode ? (
-          <Grid3x3 className="size-4" />
-        ) : (
-          <Grid3x2 className="size-4" />
-        )}
-      </Button>
-      <Button
-        variant="ghost"
         size="sm"
-        onClick={() => setFilterDrawerOpen(true)}
-        className="h-8 px-2 text-sm"
+        variant="outline"
+        onClick={() => setShowOriginal(false)}
       >
-        {selectedWeek
-          ? t("schedule.weekShort", { week: selectedWeek })
-          : t("schedule.weekLabel")}
-        <ChevronDown className="ml-0.5 size-3.5" />
+        {t("scheduleEditor.showEffective")}
       </Button>
-    </div>,
-    [selectedWeek, t, compactMode, setCompactMode]
+    ) : editing ? (
+      editorActions
+    ) : (
+      <div className="flex items-center gap-0.5">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-8 w-8"
+              aria-label={t("app.schoolSchedule")}
+            >
+              <CalendarDays className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard/school-schedule">
+                {t("app.schoolSchedule")}
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href={freeRoomHref}>
+                {t("schoolSchedule.freeRoomEntry")}
+              </Link>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => setCompactMode(!compactMode)}
+          className="h-8 w-8"
+          aria-label={t("schedule.compactHint")}
+        >
+          {compactMode ? (
+            <Grid3x3 className="size-4" />
+          ) : (
+            <Grid3x2 className="size-4" />
+          )}
+        </Button>
+        <FilterTrigger
+          label={
+            selectedWeek
+              ? t("schedule.weekShort", { week: selectedWeek })
+              : t("schedule.weekLabel")
+          }
+          onClick={() => setFilterDrawerOpen(true)}
+        />
+      </div>
+    ),
+    [
+      selectedWeek,
+      t,
+      compactMode,
+      setCompactMode,
+      currentSection,
+      freeRoomHref,
+      editing,
+      showOriginal,
+      effective.patches,
+      effective.scope,
+    ]
   )
 
   const filteredCourses = useMemo(() => {
     if (selectedWeek <= 0) return courses
     return courses.filter((c) => isCourseActiveInWeek(c, selectedWeek))
   }, [courses, selectedWeek])
+  const courseColors = useMemo(() => buildCourseColorMap(courses), [courses])
 
-  const currentWeekday = currentWeek?.weekday ?? 0
+  const examBlocks = useMemo(
+    () =>
+      computeExamBlocks(
+        examsQuery.data ?? [],
+        periods,
+        weekAnchor,
+        selectedWeek,
+        termCalendar?.startDate
+      ),
+    [
+      examsQuery.data,
+      periods,
+      weekAnchor,
+      selectedWeek,
+      termCalendar?.startDate,
+    ]
+  )
+
+  const currentWeekday = weekday
 
   if (loading && courses.length === 0) {
     return (
@@ -251,21 +581,21 @@ export default function SchedulePage() {
     )
   }
 
-  const filterControls = (
+  const renderFilterControls = (idPrefix: string) => (
     <FieldGroup className="flex flex-row flex-wrap items-end gap-3">
       <Field className="w-48">
-        <FieldLabel htmlFor="schedule-term">
+        <FieldLabel htmlFor={`${idPrefix}-term`}>
           {t("schedule.termLabel")}
         </FieldLabel>
         <Input
-          id="schedule-term"
+          id={`${idPrefix}-term`}
           value={term}
           onChange={(e) => setTerm(e.target.value)}
           placeholder={t("schedule.termPlaceholder")}
         />
       </Field>
       <Field className="min-w-[16rem]">
-        <FieldLabel htmlFor="schedule-week">
+        <FieldLabel htmlFor={`${idPrefix}-week`}>
           {t("schedule.weekLabel")}
         </FieldLabel>
         <div className="flex flex-wrap items-center gap-2">
@@ -280,12 +610,10 @@ export default function SchedulePage() {
               <ChevronLeft />
             </Button>
             <Input
-              id="schedule-week"
+              id={`${idPrefix}-week`}
               type="number"
               value={selectedWeek || ""}
-              onChange={(e) =>
-                setSelectedWeek(parseInt(e.target.value, 10) || 0)
-              }
+              onChange={(e) => selectWeek(parseInt(e.target.value, 10) || 1)}
               placeholder={t("schedule.weeks")}
               className="w-20 text-center"
             />
@@ -299,7 +627,7 @@ export default function SchedulePage() {
               <ChevronRight />
             </Button>
           </div>
-          {currentWeek?.week && (
+          {currentWeek && currentWeek.week >= 1 && (
             <Badge variant="secondary">
               {t("schedule.currentWeekBadge", { week: currentWeek.week })}
             </Badge>
@@ -314,83 +642,231 @@ export default function SchedulePage() {
         )}
         {t("schedule.query")}
       </Button>
+      <Button
+        type="button"
+        variant="outline"
+        disabled={!canEdit}
+        onClick={enterEditor}
+      >
+        <Pencil data-icon="inline-start" />
+        {t("scheduleEditor.enter")}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        disabled={!effective.ready}
+        onClick={() => {
+          setFilterDrawerOpen(false)
+          openManager()
+        }}
+      >
+        <History data-icon="inline-start" />
+        {t("scheduleEditor.manage")}
+      </Button>
+      {!canEdit && (
+        <p className="text-sm text-muted-foreground">
+          {t("scheduleEditor.notReady")}
+        </p>
+      )}
     </FieldGroup>
   )
 
   return (
     <div
       className={
-        compactMode && isMobile
+        isMobile && (compactMode || mobileFullscreen)
           ? "flex min-h-0 flex-1 flex-col"
           : "flex flex-col gap-6"
       }
     >
       <Card className="hidden md:block">
-        <CardHeader>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <CardTitle>{t("schedule.title")}</CardTitle>
-              <CardDescription>{t("schedule.description")}</CardDescription>
-            </div>
-            <Button variant="outline" size="sm" asChild>
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <div className="flex flex-col gap-1.5">
+            <CardTitle>{t("schedule.title")}</CardTitle>
+            <CardDescription>{t("schedule.description")}</CardDescription>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {editing && editorActions}
+            <Button variant="outline" asChild>
+              <Link href={freeRoomHref}>
+                <CalendarSearch data-icon="inline-start" />
+                {t("schoolSchedule.freeRoomEntry")}
+              </Link>
+            </Button>
+            <Button variant="outline" asChild>
               <Link href="/dashboard/school-schedule">
-                <Building2 />
+                <CalendarDays data-icon="inline-start" />
                 {t("app.schoolSchedule")}
               </Link>
             </Button>
           </div>
         </CardHeader>
-        <CardContent>{filterControls}</CardContent>
+        {!editing && (
+          <CardContent>{renderFilterControls("schedule-desktop")}</CardContent>
+        )}
       </Card>
 
-      {isMobile ? (
-        <div
+      {showOriginal && (
+        <Alert
           className={cn(
-            "-mx-4 -mt-4 -mb-4 flex flex-col md:m-0",
-            compactMode && "min-h-0 flex-1 overflow-hidden"
+            "shrink-0",
+            isMobile && "rounded-none border-x-0 border-t-0"
           )}
-          style={
-            compactMode ? undefined : { minHeight: "calc(100dvh - 102px)" }
-          }
         >
-          <ScheduleMobile
-            courses={filteredCourses}
-            periods={periods}
-            currentWeekday={currentWeekday}
-            currentWeek={currentWeek}
-            selectedWeek={selectedWeek}
-            semesterStartDate={termCalendarQuery.data?.startDate}
-            nowMinutes={nowMinutes}
-            compact={compactMode}
-            onPrevWeek={() => shiftWeek(-1)}
-            onNextWeek={() => shiftWeek(1)}
-          />
-        </div>
-      ) : (
-        <Card>
-          <CardContent className="pt-6">
-            <ScheduleTablet
-              courses={filteredCourses}
+          <AlertTitle>{t("scheduleEditor.showOriginal")}</AlertTitle>
+          <AlertDescription>
+            <p>{t("scheduleEditor.originalNotice")}</p>
+            {!isMobile && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowOriginal(false)}
+              >
+                {t("scheduleEditor.showEffective")}
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+      {!isMobile &&
+        effective.ready &&
+        (weekAdjustmentCount > 0 || reviewCount > 0) &&
+        !showOriginal && (
+          <div
+            className={cn(
+              "flex shrink-0 flex-wrap items-center gap-2",
+              isMobile && "px-2 py-1"
+            )}
+          >
+            <Button variant="ghost" size="sm" onClick={() => openManager()}>
+              <History data-icon="inline-start" />
+              {t("scheduleEditor.weekAdjustments", {
+                count: weekAdjustmentCount,
+              })}
+            </Button>
+            {reviewCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openManager(weekIssues[0].patchId)}
+              >
+                <TriangleAlert data-icon="inline-start" />
+                {t("scheduleEditor.reviewCount", {
+                  count: reviewCount,
+                })}
+              </Button>
+            )}
+          </div>
+        )}
+      <ScheduleDragProvider
+        editing={editing}
+        enabled={editing && !activePending && !activeManager && !undoPatch}
+        selectedWeek={selectedWeek || 1}
+        totalWeeks={effective.totalWeeks}
+        termStartDate={effective.termStartDate}
+        courses={showOriginal ? [] : effective.courses}
+        traces={showOriginal ? [] : effective.traces}
+        patches={showOriginal ? [] : effective.patches}
+        onShiftWeek={shiftWeek}
+        onDrop={openAdjustment}
+        onSelect={selectAdjustment}
+        onTraceClick={openManager}
+      >
+        {isMobile ? (
+          <div
+            className={cn(
+              mobileFullscreen
+                ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+                : "-mx-4 -mt-4 -mb-4 flex flex-col md:m-0",
+              compactMode && "min-h-0 flex-1 overflow-hidden"
+            )}
+            style={
+              compactMode || mobileFullscreen
+                ? undefined
+                : {
+                    minHeight:
+                      "calc(100dvh - 3rem - var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) - var(--mobile-bottom-nav-height, calc(4rem + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)))))",
+                  }
+            }
+          >
+            <ScheduleMobile
+              courses={courses}
+              exams={examsQuery.data}
               periods={periods}
               currentWeekday={currentWeekday}
               currentWeek={currentWeek}
+              weekAnchor={weekAnchor}
               selectedWeek={selectedWeek}
-              semesterStartDate={termCalendarQuery.data?.startDate}
+              termStartDate={termCalendar?.startDate}
               nowMinutes={nowMinutes}
+              compact={compactMode || mobileFullscreen}
+              fullscreen={mobileFullscreen}
+              onPrevWeek={() => shiftWeek(-1)}
+              onNextWeek={() => shiftWeek(1)}
+              colorMap={courseColors}
             />
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="pt-6">
+              <ScheduleTablet
+                courses={filteredCourses}
+                examBlocks={examBlocks}
+                periods={periods}
+                currentWeekday={currentWeekday}
+                currentWeek={currentWeek}
+                weekAnchor={weekAnchor}
+                selectedWeek={selectedWeek}
+                termStartDate={termCalendar?.startDate}
+                nowMinutes={nowMinutes}
+                colorMap={courseColors}
+              />
+            </CardContent>
+          </Card>
+        )}
+      </ScheduleDragProvider>
 
-      <Drawer open={filterDrawerOpen} onOpenChange={setFilterDrawerOpen}>
-        <DrawerContent>
-          <DrawerHeader>
-            <DrawerTitle>{t("schedule.title")}</DrawerTitle>
-            <DrawerDescription>{t("schedule.description")}</DrawerDescription>
-          </DrawerHeader>
-          <div className="px-4 pb-6">{filterControls}</div>
-        </DrawerContent>
-      </Drawer>
+      <ScheduleAdjustmentDialog
+        drop={activePending && !undoPatch ? activePending.drop : null}
+        courses={effective.courses}
+        periods={periods}
+        termStartDate={effective.termStartDate}
+        totalWeeks={effective.totalWeeks}
+        onClose={() => setPending(null)}
+        onSave={saveAdjustment}
+      />
+      <ScheduleAdjustmentsDialog
+        view={adjustmentsView}
+        patches={effective.patches}
+        issues={effective.issues}
+        onClose={() => {
+          if (undoPatch) setUndo(null)
+          else setManager(null)
+        }}
+        onConfirm={confirmUndo}
+        onRemove={requestUndo}
+        onToggle={(id, enabled) => {
+          if (enabled) effective.setPatchEnabled(id, true)
+          else requestUndo(id, false)
+        }}
+        onJump={(date) => {
+          selectWeek(scheduleWeek(date, effective.termStartDate).week)
+          setManager(null)
+        }}
+        onShowOriginal={() => {
+          setShowOriginal(true)
+          setManager(null)
+        }}
+      />
+
+      <FilterDrawer
+        open={filterDrawerOpen}
+        onOpenChange={setFilterDrawerOpen}
+        title={t("schedule.title")}
+        description={t("schedule.description")}
+      >
+        {renderFilterControls("schedule-drawer")}
+      </FilterDrawer>
     </div>
   )
 }

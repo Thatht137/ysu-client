@@ -13,7 +13,6 @@ import org.json.JSONObject
 object UnifiedCache {
     private const val PREFS_NAME = "ysu_app_cache"
 
-    // ─── Keys ───────────────────────────────────────────────────────────────
 
     const val KEY_SERVER_CONFIG = "server_config"
     const val KEY_CASTGC = "castgc"
@@ -30,6 +29,7 @@ object UnifiedCache {
     const val KEY_NOTIFY_ACCOUNT_HASH = "notify_account_hash"
     const val KEY_NOTIFY_SCHEMA_VERSION = "notify_schema_version"
     const val KEY_NOTIFY_SETTINGS = "notify_settings"
+    const val KEY_NOTIFY_POLLING_ENABLED = "notify_polling_enabled"
     const val KEY_CLASS_ALARMS = "class_alarms"
     const val KEY_HAS_SYNCED_SCHEDULE = "has_synced_schedule"
     const val KEY_HAS_SYNCED_EXAMS = "has_synced_exams"
@@ -38,7 +38,6 @@ object UnifiedCache {
     const val KEY_SYNC_REMINDER_HOURS = "sync_reminder_hours"
     const val KEY_SHOW_NEXT_DAY_SCHEDULE = "show_next_day_schedule"
 
-    // ─── Core helpers ───────────────────────────────────────────────────────
 
     private fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -46,6 +45,19 @@ object UnifiedCache {
     fun clearAll(context: Context) {
         prefs(context).edit().clear().apply()
     }
+    fun clearWidgetData(context: Context) {
+        prefs(context).edit()
+            .remove(KEY_CACHED_SCHEDULE)
+            .remove(KEY_CACHED_CURRENT_WEEK)
+            .remove(KEY_CACHED_EXAMS)
+            .remove(KEY_WIDGET_CACHED_EXAMS)
+            .remove(KEY_HAS_SYNCED_SCHEDULE)
+            .remove(KEY_HAS_SYNCED_EXAMS)
+            .remove(KEY_LAST_SYNC_TIME)
+            .remove(KEY_LAST_EXAM_SYNC_TIME)
+            .apply()
+    }
+
 
     fun remove(context: Context, key: String) {
         prefs(context).edit().remove(key).apply()
@@ -55,7 +67,6 @@ object UnifiedCache {
         return prefs(context).contains(key)
     }
 
-    // ─── String / JSON ──────────────────────────────────────────────────────
 
     fun putString(context: Context, key: String, value: String) {
         prefs(context).edit().putString(key, value).apply()
@@ -92,7 +103,6 @@ object UnifiedCache {
         }
     }
 
-    // ─── Boolean / Int / Long ───────────────────────────────────────────────
 
     fun putBoolean(context: Context, key: String, value: Boolean) {
         prefs(context).edit().putBoolean(key, value).apply()
@@ -115,13 +125,11 @@ object UnifiedCache {
     fun getLong(context: Context, key: String, default: Long = 0L): Long =
         prefs(context).getLong(key, default)
 
-    // ─── Convenience: cache arrays ──────────────────────────────────────────
 
     fun saveCachedGrades(context: Context, grades: JSONArray) {
         putJsonArray(context, KEY_CACHED_GRADES, grades)
     }
 
-    /** Returns empty JSONArray if no grades cached. */
     fun getCachedGrades(context: Context): JSONArray {
         return getJsonArray(context, KEY_CACHED_GRADES) ?: JSONArray()
     }
@@ -134,7 +142,6 @@ object UnifiedCache {
         editor.apply()
     }
 
-    /** Returns empty JSONArray if no widget exams cached. */
     fun getCachedExams(context: Context): JSONArray {
         return getJsonArray(context, KEY_WIDGET_CACHED_EXAMS)
             ?: getJsonArray(context, KEY_CACHED_EXAMS)
@@ -149,7 +156,6 @@ object UnifiedCache {
         editor.apply()
     }
 
-    /** Returns empty JSONArray if no schedule cached. */
     fun getCachedSchedule(context: Context): JSONArray {
         return getJsonArray(context, KEY_CACHED_SCHEDULE) ?: JSONArray()
     }

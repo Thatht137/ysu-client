@@ -4,13 +4,10 @@ import * as React from "react"
 import { Drawer as DrawerPrimitive } from "vaul"
 
 import { cn } from "@/lib/utils"
+import { BackLayer, useBackOpenState } from "@/hooks/use-back-handler"
 
-function Drawer({
-  onOpenChange,
-  ...props
-}: React.ComponentProps<typeof DrawerPrimitive.Root>) {
-  // Blur the active element on close so vaul does not flip aria-hidden onto
-  // a still-focused descendant (Chrome a11y warning).
+function Drawer(props: React.ComponentProps<typeof DrawerPrimitive.Root>) {
+  const { open, onOpenChange } = useBackOpenState(props)
   const handleOpenChange = React.useCallback(
     (open: boolean) => {
       if (!open && typeof document !== "undefined") {
@@ -22,11 +19,19 @@ function Drawer({
     [onOpenChange]
   )
   return (
-    <DrawerPrimitive.Root
-      data-slot="drawer"
-      {...props}
-      onOpenChange={handleOpenChange}
-    />
+    <BackLayer
+      enabled={open}
+      onBack={() => {
+        if (props.dismissible !== false) handleOpenChange(false)
+      }}
+    >
+      <DrawerPrimitive.Root
+        data-slot="drawer"
+        {...props}
+        open={open}
+        onOpenChange={handleOpenChange}
+      />
+    </BackLayer>
   )
 }
 
@@ -37,10 +42,10 @@ function DrawerTrigger({
 }
 
 /** 嵌套在另一个 Drawer 内部时使用（如筛选抽屉里再开选项抽屉）。 */
-function DrawerNested({
-  onOpenChange,
-  ...props
-}: React.ComponentProps<typeof DrawerPrimitive.NestedRoot>) {
+function DrawerNested(
+  props: React.ComponentProps<typeof DrawerPrimitive.NestedRoot>
+) {
+  const { open, onOpenChange } = useBackOpenState(props)
   const handleOpenChange = React.useCallback(
     (open: boolean) => {
       if (!open && typeof document !== "undefined") {
@@ -52,11 +57,19 @@ function DrawerNested({
     [onOpenChange]
   )
   return (
-    <DrawerPrimitive.NestedRoot
-      data-slot="drawer"
-      {...props}
-      onOpenChange={handleOpenChange}
-    />
+    <BackLayer
+      enabled={open}
+      onBack={() => {
+        if (props.dismissible !== false) handleOpenChange(false)
+      }}
+    >
+      <DrawerPrimitive.NestedRoot
+        data-slot="drawer"
+        {...props}
+        open={open}
+        onOpenChange={handleOpenChange}
+      />
+    </BackLayer>
   )
 }
 

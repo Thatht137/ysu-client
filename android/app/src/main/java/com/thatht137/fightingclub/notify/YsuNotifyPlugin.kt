@@ -5,10 +5,13 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.Observer
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.Operation
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
@@ -43,7 +46,6 @@ class YsuNotifyPlugin : Plugin() {
         const val TAG = "YsuNotifyPlugin"
     }
 
-    // ─── CASTGC management ──────────────────────────────────────────────────
 
     @PluginMethod
     fun setCastgc(call: PluginCall) {
@@ -54,6 +56,7 @@ class YsuNotifyPlugin : Plugin() {
             return
         }
         UnifiedCache.putString(context, UnifiedCache.KEY_CASTGC, castgc)
+        NotifyHelper.setSessionExpired(context, false)
         Log.d(TAG, "CASTGC saved to UnifiedCache")
         call.resolve()
     }
@@ -66,7 +69,6 @@ class YsuNotifyPlugin : Plugin() {
         call.resolve()
     }
 
-    // ─── Server config ──────────────────────────────────────────────────────
 
     @PluginMethod
     fun setServerConfig(call: PluginCall) {
@@ -81,7 +83,6 @@ class YsuNotifyPlugin : Plugin() {
     }
 
 
-    // ─── Cached data bridge ─────────────────────────────────────────────────
 
     @PluginMethod
     fun getCachedGrades(call: PluginCall) {
@@ -135,7 +136,6 @@ class YsuNotifyPlugin : Plugin() {
         call.resolve()
     }
 
-    // ─── Polling control ────────────────────────────────────────────────────
 
     @PluginMethod
     fun startPolling(call: PluginCall) {
@@ -148,7 +148,7 @@ class YsuNotifyPlugin : Plugin() {
         val workInterval = interval.coerceAtLeast(15)
 
         NotifyHelper.saveSettings(context, workInterval, checkGrades, checkExams, notifyNetworkError)
-        NotifyHelper.setSessionExpired(context, false)
+        UnifiedCache.putBoolean(context, UnifiedCache.KEY_NOTIFY_POLLING_ENABLED, true)
 
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -162,30 +162,32 @@ class YsuNotifyPlugin : Plugin() {
             .addTag(NotifyWorker.WORK_NAME)
             .build()
 
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+        val operation = WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             NotifyWorker.WORK_NAME,
             ExistingPeriodicWorkPolicy.UPDATE,
             workRequest
         )
 
         Log.d(TAG, "Polling started: interval=$workInterval min, grades=$checkGrades, exams=$checkExams")
-        call.resolve()
+        resolveWork(call, operation)
     }
 
     @PluginMethod
     fun stopPolling(call: PluginCall) {
         val wm = WorkManager.getInstance(context)
+        UnifiedCache.putBoolean(context, UnifiedCache.KEY_NOTIFY_POLLING_ENABLED, false)
         wm.cancelUniqueWork(NotifyWorker.WORK_NAME)
-        wm.cancelAllWorkByTag(NotifyWorker.WORK_NAME)
+        val operation = wm.cancelAllWorkByTag(NotifyWorker.WORK_NAME)
         Log.d(TAG, "Polling stopped")
-        call.resolve()
+        resolveWork(call, operation)
     }
 
     @PluginMethod
     fun pausePolling(call: PluginCall) {
-        WorkManager.getInstance(context).cancelUniqueWork(NotifyWorker.WORK_NAME)
+        UnifiedCache.putBoolean(context, UnifiedCache.KEY_NOTIFY_POLLING_ENABLED, false)
+        val operation = WorkManager.getInstance(context).cancelAllWorkByTag(NotifyWorker.WORK_NAME)
         Log.d(TAG, "Polling paused")
-        call.resolve()
+        resolveWork(call, operation)
     }
 
     @PluginMethod
@@ -194,6 +196,7 @@ class YsuNotifyPlugin : Plugin() {
         val workInterval = interval.coerceAtLeast(15)
 
         NotifyHelper.saveSettings(context, workInterval, checkGrades, checkExams, notifyNetworkError)
+        UnifiedCache.putBoolean(context, UnifiedCache.KEY_NOTIFY_POLLING_ENABLED, true)
 
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -207,14 +210,14 @@ class YsuNotifyPlugin : Plugin() {
             .addTag(NotifyWorker.WORK_NAME)
             .build()
 
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+        val operation = WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             NotifyWorker.WORK_NAME,
             ExistingPeriodicWorkPolicy.UPDATE,
             workRequest
         )
 
         Log.d(TAG, "Polling resumed: interval=$workInterval min, grades=$checkGrades, exams=$checkExams")
-        call.resolve()
+        resolveWork(call, operation)
     }
 
     @PluginMethod
@@ -228,46 +231,61 @@ class YsuNotifyPlugin : Plugin() {
             .addTag(NotifyWorker.WORK_NAME)
             .build()
 
-        WorkManager.getInstance(context).enqueue(workRequest)
+        val operation = WorkManager.getInstance(context).enqueueUniqueWork(
+            NotifyWorker.IMMEDIATE_WORK_NAME,
+            ExistingWorkPolicy.KEEP,
+            workRequest
+        )
 
         Log.d(TAG, "One-time worker enqueued")
-        call.resolve()
+        resolveWork(call, operation)
     }
 
-    // ─── Class alarms (delegates to ClassAlarmManager) ──────────────────────
+    private fun resolveWork(call: PluginCall, operation: Operation) {
+        ContextCompat.getMainExecutor(context).execute {
+            operation.state.observeForever(object : Observer<Operation.State> {
+                override fun onChanged(state: Operation.State) {
+                    when (state) {
+                        is Operation.State.SUCCESS -> {
+                            operation.state.removeObserver(this)
+                            call.resolve()
+                        }
+                        is Operation.State.FAILURE -> {
+                            operation.state.removeObserver(this)
+                            call.reject("Unable to update notification work", Exception(state.throwable))
+                        }
+                    }
+                }
+            })
+        }
+    }
+
 
     @PluginMethod
     fun scheduleClassAlarms(call: PluginCall) {
         val alarmsJson = call.getString("alarmsJson") ?: "[]"
-        ClassAlarmManager.scheduleAlarms(context, alarmsJson)
-        Log.d(TAG, "Class alarms scheduled")
-        call.resolve()
+        try {
+            ClassAlarmManager.scheduleAlarms(context, alarmsJson)
+            call.resolve()
+        } catch (e: Exception) {
+            call.reject("Unable to schedule class reminders", e)
+        }
     }
 
     @PluginMethod
     fun cancelClassAlarms(call: PluginCall) {
-        ClassAlarmManager.cancelAllAlarms(context)
-        Log.d(TAG, "Class alarms cancelled")
-        call.resolve()
+        try {
+            ClassAlarmManager.cancelAllAlarms(context)
+            call.resolve()
+        } catch (e: Exception) {
+            call.reject("Unable to cancel class reminders", e)
+        }
     }
 
-    // ─── Permission management ──────────────────────────────────────────────
 
     @PluginMethod
     override fun checkPermissions(call: PluginCall) {
-        val ret = JSObject()
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val granted = ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
-            ret.put("granted", granted)
-        } else {
-            ret.put("granted", true)
-        }
-
-        call.resolve(ret)
+        call.resolve(JSObject().put("granted", notificationsGranted()))
     }
 
     @PluginMethod
@@ -278,33 +296,28 @@ class YsuNotifyPlugin : Plugin() {
                     Manifest.permission.POST_NOTIFICATIONS
                 ) == PackageManager.PERMISSION_GRANTED
             ) {
-                val ret = JSObject()
-                ret.put("granted", true)
-                call.resolve(ret)
+                call.resolve(JSObject().put("granted", notificationsGranted()))
                 return
             }
 
             requestPermissionForAlias("notifications", call, "notificationsPermissionCallback")
         } else {
-            val ret = JSObject()
-            ret.put("granted", true)
-            call.resolve(ret)
+            call.resolve(JSObject().put("granted", notificationsGranted()))
         }
     }
 
     @PermissionCallback
     fun notificationsPermissionCallback(call: PluginCall) {
-        val granted = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.POST_NOTIFICATIONS
-        ) == PackageManager.PERMISSION_GRANTED
-
-        val ret = JSObject()
-        ret.put("granted", granted)
-        call.resolve(ret)
+        call.resolve(JSObject().put("granted", notificationsGranted()))
     }
 
-    // ─── Battery optimization & auto-start ─────────────────────────────────
+    private fun notificationsGranted(): Boolean {
+        val runtimeGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+        return runtimeGranted && NotificationManagerCompat.from(context).areNotificationsEnabled()
+    }
+
 
     @PluginMethod
     fun checkBatteryOptimization(call: PluginCall) {
@@ -332,7 +345,6 @@ class YsuNotifyPlugin : Plugin() {
                     context.startActivity(intent)
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to open battery optimization settings", e)
-                    // Fallback to app details settings
                     try {
                         val intent = android.content.Intent(
                             android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,

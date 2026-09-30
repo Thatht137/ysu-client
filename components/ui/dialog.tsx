@@ -4,13 +4,22 @@ import * as React from "react"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
+import { BackLayer, useBackOpenState } from "@/hooks/use-back-handler"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
-function Dialog({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+function Dialog(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
+  const { open, onOpenChange } = useBackOpenState(props)
+  return (
+    <BackLayer enabled={open} onBack={() => onOpenChange(false)}>
+      <DialogPrimitive.Root
+        data-slot="dialog"
+        {...props}
+        open={open}
+        onOpenChange={onOpenChange}
+      />
+    </BackLayer>
+  )
 }
 
 function DialogTrigger({
@@ -74,8 +83,7 @@ function DialogContent({
               className="absolute top-2 right-2"
               size="icon-sm"
             >
-              <XIcon
-              />
+              <XIcon />
               <span className="sr-only">Close</span>
             </Button>
           </DialogPrimitive.Close>

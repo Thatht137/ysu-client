@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   AirVent,
+  CreditCard,
+  Wallet,
   BookOpen,
   CalendarDays,
   ChevronRight,
@@ -113,6 +115,18 @@ export default function MePage() {
   }
 
   const academicLinks = [
+    {
+      href: "/dashboard/ecard",
+      label: t("ecard.nav"),
+      icon: CreditCard,
+      mobileOnly: true,
+    },
+    {
+      href: "/dashboard/epay",
+      label: t("epay.nav"),
+      icon: Wallet,
+      mobileOnly: true,
+    },
     { href: "/dashboard/me/student", label: t("app.studentInfo"), icon: User },
     { href: "/dashboard/me/gpa", label: t("app.gpa"), icon: GraduationCap },
     {

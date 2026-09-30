@@ -4,11 +4,22 @@ import * as React from "react"
 import { Dialog as SheetPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
+import { BackLayer, useBackOpenState } from "@/hooks/use-back-handler"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
-function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
-  return <SheetPrimitive.Root data-slot="sheet" {...props} />
+function Sheet(props: React.ComponentProps<typeof SheetPrimitive.Root>) {
+  const { open, onOpenChange } = useBackOpenState(props)
+  return (
+    <BackLayer enabled={open} onBack={() => onOpenChange(false)}>
+      <SheetPrimitive.Root
+        data-slot="sheet"
+        {...props}
+        open={open}
+        onOpenChange={onOpenChange}
+      />
+    </BackLayer>
+  )
 }
 
 function SheetTrigger({
@@ -75,8 +86,7 @@ function SheetContent({
               className="absolute top-3 right-3"
               size="icon-sm"
             >
-              <XIcon
-              />
+              <XIcon />
               <span className="sr-only">Close</span>
             </Button>
           </SheetPrimitive.Close>

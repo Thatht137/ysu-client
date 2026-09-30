@@ -21,6 +21,7 @@ export const STORAGE_KEYS = {
   lastDismissedAnnouncementId: `${APP_PREFIX}-last-dismissed-announcement-id`,
   legacyLastDismissedAnnouncementId: `${LEGACY_PREFIX}-last-dismissed-announcement-id`,
   gradeGacha: `${APP_PREFIX}-grade-gacha`,
+  schedulePatches: `${APP_PREFIX}-schedule-patches`,
   secureAuthToken: `${APP_PREFIX}-auth-token`,
   legacySecureAuthToken: `${LEGACY_PREFIX}-castgc`,
   secureRememberedCredentials: `${APP_PREFIX}-remember-me`,
@@ -45,9 +46,7 @@ export function migrateLocalStorageKey(
     if (legacy !== null) {
       localStorage.removeItem(legacyKey)
     }
-  } catch {
-    // ignore storage errors
-  }
+  } catch {}
 }
 
 export function getLocalStorageItemWithFallback(

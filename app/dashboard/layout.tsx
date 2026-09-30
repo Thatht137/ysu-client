@@ -36,6 +36,8 @@ import {
 import { checkRateLimit, recordLoginAttempt } from "@/lib/rate-limit"
 import {
   AirVent,
+  CreditCard,
+  Wallet,
   BookOpen,
   CalendarDays,
   Calendar,
@@ -59,6 +61,8 @@ import { RefreshIndicator } from "@/components/refresh-indicator"
 import { StaleIndicator } from "@/components/stale-indicator"
 import { UpdateDialog } from "@/components/update-dialog"
 import { APP_VERSION, APP_BUILD } from "@/lib/version"
+import { useMobileHeaderStore } from "@/lib/stores/mobile-header"
+import { cn } from "@/lib/utils"
 
 export default function DashboardLayout({
   children,
@@ -70,6 +74,10 @@ export default function DashboardLayout({
   const pathname = rawPathname.replace(/\/$/, "")
   const { isAuthenticated, hasHydrated, username } = useAuthStore()
   const { t } = useTranslation()
+  const sessionExpired = useAuthStore((s) => s.sessionExpired)
+  const fullscreenRequested = useMobileHeaderStore((s) => s.fullscreen)
+  const mobileFullscreen =
+    pathname === "/dashboard/schedule" && fullscreenRequested
 
   const backgroundImage = useSettingsStore((s) => s.backgroundImage)
   const avatarImage = useSettingsStore((s) => s.avatarImage)
@@ -98,6 +106,8 @@ export default function DashboardLayout({
       icon: Gauge,
     },
     { title: t("meter.nav"), url: "/dashboard/meter", icon: AirVent },
+    { title: t("ecard.nav"), url: "/dashboard/ecard", icon: CreditCard },
+    { title: t("epay.nav"), url: "/dashboard/epay", icon: Wallet },
     {
       title: t("app.trainingPlan"),
       url: "/dashboard/training-plan",
@@ -122,6 +132,9 @@ export default function DashboardLayout({
     "/dashboard/credits": t("app.credits"),
     "/dashboard/comprehensive": t("app.comprehensive"),
     "/dashboard/meter": t("meter.title"),
+    "/dashboard/ecard": t("ecard.title"),
+    "/dashboard/epay": t("epay.title"),
+    "/dashboard/me/settings/overview": t("overviewLayout.title"),
     "/dashboard/training-plan": t("app.trainingPlan"),
     "/dashboard/evaluation": t("app.evaluation"),
     "/dashboard/me": t("app.me"),
@@ -280,7 +293,14 @@ export default function DashboardLayout({
           </button>
         </SidebarFooter>
       </Sidebar>
-      <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden pt-[calc(3rem+var(--safe-area-inset-top,env(safe-area-inset-top,0px)))] pb-[calc(4rem+var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)))] md:overflow-auto md:pt-[var(--safe-area-inset-top,env(safe-area-inset-top))] md:pb-[var(--safe-area-inset-bottom,env(safe-area-inset-bottom))]">
+      <main
+        className={cn(
+          "flex min-w-0 flex-1 flex-col overflow-x-hidden pt-[calc(3rem+var(--safe-area-inset-top,env(safe-area-inset-top,0px)))] md:overflow-auto md:pt-[var(--safe-area-inset-top,env(safe-area-inset-top))] md:pb-[var(--safe-area-inset-bottom,env(safe-area-inset-bottom))]",
+          mobileFullscreen
+            ? "h-dvh min-h-0 overflow-hidden pb-[var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px))] md:h-auto"
+            : "pb-[var(--mobile-bottom-nav-height,calc(4rem+var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px))))]"
+        )}
+      >
         <MobileTopBar title={pageTitle} showBack={showBack} />
         <header className="hidden items-center justify-between gap-4 border-b px-6 py-4 md:flex">
           <div className="flex items-center gap-3">
@@ -338,12 +358,28 @@ export default function DashboardLayout({
         </header>
         <div
           key={pathname}
-          className="flex flex-1 animate-in flex-col p-4 duration-500 fade-in slide-in-from-bottom-2 md:p-8"
+          className={cn(
+            "flex flex-1 flex-col md:p-8",
+            mobileFullscreen
+              ? "min-h-0 overflow-hidden"
+              : "animate-in p-4 duration-500 fade-in slide-in-from-bottom-2"
+          )}
         >
           {children}
+          {sessionExpired && (
+            <div
+              role="alert"
+              className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted p-3 text-sm"
+            >
+              <span className="flex-1">{t("app.sessionExpired")}</span>
+              <Button size="sm" onClick={handleRelogin}>
+                {t("app.relogin")}
+              </Button>
+            </div>
+          )}
         </div>
       </main>
-      <MobileBottomNav />
+      {!mobileFullscreen && <MobileBottomNav />}
     </SidebarProvider>
   )
 }

@@ -1,17 +1,24 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { useEffect, useMemo, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import {
   EmptyState,
@@ -28,6 +35,8 @@ import { useMobileHeaderRight } from "@/lib/stores/mobile-header"
 import { ResponsiveSelect } from "@/components/responsive-select"
 import { cn } from "@/lib/utils"
 import {
+  useCurrentWeek,
+  useClassPeriods,
   useSchoolBuildings,
   useSchoolCampuses,
   useSchoolClasses,
@@ -37,13 +46,27 @@ import {
   useSchoolDepartments,
   useSchoolGradeYears,
   useSchoolMajors,
+  useTermCalendar,
 } from "@/providers/hooks"
 import type { Course, SchoolClassInfo, ClassroomInfo } from "@/providers/types"
-import { ArrowLeft, Search } from "lucide-react"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { useBackHandler } from "@/hooks/use-back-handler"
+import { useAcademicTime } from "@/hooks/use-academic-time"
+import { buildCourseColorMap } from "../schedule/course-color"
+import { ScheduleMobile } from "../schedule/schedule-mobile"
+import { ScheduleTablet } from "../schedule/schedule-tablet"
+import { isCourseActiveInWeek, periodIsInUse } from "../schedule/schedule-utils"
+import {
+  ArrowLeft,
+  CalendarSearch,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+} from "lucide-react"
 
 const ALL = "__all__"
 
-/** 课程列表按星期几分组展示（与个人课表同构的 Course）。 */
+/** 全校课表详情：复用个人课表的网格展示模板，按周过滤渲染。 */
 function CourseScheduleView({
   title,
   subtitle,
@@ -58,22 +81,69 @@ function CourseScheduleView({
   onBack: () => void
 }) {
   const { t } = useTranslation()
+  const isMobile = useIsMobile()
+  const currentWeekQuery = useCurrentWeek()
+  const termCalendarQuery = useTermCalendar()
+  const periodsQuery = useClassPeriods()
+  useErrorToast(
+    currentWeekQuery.error ?? termCalendarQuery.error ?? periodsQuery.error
+  )
 
-  const byWeekDay = useMemo(() => {
-    const groups = new Map<number, Course[]>()
-    for (const course of courses) {
-      const list = groups.get(course.weekDay) ?? []
-      list.push(course)
-      groups.set(course.weekDay, list)
-    }
-    for (const list of groups.values()) {
-      list.sort((a, b) => a.startSection - b.startSection)
-    }
-    return [...groups.entries()].sort((a, b) => a[0] - b[0])
-  }, [courses])
+  const snapshot = currentWeekQuery.data ?? null
+  const calendar = termCalendarQuery.data
+  const { currentWeek, weekday, nowMinutes } = useAcademicTime(
+    snapshot,
+    calendar
+  )
+  const termStartDate =
+    snapshot?.semester &&
+    calendar?.semester &&
+    snapshot.semester !== calendar.semester
+      ? undefined
+      : calendar?.startDate
+  const periods = useMemo(() => {
+    if (!periodsQuery.data) return []
+    return periodsQuery.data
+      .filter(periodIsInUse)
+      .sort((a, b) => a.section - b.section)
+  }, [periodsQuery.data])
+
+  const [weekOverride, setWeekOverride] = useState<number | null>(null)
+  const selectedWeek = weekOverride ?? currentWeek?.week ?? 1
+
+  const colorMap = useMemo(() => buildCourseColorMap(courses), [courses])
+  const weekCourses = useMemo(
+    () => courses.filter((c) => isCourseActiveInWeek(c, selectedWeek)),
+    [courses, selectedWeek]
+  )
+  const [detailCourse, setDetailCourse] = useState<Course | null>(null)
+  const isCurrentWeek = currentWeek?.week === selectedWeek
+
+  function shiftWeek(delta: number) {
+    const nextWeek = Math.max(1, selectedWeek + delta)
+    setWeekOverride(nextWeek === currentWeek?.week ? null : nextWeek)
+  }
+
+  const detailRows = useMemo(() => {
+    const c = detailCourse
+    if (!c) return []
+    const rows: Array<{ label: string; value: string }> = []
+    if (c.teacher) rows.push({ label: t("schedule.teacher"), value: c.teacher })
+    if (c.weeks) rows.push({ label: t("schedule.weeks"), value: c.weeks })
+    rows.push({
+      label: t("schedule.sections"),
+      value: t("schoolSchedule.sections", {
+        start: c.startSection,
+        end: c.endSection,
+      }),
+    })
+    if (c.classroom)
+      rows.push({ label: t("schedule.classroom"), value: c.classroom })
+    return rows
+  }, [detailCourse, t])
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <Button
           variant="ghost"
@@ -93,43 +163,121 @@ function CourseScheduleView({
         </div>
       </div>
 
+      <div className="flex items-center gap-1">
+        <Button
+          variant="outline"
+          size="icon-sm"
+          onClick={() => shiftWeek(-1)}
+          aria-label={t("schedule.weekPrev")}
+        >
+          <ChevronLeft />
+        </Button>
+        <span className="min-w-16 text-center text-sm font-medium">
+          {t("schedule.weekShort", { week: selectedWeek })}
+        </span>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          onClick={() => shiftWeek(1)}
+          aria-label={t("schedule.weekNext")}
+        >
+          <ChevronRight />
+        </Button>
+        {isCurrentWeek && (
+          <Badge variant="secondary">
+            {t("schedule.currentWeekBadge", { week: selectedWeek })}
+          </Badge>
+        )}
+      </div>
+
       {isLoading ? (
         <LoadingCards />
       ) : courses.length === 0 ? (
         <EmptyState title={t("schoolSchedule.noCourses")} />
       ) : (
-        byWeekDay.map(([weekDay, dayCourses]) => (
-          <div key={weekDay} className="flex flex-col gap-2">
-            <h3 className="text-sm font-medium text-muted-foreground">
-              {t(`dashboard.weekdayNames.${weekDay}`)}
-            </h3>
-            {dayCourses.map((course) => (
-              <Card
-                key={`${course.name}-${weekDay}-${course.startSection}-${course.endSection}-${course.classroom ?? ""}`}
-              >
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="text-base">{course.name}</CardTitle>
-                    <Badge variant="outline">
-                      {t("schoolSchedule.sections", {
-                        start: course.startSection,
-                        end: course.endSection,
-                      })}
-                    </Badge>
-                  </div>
-                  <CardDescription>
-                    {[course.teacher, course.weeks].filter(Boolean).join(" · ")}
-                  </CardDescription>
-                </CardHeader>
-                {course.classroom && (
-                  <CardContent className="text-sm text-muted-foreground">
-                    {course.classroom}
-                  </CardContent>
-                )}
-              </Card>
-            ))}
-          </div>
-        ))
+        <div className="flex min-h-[60dvh] flex-col">
+          {isMobile ? (
+            <ScheduleMobile
+              courses={courses}
+              colorMap={colorMap}
+              periods={periods}
+              currentWeekday={weekday}
+              currentWeek={currentWeek}
+              weekAnchor={snapshot}
+              selectedWeek={selectedWeek}
+              termStartDate={termStartDate}
+              nowMinutes={nowMinutes}
+              onPrevWeek={() => shiftWeek(-1)}
+              onNextWeek={() => shiftWeek(1)}
+              onCourseTap={setDetailCourse}
+            />
+          ) : (
+            <ScheduleTablet
+              courses={weekCourses}
+              colorMap={colorMap}
+              periods={periods}
+              currentWeekday={weekday}
+              currentWeek={currentWeek}
+              weekAnchor={snapshot}
+              selectedWeek={selectedWeek}
+              termStartDate={termStartDate}
+              nowMinutes={nowMinutes}
+              onCourseTap={setDetailCourse}
+            />
+          )}
+        </div>
+      )}
+
+      {isMobile ? (
+        <Drawer
+          open={!!detailCourse}
+          onOpenChange={(v) => !v && setDetailCourse(null)}
+        >
+          <DrawerContent>
+            <DrawerHeader>
+              <DrawerTitle>{detailCourse?.name}</DrawerTitle>
+              <DrawerDescription>
+                {t("schedule.courseDetail")}
+              </DrawerDescription>
+            </DrawerHeader>
+            <div className="flex flex-col gap-2 px-4 pb-6 text-sm">
+              {detailRows.map((row) => (
+                <div
+                  key={row.label}
+                  className="flex items-center justify-between"
+                >
+                  <span className="text-muted-foreground">{row.label}</span>
+                  <span>{row.value}</span>
+                </div>
+              ))}
+            </div>
+          </DrawerContent>
+        </Drawer>
+      ) : (
+        <Dialog
+          open={!!detailCourse}
+          onOpenChange={(v) => !v && setDetailCourse(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{detailCourse?.name}</DialogTitle>
+              <DialogDescription>
+                {t("schedule.courseDetail")}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-2 text-sm">
+              {detailRows.map((row) => (
+                <div
+                  key={row.label}
+                  className="flex items-center justify-between"
+                >
+                  <span className="text-muted-foreground">{row.label}</span>
+                  <span>{row.value}</span>
+                </div>
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   )
@@ -264,6 +412,7 @@ function ClassSchedulePanel() {
     className: string
   } | null>(null)
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
+  useBackHandler(() => setSelectedClass(null), selectedClass !== null)
 
   const gradeYearsQuery = useSchoolGradeYears()
   const departmentsQuery = useSchoolDepartments()
@@ -454,7 +603,11 @@ function RoomListResults({
   )
 }
 
-function RoomSchedulePanel() {
+function RoomSchedulePanel({
+  freeRoomContext,
+}: {
+  freeRoomContext?: FreeRoomContext | null
+}) {
   const { t } = useTranslation()
   const [campus, setCampus] = useState(ALL)
   const [building, setBuilding] = useState(ALL)
@@ -465,6 +618,7 @@ function RoomSchedulePanel() {
     name: string
   } | null>(null)
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
+  useBackHandler(() => setSelectedRoom(null), selectedRoom !== null)
 
   const campusesQuery = useSchoolCampuses()
   const buildingsQuery = useSchoolBuildings(campus === ALL ? undefined : campus)
@@ -498,7 +652,7 @@ function RoomSchedulePanel() {
     setFilterDrawerOpen(false)
   }
 
-  const filterControls = (
+  const renderFilterControls = (idPrefix: string) => (
     <FieldGroup className="flex flex-col gap-3">
       <div className="flex flex-col gap-3 md:flex-row">
         <Field className="flex-1">
@@ -532,12 +686,12 @@ function RoomSchedulePanel() {
         </Field>
       </div>
       <Field>
-        <FieldLabel htmlFor="room-name">
+        <FieldLabel htmlFor={`${idPrefix}-room-name`}>
           {t("schoolSchedule.roomTab")}
         </FieldLabel>
         <div className="flex gap-2">
           <Input
-            id="room-name"
+            id={`${idPrefix}-room-name`}
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t("schoolSchedule.roomNamePlaceholder")}
@@ -566,13 +720,27 @@ function RoomSchedulePanel() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="hidden md:block">{filterControls}</div>
+      {freeRoomContext && (
+        <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+          <CalendarSearch className="size-4 shrink-0 text-primary" />
+          <span>
+            {t("schoolSchedule.freeRoomContext", {
+              week: freeRoomContext.week,
+              weekday: t(`dashboard.weekdayNames.${freeRoomContext.day}`),
+              section: freeRoomContext.section,
+            })}
+          </span>
+        </div>
+      )}
+      <div className="hidden md:block">
+        {renderFilterControls("room-desktop")}
+      </div>
       <FilterDrawer
         open={filterDrawerOpen}
         onOpenChange={setFilterDrawerOpen}
         title={t("schoolSchedule.roomTab")}
       >
-        {filterControls}
+        {renderFilterControls("room-drawer")}
       </FilterDrawer>
 
       {!hasFilter ? (
@@ -591,13 +759,33 @@ function RoomSchedulePanel() {
   )
 }
 
+type FreeRoomContext = { week: number; day: number; section: number }
+
 export default function SchoolSchedulePage() {
   const { t } = useTranslation()
-  const [tab, setTab] = useState("class")
+  const [tab, setTab] = useState<"class" | "room">("class")
+  const [freeRoomContext, setFreeRoomContext] =
+    useState<FreeRoomContext | null>(null)
+
+  // 深链情境：日程页“查空教室”带周次/星期/节次跳入。静态导出下
+  // useSearchParams 初次水合可能为空，改为挂载后读一次 location.search。
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const week = Number(params.get("week"))
+    const day = Number(params.get("day"))
+    const section = Number(params.get("section"))
+    if (week >= 1 && day >= 1 && day <= 7 && section >= 1) {
+      setFreeRoomContext({ week, day, section })
+    }
+    if (params.get("tab") === "room") setTab("room")
+  }, [])
 
   return (
     <div className="flex flex-col gap-6">
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs
+        value={tab}
+        onValueChange={(v) => setTab(v === "room" ? "room" : "class")}
+      >
         <TabsList className="w-full">
           <TabsTrigger value="class">
             {t("schoolSchedule.classTab")}
@@ -609,7 +797,7 @@ export default function SchoolSchedulePage() {
           <ClassSchedulePanel />
         </TabsContent>
         <TabsContent value="room" className="mt-4">
-          <RoomSchedulePanel />
+          <RoomSchedulePanel freeRoomContext={freeRoomContext} />
         </TabsContent>
       </Tabs>
     </div>
