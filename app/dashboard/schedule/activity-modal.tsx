@@ -15,6 +15,7 @@ import {
 } from "@/components/responsive-modal";
 import { useTranslation } from "@/lib/i18n/use-translation";
 import { useProvider } from "@/providers/use-provider";
+import { useTrainingPlan } from "@/providers/hooks";
 import type { Course, CurrentLesson, LessonActivity } from "@/providers/types";
 import { Signpost, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,8 @@ function formatDateTime(iso: string | null): string {
 export function ActivityModal({ course, week, open, onOpenChange, onSigninActivity }: Props) {
   const { t } = useTranslation();
   const provider = useProvider();
+  const trainingPlan = useTrainingPlan(undefined, open && !!course?.code);
+  const credit = (course?.code && trainingPlan.data?.find((item) => item.courseCode === course.code)?.credit) || course?.credit;
   const [loading, setLoading] = useState(false);
   const [lesson, setLesson] = useState<CurrentLesson | null>(null);
 
@@ -120,9 +123,9 @@ export function ActivityModal({ course, week, open, onOpenChange, onSigninActivi
                   {course.courseType}
                 </Badge>
               )}
-              {course.credit && (
+              {credit && (
                 <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
-                  {t("schedule.credit")} {course.credit}
+                  {t("schedule.credit")} {credit}
                 </Badge>
               )}
               {course.code && (

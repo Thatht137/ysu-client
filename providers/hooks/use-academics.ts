@@ -467,14 +467,17 @@ export function useSchoolClassroomSchedule(
 }
 
 export function useTrainingPlan(
-  options?: PageQueryOptions
+  options?: PageQueryOptions,
+  enabled = true
 ): ProviderQueryResult<TrainingPlan[]> {
   const provider = useProvider()
   return useProviderQuery(
     "trainingPlan",
     "training-plan",
     () => provider.getTrainingPlan(options),
-    options
+    options,
+    undefined,
+    enabled
   )
 }
 

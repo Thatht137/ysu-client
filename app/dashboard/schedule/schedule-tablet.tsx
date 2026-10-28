@@ -305,7 +305,7 @@ export function ScheduleTablet({
                       : undefined
                   }
                   className={cn(
-                    "relative z-10 m-0.5 flex flex-col gap-0.5 overflow-hidden rounded-md p-1.5 text-left transition-opacity active:opacity-60",
+                    "relative z-10 m-0.5 flex flex-col gap-0.5 overflow-hidden rounded-md p-1.5 text-left",
                     courseBgClass(colorMap, c),
                     courseHasScheduleTrace(c, editor.traces) && "pb-7",
                     isBlockCurrent(block) && "ring-1 ring-primary"
@@ -334,7 +334,7 @@ export function ScheduleTablet({
               <button
                 key={`block-${idx}`}
                 className={cn(
-                  "relative z-10 m-0.5 flex flex-col items-center justify-center gap-0.5 rounded-md bg-accent p-1 text-center transition-opacity active:opacity-60",
+                  "relative z-10 m-0.5 flex flex-col items-center justify-center gap-0.5 rounded-md bg-accent p-1 text-center",
                   block.courses.some((course) =>
                     courseHasScheduleTrace(course, editor.traces)
                   ) && "pb-7"
@@ -363,7 +363,7 @@ export function ScheduleTablet({
             <button
               key={`exam-${idx}`}
               type="button"
-              className="relative z-20 m-0.5 flex flex-col gap-0.5 overflow-hidden rounded-md border border-amber-500/50 bg-amber-500/15 p-1.5 text-left transition-opacity active:opacity-60"
+              className="relative z-20 m-0.5 flex flex-col gap-0.5 overflow-hidden rounded-md border border-amber-500/50 bg-schedule-3 p-1.5 text-left"
               style={blockStyle(block)}
               onClick={(e) => {
                 e.currentTarget.blur()

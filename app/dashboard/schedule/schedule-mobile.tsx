@@ -460,7 +460,7 @@ export function ScheduleMobile({
                     handleCoursePress(c, safeWeek)
                   }}
                   className={cn(
-                    "flex flex-col gap-1 rounded-lg p-3 text-left transition-opacity active:opacity-60",
+                    "flex flex-col gap-1 rounded-lg p-3 text-left",
                     courseBgClass(colorMap, c)
                   )}
                 >
@@ -754,7 +754,7 @@ const WeekGrid = memo(function WeekGrid({
                 onCoursePress(c, week)
               }}
               className={cn(
-                "relative z-10 m-0.5 flex flex-col gap-0.5 overflow-hidden rounded-md p-1 text-left transition-opacity active:opacity-60",
+                "relative z-10 m-0.5 flex flex-col gap-0.5 overflow-hidden rounded-md p-1 text-left",
                 courseBgClass(colorMap, c),
                 courseHasScheduleTrace(c, editor.traces) && "pb-7",
                 isBlockCurrent(block) && "ring-1 ring-primary"
@@ -792,7 +792,7 @@ const WeekGrid = memo(function WeekGrid({
               onOverlapPress(block.day, block.start, block.courses)
             }}
             className={cn(
-              "relative z-10 m-0.5 flex flex-col items-center justify-center gap-0.5 rounded-md bg-accent p-1 text-center transition-opacity active:opacity-60",
+              "relative z-10 m-0.5 flex flex-col items-center justify-center gap-0.5 rounded-md bg-accent p-1 text-center",
               block.courses.some((course) =>
                 courseHasScheduleTrace(course, editor.traces)
               ) && "pb-7"
@@ -818,7 +818,7 @@ const WeekGrid = memo(function WeekGrid({
             e.currentTarget.blur()
             onExamPress(block)
           }}
-          className="relative z-20 m-0.5 flex flex-col gap-0.5 overflow-hidden rounded-md border border-amber-500/50 bg-amber-500/15 p-1 text-left transition-opacity active:opacity-60"
+          className="relative z-20 m-0.5 flex flex-col gap-0.5 overflow-hidden rounded-md border border-amber-500/50 bg-schedule-3 p-1 text-left"
           style={blockStyle(block)}
         >
           <span className="line-clamp-1 text-[9px] font-semibold tracking-wide text-amber-600 uppercase dark:text-amber-400">
